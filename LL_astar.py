@@ -20,8 +20,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.scale = 0
         self.scale_names = {0: 5, 1: 10, 2: 15, 3: 22, 4: 33, 5: 45, 6: 66, 7: 90, 8: 110, 9: 165, 10: 198}
         # initial data and info:
-        self.line_width = line_width
-        self.tiles_q = vertical_tiles
+        self.line_width = line_width  # TODO: to be deleted
+        self.tiles_q = vertical_tiles  # TODO: to be deleted
         self.Y, self.X = SCREEN_HEIGHT - 26, SCREEN_WIDTH - 250
         self.tile_size, self.hor_tiles_q = self.get_pars()
         self.time_elapsed_ms = 0
@@ -49,12 +49,15 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.neighs_added_to_heap_dict = {}
         self.iterations = 0
         self.nodes_visited = {}
+        # lee_wave_spreading important pars:
+        # Levi Gin area!
         # interactive pars:
         self.is_interactive = False
         self.in_interaction = False
         self.cycle_breaker_right = False
         self.cycle_breaker_left = False
-        self.ticks_q = 5
+        self.ticks_q = 0
+        self.ticks_before = 0
 
     def a_star_preparation(self):
         self.nodes_to_be_visited = [self.start_node]
@@ -95,7 +98,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             curr_node.type = NodeType.CURRENT_NODE
         curr_node.times_visited += 1
         if self.iterations > 1:
-            self.curr_node_dict[self.iterations].type = NodeType.VISITED_NODE
+            if self.curr_node_dict[self.iterations].type != NodeType.END_NODE:
+                self.curr_node_dict[self.iterations].type = NodeType.VISITED_NODE
         self.max_times_visited_dict[self.iterations + 1] = max(self.max_times_visited_dict[self.iterations],
                                                                curr_node.times_visited)
         if curr_node in self.nodes_visited.keys():
@@ -105,6 +109,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # base case of finding the shortest path:
         if curr_node == self.end_node:
             self.path = self.recover_path()
+            # curr_node.type = NodeType.VISITED_NODE
         # next step:
         # we can search for neighs on the fly or use precalculated sets:
         for neigh in curr_node.get_neighs(self):
@@ -113,10 +118,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 self.neighs_added_to_heap_dict[self.iterations + 1].append(neigh.aux_copy())
                 neigh.g = curr_node.g + neigh.val
                 neigh.h = neigh.heuristics[self.heuristic](neigh, self.end_node)
-                if self.tiebreaker is not None: neigh.tiebreaker = self.start_node.tiebreakers[self.tiebreaker](
-                    self.start_node,
-                    self.end_node,
-                    neigh)
+                if self.tiebreaker is not None:
+                    neigh.tiebreaker = self.start_node.tiebreakers[self.tiebreaker](
+                        self.start_node, self.end_node, neigh)
                 neigh.previously_visited_node = curr_node
                 if neigh not in self.nodes_visited and neigh not in [self.start_node, self.end_node]:
                     neigh.type = NodeType.NEIGH
@@ -125,7 +129,6 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.iterations += 1
 
     def a_star_step_down(self):
-        print(f'type of dict: {type(self.curr_node_dict)}')
         curr_node = self.curr_node_dict[self.iterations]
         if self.iterations > 1:
             # times visited counter and colour 'backtracking':
@@ -269,7 +272,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             if self.node_chosen:
                 arcade.draw_text(
                     f"NODE'S INFO -->> pos: {self.node_chosen.y, self.node_chosen.x}, g: {self.node_chosen.g}, "
-                    f"h: {self.node_chosen.h}, f=g+h: {self.node_chosen.g + self.node_chosen.h} t: {self.node_chosen.tiebreaker}, times visited: {self.node_chosen.times_visited}, passability: {self.node_chosen.passability}",
+                    f"h: {self.node_chosen.h}, f=g+h: {self.node_chosen.g + self.node_chosen.h} t: {self.node_chosen.tiebreaker}, times visited: {self.node_chosen.times_visited}, type: {self.node_chosen.type}",
                     1050, SCREEN_HEIGHT - 35, arcade.color.PURPLE, bold=True)
         # SET-UPS:
         arcade.draw_text(f'Heuristics: ', SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70, arcade.color.BLACK, bold=True)
@@ -355,13 +358,14 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                                       arcade.color.YELLOW)
 
         # CURRENT PATH NODE ON START OR END NODE:
-        if self.start_node and self.end_node:
-            if self.path is not None and self.path_index > 0:
-                p = -self.path[self.path_index].x + self.path[self.path_index - 1].x, -self.path[self.path_index].y + \
-                    self.path[self.path_index - 1].y
-                points = self.get_triangle(self.path[self.path_index], p)
-                arcade.draw_triangle_filled(points[0], points[1], points[2], points[3], points[4], points[5],
-                                            arcade.color.RED)
+        if self.in_interaction:
+            if self.start_node and self.end_node:
+                if self.path is not None and self.path_index > 0:
+                    p = -self.path[self.path_index].x + self.path[self.path_index - 1].x, -self.path[self.path_index].y + \
+                        self.path[self.path_index - 1].y
+                    points = self.get_triangle(self.path[self.path_index], p)
+                    arcade.draw_triangle_filled(points[0], points[1], points[2], points[3], points[4], points[5],
+                                                arcade.color.RED)
 
     def get_triangle(self, node: 'Node', point: tuple[int, int]):
         scaled_point = point[0] * (self.tile_size // 2 - 2), point[1] * (self.tile_size // 2 - 2)
@@ -389,16 +393,31 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
 
     def update(self, delta_time: float):
         # consecutive calls during key pressing:
+        k, ticks_threshold = 1, 12
         if self.cycle_breaker_right:
-            self.ticks_q += 1
-            if self.ticks_q == 10:
-                self.a_star_step_up()
-                self.ticks_q = 0
+            self.ticks_before += 1
+            if self.ticks_before >= ticks_threshold:
+                self.ticks_q += 1
+                if self.ticks_q == k:
+                    if self.path is None:
+                        self.a_star_step_up()
+                    else:
+                        if self.path_index < len(self.path) - 1:
+                            self.path_up()
+                            self.path_index += 1
+                    self.ticks_q = 0
         if self.cycle_breaker_left:
-            self.ticks_q += 1
-            if self.ticks_q == 10:
-                self.a_star_step_down()
-                self.ticks_q = 0
+            self.ticks_before += 1
+            if self.ticks_before >= ticks_threshold:
+                self.ticks_q += 1
+                if self.ticks_q == k:
+                    if self.path is None:
+                        self.a_star_step_down()
+                    else:
+                        if self.path_index > 0:
+                            self.path_down()
+                            self.path_index -= 1
+                    self.ticks_q = 0
 
     @staticmethod
     def linear_gradi(c: tuple[int, int, int], i):
@@ -472,8 +491,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             # a_star interactive:
             case arcade.key.RIGHT:
                 if self.is_interactive:
+                    self.cycle_breaker_right = True
                     if self.path is None:
-                        self.cycle_breaker_right = True
                         self.a_star_step_up()
                     else:
                         if self.path_index < len(self.path) - 1:
@@ -481,8 +500,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                             self.path_index += 1
             case arcade.key.LEFT:
                 if self.is_interactive:
+                    self.cycle_breaker_left = True
                     if self.path is None:
-                        self.cycle_breaker_left = True
                         self.a_star_step_down()
                     else:
                         if self.path_index > 0:
@@ -496,9 +515,11 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             case arcade.key.RIGHT:
                 self.cycle_breaker_right = False
                 self.ticks_q = 0
+                self.ticks_before = 0
             case arcade.key.LEFT:
                 self.cycle_breaker_left = False
                 self.ticks_q = 0
+                self.ticks_before = 0
 
     def get_node(self, mouse_x, mouse_y):
         x_, y_ = mouse_x - 5, mouse_y - 5
@@ -564,13 +585,15 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             if button == arcade.MOUSE_BUTTON_LEFT:
                 sn = self.get_node(x, y)
                 if sn:
-                    if self.start_node: self.start_node.type = NodeType.EMPTY
+                    if self.start_node:
+                        self.start_node.type = NodeType.EMPTY
                     sn.type = NodeType.START_NODE
                     self.start_node = sn
             elif button == arcade.MOUSE_BUTTON_RIGHT:
                 en = self.get_node(x, y)
                 if en:
-                    if self.end_node: self.end_node.type = NodeType.EMPTY
+                    if self.end_node:
+                        self.end_node.type = NodeType.EMPTY
                     en.type = NodeType.END_NODE
                     self.end_node = en
         elif self.mode == 2:  # a_star interactive -->> info getting:
@@ -629,7 +652,8 @@ class Node:
             self.type = NodeType.EMPTY
 
     def __eq__(self, other):
-        if type(self) != type(other): return False
+        if type(self) != type(other):
+            return False
         return (self.y, self.x) == (other.y, other.x)
 
     # this is needed for using Node objects in priority queue like heapq and so on
@@ -653,6 +677,7 @@ class Node:
         self.tiebreaker = None
         self.previously_visited_node = None
         self.times_visited = 0
+        self.neighs = set()
 
     @staticmethod
     def manhattan_distance(node1, node2: 'Node'):
@@ -695,23 +720,30 @@ class Node:
             if 0 <= ny < game.tiles_q and 0 <= nx < game.hor_tiles_q:
                 yield game.grid[ny][nx]
 
-    def wave_lee(self, other: 'Node'):
-        front_wave, new_front_wave = {self}, set()
+    # finished, tested and approved by Levi Gin:
+    def wave_lee(self, other: 'Node', game: 'Astar'):
+        other.get_neighs(game)
+        flag = True
+        front_wave = [self]
         other.val, iteration = 0, 0
         # wave-spreading:
         while front_wave:
             iteration += 1
+            new_front_wave = []
             for front_node in front_wave:
                 front_node.val = iteration
                 if front_node == other:
-                    front_wave.clear()
+                    flag = False
                     break
-                for front_neigh in front_node.neighs:
-                    if front_neigh not in front_wave:
-                        new_front_wave.add(front_neigh)
+                for front_neigh in front_node.get_neighs(game):
+                    if front_neigh.val == 0:
+                        new_front_wave.append(front_neigh)
+            if not flag:
+                break
             front_wave = new_front_wave[:]
-            # path restoration:
-        if other.val == 0: return []
+        # path restoration:
+        if other.val == 0:
+            return []
         curr_node = other
         the_shortest_path = []
         while curr_node != self:
@@ -739,14 +771,16 @@ class Node:
             max_times_visited = max(max_times_visited, curr_node.times_visited)
             game.nodes_visited[curr_node] = 1
             # base case of finding the shortest path:
-            if curr_node == other: break
+            if curr_node == other:
+                break
             # next step:
             for neigh in curr_node.get_neighs(game):
                 if neigh.g > curr_node.g + neigh.val:
                     neigh.g = curr_node.g + neigh.val
                     neigh.h = neigh.heuristics[game.heuristic](neigh, other)
-                    if game.tiebreaker is not None: neigh.tiebreaker = self.tiebreakers[game.tiebreaker](self, other,
-                                                                                                         neigh)
+                    if game.tiebreaker is not None:
+                        neigh.tiebreaker = self.tiebreakers[game.tiebreaker](self, other,
+                                                                             neigh)
                     neigh.previously_visited_node = curr_node
                     hq.heappush(nodes_to_be_visited, neigh)
         game.max_times_visited = max_times_visited
@@ -829,24 +863,23 @@ if __name__ == "__main__":
 # methods are borrowed from CPython.heapq github
 # v2.3 fixed bug when a rare exception raised during the consecutive calls of a_star_step_down() method
 # Current node to be removed from nodes_visited set have been absent. Nodes_visited now is dict instead of set as it was before
-# v2.4
+# v2.4 Added the correct path restoring to the a_star_interactive mode
+# v2.5 Added two methods: path_up() and path_down() to visualize the path restoring phase step by step up and down respectively
+# --- trying to represent the leading node of restoring path by a purple circle, bad idea
+# v2.6 Now the leading node of the path found is represented by a directed triangle turning the way consistent with the shortest path's direction
+# v2.7 fixed bug when the exception raised if user try undoing the path restoring and continue pressing the left arrow key (a_star_down calls)
+# v2.8 added fast path_up() and path_down() consecutive calls during the right and the left mouse keys respectively (after a short delay)
+# v2.9 fixed bug when ENTER clearing have not been working correctly, some walls have become passable, neighs is now renewed after both types of clearing
 #
 #
 #
 #
-#
-#
-#
-#
-#
-# TODO: implement a step-up a_star visualization with some interaction (info window with pars of the current node or the selected one)... (high, hard) ++-
 # TODO: add some other tiebreakers (medium, easy) +-
 # TODO: upgrade the visual part (medium, medium) -+
 # TODO: add number representation of times_visited par for the every visited node than can be on off by pressing a key (medium, easy)
 # TODO: create an info/help pages (high, hard)
-# TODO: extend the algo base with Lee wave pathfinding algorithm (medium, medium) +-
-# TODO: add special flag a_star_interactive_on and switcher on the main window (high, easy) +-
-# TODO:
-# TODO:
+# TODO: extend the algo base with Lee wave pathfinding algorithm (medium, medium) Levi Gin +-
+# TODO: add a visualization for the most priority nodes in the heap (medium, medium)
+# TODO: fix bug when the right arrow key is being pressed after the fully undoing of the path recovering by pressing the left arrow key (high, medium)
 # TODO:
 # TODO:

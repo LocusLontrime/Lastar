@@ -59,6 +59,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.ticks_q = 0
         self.ticks_before = 0
         self.f_flag = False
+        self.in_interaction_mode_lock = False
+        self.greedy_flag_lock = False
         # walls building/erasing dicts:
         self.walls_built_erased = [([], True)]
         self.walls_index = 0
@@ -321,10 +323,14 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                          arcade.color.BLACK, bold=True)
 
         if self.greedy_flag:
-            arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
-                                         SCREEN_HEIGHT - 130 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30, 14,
-                                         14,
-                                         arcade.color.BLACK)
+            if not self.greedy_flag_lock:
+                arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
+                                             SCREEN_HEIGHT - 130 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30, 14,
+                                             14,
+                                             arcade.color.BLACK)
+        if self.greedy_flag_lock:
+            self.draw_lock(SCREEN_WIDTH - 225,
+                           SCREEN_HEIGHT - 130 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30)
 
         arcade.draw_text('Sizes in tiles: ', SCREEN_WIDTH - 235,
                          SCREEN_HEIGHT - 160 - (18 + 2 * 2 + 18) * 4 - 3 * 18 * 3,
@@ -355,9 +361,13 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                          bold=True)
 
         if self.is_interactive:
-            arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
-                                         SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30, 14, 14,
-                                         arcade.color.BLACK)
+            if self.in_interaction_mode_lock:
+                self.draw_lock(SCREEN_WIDTH - 225,
+                                             SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30)
+            else:
+                arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
+                                             SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30, 14, 14,
+                                             arcade.color.BLACK)
 
         # NODE CHOSEN:
         if self.node_chosen:
@@ -388,6 +398,11 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             scaled_point[0] + scaled_point[1], -scaled_point[0] + scaled_point[1])
         cx, cy = 5 + node.x * self.tile_size + self.tile_size / 2, 5 + node.y * self.tile_size + self.tile_size / 2
         return cx, cy, cx + deltas[0][0], cy + deltas[0][1], cx + deltas[1][0], cy + deltas[1][1]
+
+    @staticmethod
+    def draw_lock(center_x: int, center_y: int):
+        arcade.draw_rectangle_filled(center_x, center_y, 14, 14, arcade.color.RED)
+        arcade.draw_rectangle_outline(center_x, center_y + 7, 8.4, 16.8, arcade.color.RED, border_width=2)
 
     def rebuild_map(self):
         self.tile_size, self.hor_tiles_q = self.get_pars()
@@ -445,9 +460,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # clearing the every empty node:
         for row in self.grid:
             for node in row:
-                if node.type == NodeType.EMPTY and node not in [self.start_node, self.end_node]:
+                if node.type not in [NodeType.WALL, NodeType.START_NODE, NodeType.END_NODE]:
                     node.clear()
-                else:
+                elif node.type in [NodeType.START_NODE, NodeType.END_NODE]:
                     node.heur_clear()
         # clearing the nodes-relating pars of the game:
         self.aux_clear()
@@ -472,6 +487,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.neighs_added_to_heap_dict = {}
         self.walls_built_erased = [([], True)]
         self.walls_index = 0
+        self.in_interaction = False
+        self.in_interaction_mode_lock = False
+        self.greedy_flag_lock = False
 
     def on_key_press(self, symbol: int, modifiers: int):
         # is called when user press the symbol key:
@@ -481,6 +499,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 if self.start_node and self.end_node:
                     if self.is_interactive:
                         self.in_interaction = True
+                        self.in_interaction_mode_lock = True
+                        self.greedy_flag_lock = True
                         self.a_star_preparation()
                     else:
                         start = time.time_ns()
@@ -592,11 +612,13 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 130 - (
                 18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 130 - (
                 18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 + 9:
-            self.greedy_flag = not self.greedy_flag
+            if not self.greedy_flag_lock:
+                self.greedy_flag = not self.greedy_flag
         if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 190 - (
                 18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 190 - (
                 18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30 + 9:
-            self.is_interactive = not self.is_interactive
+            if not self.in_interaction_mode_lock:
+                self.is_interactive = not self.is_interactive
         if self.mode == 0:
             self.building_walls_flag = True
             if button == arcade.MOUSE_BUTTON_LEFT:
@@ -910,10 +932,10 @@ if __name__ == "__main__":
 # v3.0 undo and redo commands for wall-structures have been implemented, they can be called by pressing the 'Z' and 'Y' keys respectively
 # v3.1 fixed bug when consecutive erasing linked regions by pressing the middle mouse key could not be undone correctly,passability par has been removed from class Node
 # v3.2 fixed bug when walls_built_erased dict is widening enormously quick
-# v3.3 common pieces of code from 2 clearing and one rebuilding methods has been merged into new method aux_clear()
+# v3.3 common pieces of code from 2 clearing and one rebuilding methods has been merged into new method aux_clear(), good code lines decreasing
 # v3.4 fixed bug when END_NODE could not be visited
-#
-#
+# v3.5 added a lock-flag that prohibits the is_interactive flag switching after the space has been pressed in interactive mode
+# v3.6 fixed all clearing methods, added a lock_flag that prohibits greedy_flag changing during interactive a_star phase, lock colour has been changed to RED, aux_clear() method has been extended
 #
 #
 # TODO: add some other tiebreakers (medium, easy) +-
@@ -926,10 +948,10 @@ if __name__ == "__main__":
 # TODO: add a scroller on the right side of the window (high, medium)
 # TODO: add an interaction-prohibition for a large grids (high, easy)
 # TODO: find and implement other core algorithms (like Lee and Astar/Dijkstra) (low, high)
-# TODO:
+# TODO: while in_interaction is True this flag cannot be switched until the field is fully cleared by pressing the 'ENTER' key (high, easy)
 # TODO: add a command of wall-pattern saving and further loading (low, high)
-# TODO:
-# TODO:
+# TODO: simplify the drawing (high, high)
+# TODO: add an info changing depending on a_star heuristic and greedy_flag (high, easy)
 # TODO:
 # TODO:
 # TODO:

@@ -58,6 +58,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.cycle_breaker_left = False
         self.ticks_q = 0
         self.ticks_before = 0
+        self.f_flag = False
 
     def a_star_preparation(self):
         self.nodes_to_be_visited = [self.start_node]
@@ -262,6 +263,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                                                      1 if self.line_width % 2 != 0 else 0),
                                                  self.tile_size - 2 * self.line_width - (
                                                      1 if self.line_width % 2 != 0 else 0), n.type.value)
+                    if self.f_flag:
+                        arcade.draw_text(f'{n.g + n.h}', 5 + self.tile_size * x + self.tile_size / 3,
+                                                 5 + self.tile_size * y + self.tile_size / 3, arcade.color.BLACK, self.tile_size // 3, bold=True)
         # HINTS:
         arcade.draw_text(f'Mode: {self.mode_names[self.mode]}', 25, SCREEN_HEIGHT - 35, arcade.color.BLACK, bold=True)
         arcade.draw_text(
@@ -361,11 +365,18 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         if self.in_interaction:
             if self.start_node and self.end_node:
                 if self.path is not None and self.path_index > 0:
-                    p = -self.path[self.path_index].x + self.path[self.path_index - 1].x, -self.path[self.path_index].y + \
+                    p = -self.path[self.path_index].x + self.path[self.path_index - 1].x, -self.path[
+                        self.path_index].y + \
                         self.path[self.path_index - 1].y
                     points = self.get_triangle(self.path[self.path_index], p)
                     arcade.draw_triangle_filled(points[0], points[1], points[2], points[3], points[4], points[5],
                                                 arcade.color.RED)
+
+            if self.path:
+                arcade.draw_circle_filled(5 + self.end_node.x * self.tile_size + self.tile_size / 2,
+                                          5 + self.end_node.y * self.tile_size + self.tile_size / 2,
+                                          self.tile_size / 4,
+                                          arcade.color.RED)
 
     def get_triangle(self, node: 'Node', point: tuple[int, int]):
         scaled_point = point[0] * (self.tile_size // 2 - 2), point[1] * (self.tile_size // 2 - 2)
@@ -417,6 +428,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                         if self.path_index > 0:
                             self.path_down()
                             self.path_index -= 1
+                        else:
+                            self.path = None
+                            self.a_star_step_down()
                     self.ticks_q = 0
 
     @staticmethod
@@ -509,6 +523,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                             self.path_index -= 1
                         else:
                             self.path = None
+                            self.a_star_step_down()
+            case arcade.key.F:
+                self.f_flag = not self.f_flag
 
     def on_key_release(self, symbol: int, modifiers: int):
         match symbol:
@@ -870,16 +887,39 @@ if __name__ == "__main__":
 # v2.7 fixed bug when the exception raised if user try undoing the path restoring and continue pressing the left arrow key (a_star_down calls)
 # v2.8 added fast path_up() and path_down() consecutive calls during the right and the left mouse keys respectively (after a short delay)
 # v2.9 fixed bug when ENTER clearing have not been working correctly, some walls have become passable, neighs is now renewed after both types of clearing
+# v2.10 wave-spreading lee pathfinding algorithm has been tested and then fully corrected
+#
+# v2.11 fixed bug when the right arrow key is being pressed after the fully undoing of the path recovering by pressing the left arrow key and an error is raised
+# removed an additional interactive step between the null-index of path found and the first call of a_star_step_down() method, the end node (
+# the first node of the reversed path) now is marked by a red inner circle
+# v2.12 now it is possible to get the full steps of algo by one long pressing the right mouse key and reverse this process by pressing the left moue key
+# v2.13 added number representation of f = g + h par for the every visited/heap node than can be turned on/off by pressing the key 'F'
+#
 #
 #
 #
 #
 # TODO: add some other tiebreakers (medium, easy) +-
 # TODO: upgrade the visual part (medium, medium) -+
-# TODO: add number representation of times_visited par for the every visited node than can be on off by pressing a key (medium, easy)
+# TODO: add a core-algo switcher that can change the right interactive panel (Lee, Astar and so on) (high, medium)
 # TODO: create an info/help pages (high, hard)
 # TODO: extend the algo base with Lee wave pathfinding algorithm (medium, medium) Levi Gin +-
 # TODO: add a visualization for the most priority nodes in the heap (medium, medium)
-# TODO: fix bug when the right arrow key is being pressed after the fully undoing of the path recovering by pressing the left arrow key (high, medium)
+# TODO: add heuristic tiebreaker and combined tiebreakers (medium, high)
+# TODO: add a scroller on the right side of the window (high, medium)
+# TODO: add an interaction-prohibition for a large grids (high, easy)
+# TODO: find and implement other core algorithms (like Lee and Astar/Dijkstra) (low, high)
+# TODO: add an undo command (high, high)
+# TODO: add a command of wall-pattern saving and further loading (low, high)
 # TODO:
 # TODO:
+# TODO:
+# TODO:
+# TODO:
+# TODO:
+# TODO:
+
+
+
+
+

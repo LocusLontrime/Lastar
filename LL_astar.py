@@ -13,15 +13,15 @@ TILE_SIZE: int
 
 
 class Astar(arcade.Window):  # 36 366 98 989 LL
-    def __init__(self, width: int, height: int, vertical_tiles=25, line_width=3):
+    def __init__(self, width: int, height: int):
         super().__init__(width, height)
         arcade.set_background_color(arcade.color.DUTCH_WHITE)
         # scaling:
         self.scale = 0
         self.scale_names = {0: 5, 1: 10, 2: 15, 3: 22, 4: 33, 5: 45, 6: 66, 7: 90, 8: 110, 9: 165, 10: 198}
         # initial data and info:
-        self.line_width = line_width  # TODO: to be deleted
-        self.tiles_q = vertical_tiles  # TODO: to be deleted
+        self.line_width = None
+        self.tiles_q = None
         self.Y, self.X = SCREEN_HEIGHT - 26, SCREEN_WIDTH - 250
         self.tile_size, self.hor_tiles_q = self.get_pars()
         self.time_elapsed_ms = 0
@@ -59,6 +59,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.ticks_q = 0
         self.ticks_before = 0
         self.f_flag = False
+        # walls building/erasing dicts:
+        self.walls_built_erased = [([], True)]
+        self.walls_index = 0
 
     def a_star_preparation(self):
         self.nodes_to_be_visited = [self.start_node]
@@ -265,7 +268,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                                                      1 if self.line_width % 2 != 0 else 0), n.type.value)
                     if self.f_flag:
                         arcade.draw_text(f'{n.g + n.h}', 5 + self.tile_size * x + self.tile_size / 3,
-                                                 5 + self.tile_size * y + self.tile_size / 3, arcade.color.BLACK, self.tile_size // 3, bold=True)
+                                         5 + self.tile_size * y + self.tile_size / 3, arcade.color.BLACK,
+                                         self.tile_size // 3, bold=True)
         # HINTS:
         arcade.draw_text(f'Mode: {self.mode_names[self.mode]}', 25, SCREEN_HEIGHT - 35, arcade.color.BLACK, bold=True)
         arcade.draw_text(
@@ -390,17 +394,10 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # grid's renewing:
         self.grid = [[Node(j, i, 1, NodeType.EMPTY) for i in range(self.hor_tiles_q)] for j in range(self.tiles_q)]
         # pars resetting:
-        self.iterations = 0
-        self.nodes_visited = {}
-        self.path = None
-        self.path_index = 0
-        self.time_elapsed_ms = 0
+        self.aux_clear()
         self.start_node = None
         self.end_node = None
         self.node_chosen = None
-        self.neighs_added_to_heap_dict = {0: [self.start_node]}
-        self.curr_node_dict = {0: None}
-        self.max_times_visited_dict = {0: 0}
 
     def update(self, delta_time: float):
         # consecutive calls during key pressing:
@@ -438,29 +435,22 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         return c[0] + 3 * i, c[1] - 5 * i, c[2] + i * 5
 
     def erase_all_linked_nodes(self, node: 'Node'):
-        node.passability = True
         node.type = NodeType.EMPTY
+        self.walls_built_erased[self.walls_index][0].append(node)
         for neigh in node.get_extended_neighs(self):
-            if not neigh.passability:
+            if neigh.type == NodeType.WALL:
                 self.erase_all_linked_nodes(neigh)
 
     def clear_empty_nodes(self):
         # clearing the every empty node:
         for row in self.grid:
             for node in row:
-                if node.passability and node not in [self.start_node, self.end_node]:
+                if node.type == NodeType.EMPTY and node not in [self.start_node, self.end_node]:
                     node.clear()
                 else:
                     node.heur_clear()
         # clearing the nodes-relating pars of the game:
-        self.nodes_visited = {}
-        self.time_elapsed_ms = 0
-        self.iterations = 0
-        self.path = None
-        self.path_index = 0
-        self.curr_node_dict = {0: None}
-        self.max_times_visited_dict = {0: 0}
-        self.neighs_added_to_heap_dict = {}
+        self.aux_clear()
 
     def clear_grid(self):
         # clearing the every node:
@@ -469,6 +459,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 node.clear()
         # clearing the nodes-relating pars of the game:
         self.start_node, self.end_node = None, None
+        self.aux_clear()
+
+    def aux_clear(self):
         self.nodes_visited = {}
         self.time_elapsed_ms = 0
         self.iterations = 0
@@ -477,6 +470,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.curr_node_dict = {0: None}
         self.max_times_visited_dict = {0: 0}
         self.neighs_added_to_heap_dict = {}
+        self.walls_built_erased = [([], True)]
+        self.walls_index = 0
 
     def on_key_press(self, symbol: int, modifiers: int):
         # is called when user press the symbol key:
@@ -526,6 +521,17 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                             self.a_star_step_down()
             case arcade.key.F:
                 self.f_flag = not self.f_flag
+            # undoing and cancelling:
+            case arcade.key.Z:  # undo
+                if self.walls_index > 0:
+                    for node in (l := self.walls_built_erased[self.walls_index])[0]:
+                        node.type = NodeType.EMPTY if l[1] else NodeType.WALL
+                    self.walls_index -= 1
+            case arcade.key.Y:  # cancel undo
+                if self.walls_index < len(self.walls_built_erased) - 1:
+                    for node in (l := self.walls_built_erased[self.walls_index])[0]:
+                        node.type = NodeType.WALL if l[1] else NodeType.EMPTY
+                    self.walls_index += 1
 
     def on_key_release(self, symbol: int, modifiers: int):
         match symbol:
@@ -549,16 +555,24 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 if self.build_or_erase is not None:
                     if self.build_or_erase:
                         n = self.get_node(x, y)
-                        if n and ((n.type not in [NodeType.VISITED_NODE, NodeType.NEIGH, NodeType.START_NODE,
-                                                  NodeType.END_NODE]) or not self.in_interaction):
-                            n.passability = False
+                        if n and n.type != NodeType.WALL and (
+                                (n.type not in [NodeType.VISITED_NODE, NodeType.NEIGH, NodeType.START_NODE,
+                                                NodeType.END_NODE]) or not self.in_interaction):
                             n.type = NodeType.WALL
+                            if self.walls_index < len(self.walls_built_erased) - 1:
+                                self.walls_built_erased = self.walls_built_erased[:self.walls_index + 1]
+                            self.walls_built_erased.append(([n], self.build_or_erase))
+                            self.walls_index += 1
                     else:
                         n = self.get_node(x, y)
-                        if n and ((n.type not in [NodeType.VISITED_NODE, NodeType.NEIGH, NodeType.START_NODE,
-                                                  NodeType.END_NODE]) or not self.in_interaction):
-                            n.passability = True
+                        if n and n.type != NodeType.WALL and (
+                                (n.type not in [NodeType.VISITED_NODE, NodeType.NEIGH, NodeType.START_NODE,
+                                                NodeType.END_NODE]) or not self.in_interaction):
                             n.type = NodeType.EMPTY
+                            if self.walls_index < len(self.walls_built_erased) - 1:
+                                self.walls_built_erased = self.walls_built_erased[:self.walls_index + 1]
+                            self.walls_built_erased.append(([n], self.build_or_erase))
+                            self.walls_index += 1
 
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int):
         # setting_up heuristic and tiebreaker:
@@ -597,6 +611,10 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 self.build_or_erase = None
                 n = self.get_node(x, y)
                 if n:
+                    if self.walls_index < len(self.walls_built_erased) - 1:
+                        self.walls_built_erased = self.walls_built_erased[: self.walls_index + 1]
+                    self.walls_built_erased.append(([], False))
+                    self.walls_index += 1
                     self.erase_all_linked_nodes(n)
         elif self.mode == 1:
             if button == arcade.MOUSE_BUTTON_LEFT:
@@ -634,13 +652,12 @@ class Node:
     extended_walk = [(dy, dx) for dx in range(-1, 2) for dy in range(-1, 2) if (dy, dx) != (0, 0)]
     IS_GREEDY = False
 
-    def __init__(self, y, x, val, node_type: 'NodeType', passability=True):
+    def __init__(self, y, x, val, node_type: 'NodeType'):
         # type:
         self.type = node_type
         # important pars:
         self.y, self.x = y, x
         self.val = val
-        self.passability = passability
         self.neighs = set()  # the nearest neighbouring nodes
         self.previously_visited_node = None  # for building the shortest path of Nodes from the starting point to the ending one
         self.times_visited = 0
@@ -649,7 +666,7 @@ class Node:
         self.h = 0  # approximated cost evaluated by heuristic for path starting from the current node and ending at the exit Node
         self.tiebreaker = None
         # f = h + g or total cost of the current Node is not needed here
-        # heur dict, TODO: (it should be implemented in Astar class instead of node one):
+        # heur dict, TODO: (it should be implemented in Astar class instead of node one) (medium, easy):
         self.heuristics = {0: self.manhattan_distance, 1: self.euclidian_distance, 2: self.max_delta,
                            3: self.no_heuristic}
         self.tiebreakers = {0: self.vector_cross_product_deviation, 1: self.coordinates_pair}
@@ -686,7 +703,6 @@ class Node:
     def clear(self):
         self.heur_clear()
         self.type = NodeType.EMPTY
-        self.passability = True
 
     def heur_clear(self):
         self.g = np.Infinity
@@ -727,7 +743,7 @@ class Node:
         for dy, dx in self.walk:
             ny, nx = self.y + dy, self.x + dx
             if 0 <= ny < game.tiles_q and 0 <= nx < game.hor_tiles_q:
-                if game.grid[ny][nx].passability:
+                if game.grid[ny][nx].type == NodeType.EMPTY:
                     self.neighs.add(game.grid[ny][nx])
         return self.neighs
 
@@ -826,7 +842,7 @@ class NodeType(Enum):
 
 def main():
     # line_width par should be even number for correct grid&nodes representation:
-    game = Astar(SCREEN_WIDTH, SCREEN_HEIGHT, 28, 2)
+    game = Astar(SCREEN_WIDTH, SCREEN_HEIGHT)
     game.setup()
     arcade.run()
 
@@ -894,6 +910,11 @@ if __name__ == "__main__":
 # the first node of the reversed path) now is marked by a red inner circle
 # v2.12 now it is possible to get the full steps of algo by one long pressing the right mouse key and reverse this process by pressing the left moue key
 # v2.13 added number representation of f = g + h par for the every visited/heap node than can be turned on/off by pressing the key 'F'
+# v2.14 two excess pars have been deleted from Lastar init signature
+# v3.0 undo and redo commands for wall-structures have been implemented, they can be called by pressing the 'Z' and 'Y' keys respectively
+# v3.1 fixed bug when consecutive erasing linked regions by pressing the middle mouse key could not be undone correctly,passability par has been removed from class Node
+# v3.2 fixed bug when walls_built_erased dict is widening enormously quick
+# v3.3 common pieces of code from 2 clearing and one rebuilding methods has been merged into new method aux_clear()
 #
 #
 #
@@ -909,7 +930,7 @@ if __name__ == "__main__":
 # TODO: add a scroller on the right side of the window (high, medium)
 # TODO: add an interaction-prohibition for a large grids (high, easy)
 # TODO: find and implement other core algorithms (like Lee and Astar/Dijkstra) (low, high)
-# TODO: add an undo command (high, high)
+# TODO:
 # TODO: add a command of wall-pattern saving and further loading (low, high)
 # TODO:
 # TODO:
@@ -918,8 +939,3 @@ if __name__ == "__main__":
 # TODO:
 # TODO:
 # TODO:
-
-
-
-
-

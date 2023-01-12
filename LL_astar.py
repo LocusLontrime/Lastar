@@ -555,9 +555,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 if self.build_or_erase is not None:
                     if self.build_or_erase:
                         n = self.get_node(x, y)
-                        if n and n.type != NodeType.WALL and (
-                                (n.type not in [NodeType.VISITED_NODE, NodeType.NEIGH, NodeType.START_NODE,
-                                                NodeType.END_NODE]) or not self.in_interaction):
+                        if n and n.type != NodeType.WALL:
                             n.type = NodeType.WALL
                             if self.walls_index < len(self.walls_built_erased) - 1:
                                 self.walls_built_erased = self.walls_built_erased[:self.walls_index + 1]
@@ -565,9 +563,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                             self.walls_index += 1
                     else:
                         n = self.get_node(x, y)
-                        if n and n.type != NodeType.WALL and (
-                                (n.type not in [NodeType.VISITED_NODE, NodeType.NEIGH, NodeType.START_NODE,
-                                                NodeType.END_NODE]) or not self.in_interaction):
+                        if n and n.type == NodeType.WALL:
                             n.type = NodeType.EMPTY
                             if self.walls_index < len(self.walls_built_erased) - 1:
                                 self.walls_built_erased = self.walls_built_erased[:self.walls_index + 1]
@@ -743,7 +739,7 @@ class Node:
         for dy, dx in self.walk:
             ny, nx = self.y + dy, self.x + dx
             if 0 <= ny < game.tiles_q and 0 <= nx < game.hor_tiles_q:
-                if game.grid[ny][nx].type == NodeType.EMPTY:
+                if game.grid[ny][nx].type in [NodeType.EMPTY, NodeType.END_NODE]:
                     self.neighs.add(game.grid[ny][nx])
         return self.neighs
 
@@ -915,7 +911,7 @@ if __name__ == "__main__":
 # v3.1 fixed bug when consecutive erasing linked regions by pressing the middle mouse key could not be undone correctly,passability par has been removed from class Node
 # v3.2 fixed bug when walls_built_erased dict is widening enormously quick
 # v3.3 common pieces of code from 2 clearing and one rebuilding methods has been merged into new method aux_clear()
-#
+# v3.4 fixed bug when END_NODE could not be visited
 #
 #
 #

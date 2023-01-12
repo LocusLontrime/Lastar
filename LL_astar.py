@@ -5,6 +5,9 @@ from enum import Enum
 import numpy as np
 # graphics:
 import arcade
+# data
+import shelve
+import pickle
 
 # screen sizes:
 SCREEN_WIDTH = 1920
@@ -59,8 +62,12 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.ticks_q = 0
         self.ticks_before = 0
         self.f_flag = False
+        # lockers:
         self.in_interaction_mode_lock = False
         self.greedy_flag_lock = False
+        self.heuristic_lock = False
+        self.tiebreakers_lock = False
+        self.scale_lock = False
         # walls building/erasing dicts:
         self.walls_built_erased = [([], True)]
         self.walls_index = 0
@@ -296,6 +303,12 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                                      14,
                                      arcade.color.BLACK)
 
+        if self.heuristic_lock:
+            self.draw_lock(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - (18 + 2 * 2 + 18) * self.heuristic)
+            for i in range(len(self.heuristic_names)):
+                if i != self.heuristic:
+                    self.draw_cross(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - (18 + 2 * 2 + 18) * i)
+
         arcade.draw_text(f'Tiebreakers: ', SCREEN_WIDTH - 235, SCREEN_HEIGHT - 100 - (18 + 2 * 2 + 18) * 3 - 18 * 3,
                          arcade.color.BLACK, bold=True)
         for i in range(len(self.tiebreaker_names)):
@@ -312,6 +325,15 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                                          14,
                                          14, arcade.color.BLACK)
 
+        if self.tiebreakers_lock:
+            if self.tiebreaker is not None:
+                self.draw_lock(SCREEN_WIDTH - 225,
+                               SCREEN_HEIGHT - 100 - (18 + 2 * 2 + 18) * (3 + self.tiebreaker) - 18 * 3 - 30)
+            for i in range(len(self.tiebreaker_names)):
+                if self.tiebreaker is None or i != self.tiebreaker:
+                    self.draw_cross(SCREEN_WIDTH - 225,
+                                    SCREEN_HEIGHT - 100 - (18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30)
+
         arcade.draw_text('Is greedy: ', SCREEN_WIDTH - 235,
                          SCREEN_HEIGHT - 130 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3,
                          arcade.color.BLACK, bold=True)
@@ -323,14 +345,19 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                          arcade.color.BLACK, bold=True)
 
         if self.greedy_flag:
-            if not self.greedy_flag_lock:
+            if self.greedy_flag_lock:
+                self.draw_lock(SCREEN_WIDTH - 225,
+                               SCREEN_HEIGHT - 130 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30)
+
+            else:
                 arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
                                              SCREEN_HEIGHT - 130 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30, 14,
                                              14,
                                              arcade.color.BLACK)
-        if self.greedy_flag_lock:
-            self.draw_lock(SCREEN_WIDTH - 225,
-                           SCREEN_HEIGHT - 130 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30)
+        else:
+            if self.greedy_flag_lock:
+                self.draw_cross(SCREEN_WIDTH - 225,
+                                SCREEN_HEIGHT - 130 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30)
 
         arcade.draw_text('Sizes in tiles: ', SCREEN_WIDTH - 235,
                          SCREEN_HEIGHT - 160 - (18 + 2 * 2 + 18) * 4 - 3 * 18 * 3,
@@ -344,10 +371,18 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                              SCREEN_HEIGHT - 160 - (18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30 - 6,
                              arcade.color.BLACK, bold=True)
 
-        arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
-                                     SCREEN_HEIGHT - 160 - (18 + 2 * 2 + 18) * (4 + self.scale) - 3 * 18 * 3 - 30, 14,
-                                     14,
-                                     arcade.color.BLACK)
+        if self.scale_lock:
+            self.draw_lock(SCREEN_WIDTH - 225,
+                                         SCREEN_HEIGHT - 160 - (18 + 2 * 2 + 18) * (4 + self.scale) - 3 * 18 * 3 - 30)
+            for i in range(len(self.scale_names)):
+                if i != self.scale:
+                    self.draw_cross(SCREEN_WIDTH - 225,
+                                         SCREEN_HEIGHT - 160 - (18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30)
+        else:
+            arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
+                                         SCREEN_HEIGHT - 160 - (18 + 2 * 2 + 18) * (4 + self.scale) - 3 * 18 * 3 - 30, 14,
+                                         14,
+                                         arcade.color.BLACK)
 
         arcade.draw_text('Show mode: ', SCREEN_WIDTH - 235,
                          SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3, arcade.color.BLACK, bold=True)
@@ -363,7 +398,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         if self.is_interactive:
             if self.in_interaction_mode_lock:
                 self.draw_lock(SCREEN_WIDTH - 225,
-                                             SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30)
+                               SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30)
             else:
                 arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
                                              SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30, 14, 14,
@@ -403,6 +438,12 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
     def draw_lock(center_x: int, center_y: int):
         arcade.draw_rectangle_filled(center_x, center_y, 14, 14, arcade.color.RED)
         arcade.draw_rectangle_outline(center_x, center_y + 7, 8.4, 16.8, arcade.color.RED, border_width=2)
+
+    @staticmethod
+    def draw_cross(center_x: int, center_y: int):
+        arcade.draw_line(center_x - 9, center_y + 9, center_x + 9, center_y - 9, arcade.color.BLACK, line_width=2)
+        arcade.draw_line(center_x + 9, center_y + 9, center_x - 9,
+                         center_y - 9, arcade.color.BLACK, line_width=2)
 
     def rebuild_map(self):
         self.tile_size, self.hor_tiles_q = self.get_pars()
@@ -490,6 +531,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.in_interaction = False
         self.in_interaction_mode_lock = False
         self.greedy_flag_lock = False
+        self.heuristic_lock = False
+        self.tiebreakers_lock = False
+        self.scale_lock = False
 
     def on_key_press(self, symbol: int, modifiers: int):
         # is called when user press the symbol key:
@@ -501,6 +545,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                         self.in_interaction = True
                         self.in_interaction_mode_lock = True
                         self.greedy_flag_lock = True
+                        self.heuristic_lock = True
+                        self.tiebreakers_lock = True
+                        self.scale_lock = True
                         self.a_star_preparation()
                     else:
                         start = time.time_ns()
@@ -592,23 +639,26 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
 
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int):
         # setting_up heuristic and tiebreaker:
-        for i in range(len(self.heuristic_names)):
-            if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 100 - (
-                    18 + 2 * 2 + 18) * i - 9 <= y <= SCREEN_HEIGHT - 100 - (18 + 2 * 2 + 18) * i + 9:
-                self.heuristic = i
-                break
-        for i in range(len(self.tiebreaker_names)):
-            if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 100 - (
-                    18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 100 - (
-                    18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30 + 9:
-                self.tiebreaker = None if self.tiebreaker == i else i
-                break
-        for i in range(len(self.scale_names)):
-            if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 160 - (
-                    18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 160 - (
-                    18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30 + 9:
-                self.scale = i
-                self.rebuild_map()
+        if not self.heuristic_lock:
+            for i in range(len(self.heuristic_names)):
+                if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 100 - (
+                        18 + 2 * 2 + 18) * i - 9 <= y <= SCREEN_HEIGHT - 100 - (18 + 2 * 2 + 18) * i + 9:
+                    self.heuristic = i
+                    break
+        if not self.tiebreakers_lock:
+            for i in range(len(self.tiebreaker_names)):
+                if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 100 - (
+                        18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 100 - (
+                        18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30 + 9:
+                    self.tiebreaker = None if self.tiebreaker == i else i
+                    break
+        if not self.scale_lock:
+            for i in range(len(self.scale_names)):
+                if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 160 - (
+                        18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 160 - (
+                        18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30 + 9:
+                    self.scale = i
+                    self.rebuild_map()
         if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 130 - (
                 18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 130 - (
                 18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 + 9:

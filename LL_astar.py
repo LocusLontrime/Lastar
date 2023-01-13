@@ -19,6 +19,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
     def __init__(self, width: int, height: int):
         super().__init__(width, height)
         arcade.set_background_color(arcade.color.DUTCH_WHITE)
+        self.set_update_rate(1 / 60)
         # scaling:
         self.scale = 0
         self.scale_names = {0: 5, 1: 10, 2: 15, 3: 22, 4: 33, 5: 45, 6: 66, 7: 90, 8: 110, 9: 165, 10: 198}
@@ -71,6 +72,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # walls building/erasing dicts:
         self.walls_built_erased = [([], True)]
         self.walls_index = 0
+        self.walls = set()  # all walls located on the map at the time being
 
     def a_star_preparation(self):
         self.nodes_to_be_visited = [self.start_node]
@@ -492,6 +494,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
 
     def erase_all_linked_nodes(self, node: 'Node'):
         node.type = NodeType.EMPTY
+        self.walls.remove(self.number_repr(node))
         self.walls_built_erased[self.walls_index][0].append(node)
         for neigh in node.get_extended_neighs(self):
             if neigh.type == NodeType.WALL:
@@ -599,6 +602,19 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     for node in (l := self.walls_built_erased[self.walls_index])[0]:
                         node.type = NodeType.WALL if l[1] else NodeType.EMPTY
                     self.walls_index += 1
+            # saving and loading:
+            case arcade.key.S:
+                with shelve.open('saved_walls', 'c') as shelf:
+                    index = len(shelf)
+                    shelf[f'ornament {index}'] = self.walls
+            case arcade.key.L:
+                ...
+
+    def number_repr(self, node: 'Node'):
+        return node.y * self.hor_tiles_q + node.x
+
+    def coords(self, number: int):
+        return divmod(number, self.hor_tiles_q)
 
     def on_key_release(self, symbol: int, modifiers: int):
         match symbol:
@@ -624,6 +640,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                         n = self.get_node(x, y)
                         if n and n.type != NodeType.WALL:
                             n.type = NodeType.WALL
+                            self.walls.add(self.number_repr(n))
                             if self.walls_index < len(self.walls_built_erased) - 1:
                                 self.walls_built_erased = self.walls_built_erased[:self.walls_index + 1]
                             self.walls_built_erased.append(([n], self.build_or_erase))
@@ -632,6 +649,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                         n = self.get_node(x, y)
                         if n and n.type == NodeType.WALL:
                             n.type = NodeType.EMPTY
+                            self.walls.remove(self.number_repr(n))
                             if self.walls_index < len(self.walls_built_erased) - 1:
                                 self.walls_built_erased = self.walls_built_erased[:self.walls_index + 1]
                             self.walls_built_erased.append(([n], self.build_or_erase))
@@ -986,7 +1004,12 @@ if __name__ == "__main__":
 # v3.4 fixed bug when END_NODE could not be visited
 # v3.5 added a lock-flag that prohibits the is_interactive flag switching after the space has been pressed in interactive mode
 # v3.6 fixed all clearing methods, added a lock_flag that prohibits greedy_flag changing during interactive a_star phase, lock colour has been changed to RED, aux_clear() method has been extended
-#
+# v4.0 lockers added, while in_interaction is True this flag cannot be switched until the field is fully cleared by pressing the 'ENTER' key, also
+# heuristic, tiebreaker, greedy_flag and size_in_tiles cannot be changed too during the interactive phase, added method draw_lock()
+# v4.1 now all lockers are red and work correctly
+# v4.2 added method draw_cross(), now all the empty fields are crossed while in interactive phase
+# v4.3 added a walls set to keep the information about all the walls, that currently exist, methods number_repr() and coords() for number representation of a node
+# and the inverse process
 #
 # TODO: add some other tiebreakers (medium, easy) +-
 # TODO: upgrade the visual part (medium, medium) -+
@@ -998,8 +1021,8 @@ if __name__ == "__main__":
 # TODO: add a scroller on the right side of the window (high, medium)
 # TODO: add an interaction-prohibition for a large grids (high, easy)
 # TODO: find and implement other core algorithms (like Lee and Astar/Dijkstra) (low, high)
-# TODO: while in_interaction is True this flag cannot be switched until the field is fully cleared by pressing the 'ENTER' key (high, easy)
-# TODO: add a command of wall-pattern saving and further loading (low, high)
+# TODO:
+# TODO: add a command of wall-pattern saving and further loading (low, high) -+
 # TODO: simplify the drawing (high, high)
 # TODO: add an info changing depending on a_star heuristic and greedy_flag (high, easy)
 # TODO:

@@ -73,6 +73,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.walls_built_erased = [([], True)]
         self.walls_index = 0
         self.walls = set()  # all walls located on the map at the time being
+        # sprites:
+        self.nodes_list = arcade.SpriteList()
 
     def a_star_preparation(self):
         self.nodes_to_be_visited = [self.start_node]
@@ -243,9 +245,24 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         return (finish - start) // 10 ** 6
 
     def setup(self):
+        ...
         # game set up is located below:
         # sprites and etc...
-        ...
+        # blocks:
+
+    def make_wall_sprites(self):
+        # node-sprites:
+        self.nodes_list = arcade.SpriteList()
+        for y in range(self.tiles_q):
+            for x in range(self.hor_tiles_q):
+                if (n := self.grid[y][x]).type is not NodeType.EMPTY:
+                    node_sprite = arcade.SpriteSolidColor(self.tile_size - 2 * self.line_width - (
+                        1 if self.line_width % 2 != 0 else 0),
+                                                          self.tile_size - 2 * self.line_width - (
+                                                              1 if self.line_width % 2 != 0 else 0), n.type.value)
+                    node_sprite.center_x = 5 + self.tile_size * x + self.tile_size / 2
+                    node_sprite.center_y = 5 + self.tile_size * y + self.tile_size / 2
+                    self.nodes_list.append(node_sprite)
 
     def get_all_neighs(self):  # pre-calculations (kind of optimization)
         for row in self.grid:
@@ -268,19 +285,21 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # grid:
         self.draw_grid_lines()
         # blocks:
-        for y in range(self.tiles_q):
-            for x in range(self.hor_tiles_q):
-                if (n := self.grid[y][x]).type is not NodeType.EMPTY:
-                    arcade.draw_rectangle_filled(5 + self.tile_size * x + self.tile_size / 2,
-                                                 5 + self.tile_size * y + self.tile_size / 2,
-                                                 self.tile_size - 2 * self.line_width - (
-                                                     1 if self.line_width % 2 != 0 else 0),
-                                                 self.tile_size - 2 * self.line_width - (
-                                                     1 if self.line_width % 2 != 0 else 0), n.type.value)
-                    if self.f_flag:
-                        arcade.draw_text(f'{n.g + n.h}', 5 + self.tile_size * x + self.tile_size / 3,
-                                         5 + self.tile_size * y + self.tile_size / 3, arcade.color.BLACK,
-                                         self.tile_size // 3, bold=True)
+        # for y in range(self.tiles_q):
+        #     for x in range(self.hor_tiles_q):
+        #         if (n := self.grid[y][x]).type is not NodeType.EMPTY:
+        #             arcade.draw_rectangle_filled(5 + self.tile_size * x + self.tile_size / 2,
+        #                                          5 + self.tile_size * y + self.tile_size / 2,
+        #                                          self.tile_size - 2 * self.line_width - (
+        #                                              1 if self.line_width % 2 != 0 else 0),
+        #                                          self.tile_size - 2 * self.line_width - (
+        #                                              1 if self.line_width % 2 != 0 else 0), n.type.value)
+        #             if self.f_flag:
+        #                 arcade.draw_text(f'{n.g + n.h}', 5 + self.tile_size * x + self.tile_size / 3,
+        #                                  5 + self.tile_size * y + self.tile_size / 3, arcade.color.BLACK,
+        #                                  self.tile_size // 3, bold=True)
+        self.make_wall_sprites()
+        self.nodes_list.draw()
         # HINTS:
         arcade.draw_text(f'Mode: {self.mode_names[self.mode]}', 25, SCREEN_HEIGHT - 35, arcade.color.BLACK, bold=True)
         arcade.draw_text(
@@ -589,8 +608,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                         else:
                             self.path = None
                             self.a_star_step_down()
-            case arcade.key.F:
-                self.f_flag = not self.f_flag
+            # case arcade.key.F:
+            #     self.f_flag = not self.f_flag
             # undoing and cancelling:
             case arcade.key.Z:  # undo
                 if self.walls_index > 0:
@@ -1021,12 +1040,12 @@ if __name__ == "__main__":
 # TODO: add a scroller on the right side of the window (high, medium)
 # TODO: add an interaction-prohibition for a large grids (high, easy)
 # TODO: find and implement other core algorithms (like Lee and Astar/Dijkstra) (low, high)
-# TODO: change the way of drawing, rectangles and ellipses/circles should be switched by sprites for fast .batch rendering (high, high)
+# TODO: change the way of drawing, rectangles and ellipses/circles should be switched by sprites for fast .batch rendering (high, high) --+
 # TODO: add a command of wall-pattern saving and further loading (low, high) -+
 # TODO: simplify the drawing (high, high)
 # TODO: add an info changing depending on a_star heuristic and greedy_flag (high, easy)
-# TODO:
-# TODO:
+# TODO: Windows in Arcade!!! (save and load) (high, medium)
+# TODO: change the logic of the wall-sprites list shaping, now it can be constructed only once at the beginning and then updating... (high, high)
 # TODO:
 # TODO:
 # TODO:

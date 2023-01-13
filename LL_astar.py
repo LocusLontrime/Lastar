@@ -1021,7 +1021,7 @@ if __name__ == "__main__":
 # TODO: add a scroller on the right side of the window (high, medium)
 # TODO: add an interaction-prohibition for a large grids (high, easy)
 # TODO: find and implement other core algorithms (like Lee and Astar/Dijkstra) (low, high)
-# TODO:
+# TODO: change the way of drawing, rectangles and ellipses/circles should be switched by sprites for fast .batch rendering (high, high)
 # TODO: add a command of wall-pattern saving and further loading (low, high) -+
 # TODO: simplify the drawing (high, high)
 # TODO: add an info changing depending on a_star heuristic and greedy_flag (high, easy)

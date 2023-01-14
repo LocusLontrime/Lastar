@@ -607,14 +607,20 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     for node in (l := self.walls_built_erased[self.walls_index])[0]:
                         node.type = NodeType.EMPTY if l[1] else NodeType.WALL
                         node.update_sprite_colour()
-                        self.walls.add(self.number_repr(node))
+                        if l[1]:
+                            self.walls.remove(self.number_repr(node))
+                        else:
+                            self.walls.add(self.number_repr(node))
                     self.walls_index -= 1
             case arcade.key.Y:  # cancel undo
                 if self.walls_index < len(self.walls_built_erased) - 1:
-                    for node in (l := self.walls_built_erased[self.walls_index])[0]:
+                    for node in (l := self.walls_built_erased[self.walls_index + 1])[0]:
                         node.type = NodeType.WALL if l[1] else NodeType.EMPTY
                         node.update_sprite_colour()
-                        self.walls.remove(self.number_repr(node))
+                        if l[1]:
+                            self.walls.add(self.number_repr(node))
+                        else:
+                            self.walls.remove(self.number_repr(node))
                     self.walls_index += 1
             # saving and loading:
             case arcade.key.S:
@@ -1051,7 +1057,7 @@ if __name__ == "__main__":
 # v4.4 the logic of the wall-sprites list shaping has been fully changed, now it is constructed only once at the beginning and then updating...
 # performance has increased significantly. The colour of empty node is now WHITE
 # v4.5 the way of grid lines drawing has been changed, now they are created through the create_line() method instead of draw_line. And then are formed into a ShapeElementList
-#
+# v4.6 fixed bug when redo by pressing the 'Y' key have not been working and bug with walls sets
 #
 #
 # TODO: add some other tiebreakers (medium, easy) +-

@@ -20,9 +20,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         super().__init__(width, height)
         arcade.set_background_color(arcade.color.DUTCH_WHITE)
         self.set_update_rate(1 / 60)
-        # scaling:
+        # scaling:  TODO: add AI to calculate the sizes for every resolution possible:
         self.scale = 0
-        self.scale_names = {0: 5, 1: 10, 2: 15, 3: 22, 4: 33, 5: 45, 6: 66, 7: 90, 8: 110, 9: 165, 10: 198}
+        self.scale_names = {0: 5, 1: 10, 2: 15, 3: 22, 4: 33, 5: 45, 6: 66, 7: 90, 8: 110, 9: 165, 10: 198}  # factors of 990 num
         # initial data and info:
         self.line_width = None
         self.tiles_q = None
@@ -271,7 +271,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 arcade.create_line(5 + self.tile_size * i, 5, 5 + self.tile_size * i, 5 + self.Y, arcade.color.BLACK,
                                    self.line_width))
 
-    def get_shapes(self):
+    def get_shapes(self):  # batch -->
         for row in self.grid:
             for node in row:
                 node.get_solid_colour_sprite(self)
@@ -623,7 +623,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                             self.walls.remove(self.number_repr(node))
                     self.walls_index += 1
             # saving and loading:
-            case arcade.key.S:
+            case arcade.key.S:  # TODO: AUX WINDOWS!!!
                 with shelve.open('saved_walls', 'c') as shelf:
                     index = len(shelf)
                     shelf[f'ornament {index}'] = self.walls

@@ -83,6 +83,18 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.grid_line_shapes = arcade.ShapeElementList()
         # UI:
 
+    # INITIALIZATION AUX:
+    # calculating grid visualization pars for vertical tiles number given:
+    def get_pars(self):
+        self.Y, self.X = SCREEN_HEIGHT - 60, SCREEN_WIDTH - 250
+        self.tiles_q = self.scale_names[self.scale]
+        self.line_width = int(math.sqrt(max(self.scale_names.values()) / self.tiles_q))
+        tile_size = self.Y // self.tiles_q
+        hor_tiles_q = self.X // tile_size
+        self.Y, self.X = self.tiles_q * tile_size, hor_tiles_q * tile_size
+        return tile_size, hor_tiles_q
+
+    # A_STAR INTERACTIVE METHODS:
     # preparation for interactive a_star:
     def a_star_preparation(self):
         self.nodes_to_be_visited = [self.start_node]
@@ -248,30 +260,13 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         heap[pos] = new_item
         Astar.siftdown(heap, start_pos, pos)
 
-    # make a node the chosen one:
-    def a_star_choose_node(self, node: 'Node'):
-        self.node_chosen = node
-        # draw a frame
-
-    # calculating grid visualization pars for vertical tiles number given:
-    def get_pars(self):
-        self.Y, self.X = SCREEN_HEIGHT - 60, SCREEN_WIDTH - 250
-        self.tiles_q = self.scale_names[self.scale]
-        self.line_width = int(math.sqrt(max(self.scale_names.values()) / self.tiles_q))
-        tile_size = self.Y // self.tiles_q
-        hor_tiles_q = self.X // tile_size
-        self.Y, self.X = self.tiles_q * tile_size, hor_tiles_q * tile_size
-        return tile_size, hor_tiles_q
-
-    @staticmethod
-    def get_ms(start, finish):
-        return (finish - start) // 10 ** 6
-
+    # PRESETS:
     def setup(self):
         # game set up is located below:
         # sprites, shapes and etc...
         # blocks:
         self.get_sprites()
+        # grid lines:
         self.make_grid_lines()
 
     # shaping shape element list of grid lines:
@@ -298,10 +293,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             for node in row:
                 node.get_neighs(self)
 
-    # draws left or right arrow:
-    def make_arrow(self):
-        ...
-
+    # DRAWING:
     # the main drawing method, that is called one times per frame:
     def on_draw(self):
         # renders this screen:
@@ -484,6 +476,16 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         arcade.draw_line(center_x + 9, center_y + 9, center_x - 9,
                          center_y - 9, arcade.color.BLACK, line_width=2)
 
+    # draws left or right arrow:
+    def make_arrow(self):
+        ...
+
+    # colour gradient:
+    @staticmethod
+    def linear_gradi(c: tuple[int, int, int], i):
+        return c[0] + 3 * i, c[1] - 5 * i, c[2] + i * 5
+
+    # REBUILDING AND CLEARING/ERASING METHODS:
     # rebuilds grid lines and grid of nodes for a new vertical tiles number chosen:
     def rebuild_map(self):
         self.tile_size, self.hor_tiles_q = self.get_pars()
@@ -499,48 +501,6 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.walls = set()
         self.get_sprites()
         self.make_grid_lines()
-
-    # long press logic for mouse buttons:
-    def update(self, delta_time: float):
-        # consecutive calls during key pressing:
-        ticks_threshold = 12
-        if self.cycle_breaker_right:
-            self.ticks_before += 1
-            if self.ticks_before >= ticks_threshold:
-                if self.path is None:
-                    self.a_star_step_up()
-                else:
-                    if self.path_index < len(self.path) - 1:
-                        self.path_up()
-                        self.path_index += 1
-        if self.cycle_breaker_left:
-            self.ticks_before += 1
-            if self.ticks_before >= ticks_threshold:
-                if self.path is None:
-                    self.a_star_step_down()
-                else:
-                    if self.path_index > 0:
-                        self.path_down()
-                        self.path_index -= 1
-                    else:
-                        self.path = None
-                        self.a_star_step_down()
-
-    # colour gradient:
-    @staticmethod
-    def linear_gradi(c: tuple[int, int, int], i):
-        return c[0] + 3 * i, c[1] - 5 * i, c[2] + i * 5
-
-    # erases all nodes, that are connected vertically, horizontally or diagonally to a chosen one,
-    # then nodes connected to them the same way and so on recursively...
-    def erase_all_linked_nodes(self, node: 'Node'):
-        node.type = NodeType.EMPTY
-        node.update_sprite_colour()
-        self.walls.remove(self.number_repr(node))
-        self.walls_built_erased[self.walls_index][0].append(self.number_repr(node))
-        for neigh in node.get_extended_neighs(self):
-            if neigh.type == NodeType.WALL:
-                self.erase_all_linked_nodes(neigh)
 
     # clears all the nodes except start, end and walls
     def clear_empty_nodes(self):
@@ -584,6 +544,45 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.tiebreakers_lock = False
         self.scale_lock = False
 
+    # erases all nodes, that are connected vertically, horizontally or diagonally to a chosen one,
+    # then nodes connected to them the same way and so on recursively...
+    def erase_all_linked_nodes(self, node: 'Node'):
+        node.type = NodeType.EMPTY
+        node.update_sprite_colour()
+        self.walls.remove(self.number_repr(node))
+        self.walls_built_erased[self.walls_index][0].append(self.number_repr(node))
+        for neigh in node.get_extended_neighs(self):
+            if neigh.type == NodeType.WALL:
+                self.erase_all_linked_nodes(neigh)
+
+    # UPDATING:
+    # long press logic for mouse buttons:
+    def update(self, delta_time: float):
+        # consecutive calls during key pressing:
+        ticks_threshold = 12
+        if self.cycle_breaker_right:
+            self.ticks_before += 1
+            if self.ticks_before >= ticks_threshold:
+                if self.path is None:
+                    self.a_star_step_up()
+                else:
+                    if self.path_index < len(self.path) - 1:
+                        self.path_up()
+                        self.path_index += 1
+        if self.cycle_breaker_left:
+            self.ticks_before += 1
+            if self.ticks_before >= ticks_threshold:
+                if self.path is None:
+                    self.a_star_step_down()
+                else:
+                    if self.path_index > 0:
+                        self.path_down()
+                        self.path_index -= 1
+                    else:
+                        self.path = None
+                        self.a_star_step_down()
+
+    # KEYBOARD:
     def on_key_press(self, symbol: int, modifiers: int):
         # is called when user press the symbol key:
         match symbol:
@@ -700,26 +699,6 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                                 self.walls_index += 1
                                 self.walls = dict(shelf)
 
-    # changing the type of the node and then changes the node's sprite colour:
-    def change_nodes_type(self, node_type: 'NodeType', walls_set: set or list):
-        for node_num in walls_set:
-            y, x = self.coords(node_num)
-            self.grid[y][x].type = node_type
-            self.grid[y][x].update_sprite_colour()
-
-    # gets the number representation for the node:
-    def number_repr(self, node: 'Node'):
-        return node.y * self.hor_tiles_q + node.x
-
-    # gets node's coordinates for its number representation:
-    def coords(self, number: int):
-        return divmod(number, self.hor_tiles_q)
-
-    # gets the node itself for its number representation:
-    def node(self, num: int) -> 'Node':
-        y, x = self.coords(num)
-        return self.grid[y][x]
-
     def on_key_release(self, symbol: int, modifiers: int):
         match symbol:
             case arcade.key.RIGHT:
@@ -729,12 +708,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 self.cycle_breaker_left = False
                 self.ticks_before = 0
 
-    # gets the node from the current mouse coordinates:
-    def get_node(self, mouse_x, mouse_y):
-        x_, y_ = mouse_x - 5, mouse_y - 5
-        x, y = x_ // self.tile_size, y_ // self.tile_size
-        return self.grid[y][x] if 0 <= x < self.hor_tiles_q and 0 <= y < self.tiles_q else None
-
+    # MOUSE:
     def on_mouse_motion(self, x, y, dx, dy):
         if self.building_walls_flag:
             if self.mode == 0:
@@ -847,6 +821,42 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
     def on_mouse_release(self, x: int, y: int, button: int, modifiers: int):
         self.building_walls_flag = False
 
+    # SOME AUXILIARY METHODS:
+    # changing the type of the node and then changes the node's sprite colour:
+    def change_nodes_type(self, node_type: 'NodeType', walls_set: set or list):
+        for node_num in walls_set:
+            y, x = self.coords(node_num)
+            self.grid[y][x].type = node_type
+            self.grid[y][x].update_sprite_colour()
+
+    # make a node the chosen one:
+    def a_star_choose_node(self, node: 'Node'):
+        self.node_chosen = node
+        # draw a frame
+
+    # gets the number representation for the node:
+    def number_repr(self, node: 'Node'):
+        return node.y * self.hor_tiles_q + node.x
+
+    # gets node's coordinates for its number representation:
+    def coords(self, number: int):
+        return divmod(number, self.hor_tiles_q)
+
+    # gets the node itself for its number representation:
+    def node(self, num: int) -> 'Node':
+        y, x = self.coords(num)
+        return self.grid[y][x]
+
+    # gets the node from the current mouse coordinates:
+    def get_node(self, mouse_x, mouse_y):
+        x_, y_ = mouse_x - 5, mouse_y - 5
+        x, y = x_ // self.tile_size, y_ // self.tile_size
+        return self.grid[y][x] if 0 <= x < self.hor_tiles_q and 0 <= y < self.tiles_q else None
+
+    @staticmethod
+    def get_ms(start, finish):
+        return (finish - start) // 10 ** 6
+
 
 # class for a node representation:
 class Node:
@@ -875,6 +885,7 @@ class Node:
                            3: self.no_heuristic}
         self.tiebreakers = {0: self.vector_cross_product_deviation, 1: self.coordinates_pair}
 
+    # COPYING/RESTORING:
     # makes an auxiliary copy for a nde, it is needed for a_star interactive:
     def aux_copy(self):
         copied_node = Node(self.y, self.x, self.type, self.val)
@@ -892,6 +903,7 @@ class Node:
             self.type = NodeType.EMPTY
             self.sprite.color = arcade.color.WHITE
 
+    # TYPE/SPRITE CHANGE/INIT:
     # makes a solid colour sprite for a node:
     def get_solid_colour_sprite(self, game: Astar):
         cx, cy, size, colour = self.get_center_n_sizes(game)
@@ -910,6 +922,7 @@ class Node:
     def update_sprite_colour(self):
         self.sprite.color = self.type.value
 
+    # DUNDERS:
     def __eq__(self, other):
         if type(self) != type(other):
             return False
@@ -925,6 +938,7 @@ class Node:
     def __hash__(self):
         return hash((self.y, self.x))
 
+    # CLEARING:
     # entirely clears the node, returning it to the initial state:
     def clear(self):
         self.heur_clear()
@@ -940,7 +954,7 @@ class Node:
         self.times_visited = 0
         self.neighs = set()
 
-    # heuristics:
+    # HEURISTICS:
     @staticmethod
     def manhattan_distance(node1, node2: 'Node'):
         return abs(node1.y - node2.y) + abs(node1.x - node2.x)
@@ -957,7 +971,7 @@ class Node:
     def no_heuristic(node1, node2: 'Node'):
         return 0
 
-    # self * other, tiebreaker:
+    # SELF * OTHER, TIEBREAKER:
     @staticmethod
     def vector_cross_product_deviation(start, end, neigh):
         v1 = neigh.y - start.y, neigh.x - start.x
@@ -968,6 +982,7 @@ class Node:
     def coordinates_pair(start, end, neigh):
         return neigh.y, neigh.x
 
+    # NEIGHS:
     # gets neighs of the node:
     def get_neighs(self, game: 'Astar'):
         for dy, dx in self.walk:
@@ -984,6 +999,7 @@ class Node:
             if 0 <= ny < game.tiles_q and 0 <= nx < game.hor_tiles_q:
                 yield game.grid[ny][nx]
 
+    # PATHFINDING:
     # finished, tested and approved by Levi Gin:
     def wave_lee(self, other: 'Node', game: 'Astar'):
         other.get_neighs(game)
@@ -1166,7 +1182,7 @@ if __name__ == "__main__":
 # v4.6 fixed bug when redo by pressing the 'Y' key have not been working and bug with walls sets
 # v4.7 save/load methods for wall now work correctly in alpha state, should be finished afterwards
 # v4.8 comments added, some refactoring and minor fixes
-#
+# v4.9 some code reorganization and minor fixes
 #
 #
 # TODO: add some other tiebreakers (medium, easy) +-

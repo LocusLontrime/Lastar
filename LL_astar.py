@@ -81,7 +81,10 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.node_sprite_list = arcade.SpriteList()
         # grid_lines:
         self.grid_line_shapes = arcade.ShapeElementList()
-        # UI:
+        # UI ???:
+        self.a_star_view = arcade.View()
+        self.wave_lee_view = arcade.View()
+        self.game_choosing_view = arcade.View()
 
     # INITIALIZATION AUX:
     # calculating grid visualization pars for vertical tiles number given:
@@ -1199,8 +1202,8 @@ if __name__ == "__main__":
 # TODO: add a command of wall-pattern saving and further loading (low, high) -+
 # TODO: simplify the drawing (high, high)
 # TODO: add an info changing depending on a_star heuristic and greedy_flag (high, easy)
-# TODO: Windows in Arcade!!! (save and load) (high, medium)
-# TODO: Fix bug with walls set (high, medium)
+# TODO: add correct UI system (high, high)
+# TODO:
 # TODO:
 # TODO:
 # TODO:

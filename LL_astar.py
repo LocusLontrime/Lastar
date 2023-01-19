@@ -85,6 +85,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.a_star_view = arcade.View()
         self.wave_lee_view = arcade.View()
         self.game_choosing_view = arcade.View()
+        self.twist_angle = 0
 
     # INITIALIZATION AUX:
     # calculating grid visualization pars for vertical tiles number given:
@@ -96,6 +97,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         hor_tiles_q = self.X // tile_size
         self.Y, self.X = self.tiles_q * tile_size, hor_tiles_q * tile_size
         return tile_size, hor_tiles_q
+
+    def get_hor_tiles(self, i):
+        return (SCREEN_WIDTH - 250) // ((SCREEN_HEIGHT - 30) // self.scale_names[i])
 
     # A_STAR INTERACTIVE METHODS:
     # preparation for interactive a_star:
@@ -149,7 +153,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             if (prev_node := self.curr_node_dict[self.iterations]).type != NodeType.END_NODE:
                 prev_node.type = NodeType.VISITED_NODE
                 prev_node.update_sprite_colour()
-        self.max_times_visited_dict[self.iterations + 1] = max(self.max_times_visited_dict[self.iterations],  # memoization
+        self.max_times_visited_dict[self.iterations + 1] = max(self.max_times_visited_dict[self.iterations],
+                                                               # memoization
                                                                curr_node.times_visited)
         # memoization for correct movement back:
         if curr_node in self.nodes_visited.keys():
@@ -483,6 +488,50 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
     def make_arrow(self):
         ...
 
+    def draw_gear_wheel(self, cx, cy, rx=32, ry=32, cog_size=8, line_w=2, shift=False, clockwise=True):
+        circumference = math.pi * (rx + ry)  # approximately if cog_size << radius
+        angular_size = (2 * math.pi) * cog_size / circumference
+        max_cogs_fit_in_the_gear_wheel = int(circumference / cog_size)
+        cogs_q = max_cogs_fit_in_the_gear_wheel // 2
+        fit_angular_size = (2 * math.pi - cogs_q * angular_size) / cogs_q
+        angle = (angular_size if shift else 0) + (self.twist_angle if clockwise else -self.twist_angle)  # in radians
+        upper_vertices_list = []
+        for i in range(cogs_q):
+            # aux pars:
+            _a, a_ = (angle - angular_size / 2), (angle + angular_size / 2)
+            _rx, _ry, rx_, ry_ = rx * math.cos(_a), ry * math.sin(_a), rx * math.cos(a_), ry * math.sin(a_)
+            _dx, _dy = cog_size * math.cos(angle), cog_size * math.sin(angle)
+            dx_, dy_ = cog_size * math.cos(angle), cog_size * math.sin(angle)
+            # polygon's points:
+            upper_vertices_list.append([cx + _rx, cy + _ry])
+            upper_vertices_list.append([cx + _rx + _dx, cy + _ry + _dy])
+            upper_vertices_list.append([cx + rx_ + dx_, cy + ry_ + dy_])
+            upper_vertices_list.append([cx + rx_, cy + ry_])
+            # angle incrementation:
+            angle += angular_size + fit_angular_size
+        # upper gear wheel:
+        arcade.draw_polygon_filled(upper_vertices_list, arcade.color.GRAY)
+        arcade.draw_polygon_outline(upper_vertices_list, arcade.color.BLACK, line_w)
+        # hole:
+        arcade.draw_ellipse_filled(cx, cy, 2 * (rx - 1.5 * cog_size), 2 * (ry - 1.5 * cog_size),
+                                   arcade.color.AQUAMARINE)
+        arcade.draw_ellipse_outline(cx, cy, 2 * (rx - 1.5 * cog_size), 2 * (ry - 1.5 * cog_size), arcade.color.BLACK,
+                                    line_w)
+        return upper_vertices_list  # for further is_point_in_polygon() method call
+
+    def draw_star(self, cx, cy, vertices=5, r=32, line_w=2, clockwise=True):
+        delta_angle = 2 * math.pi / vertices
+        d = vertices // 2
+        angle = self.twist_angle if clockwise else -self.twist_angle  # in radians
+        for i in range(vertices):
+            da = d * delta_angle
+            arcade.draw_line(cx + r * math.cos(angle),
+                             cy + r * math.sin(angle),
+                             cx + r * math.cos(angle + da),
+                             cy + r * math.sin(angle + da),
+                             arcade.color.BLACK, line_w)
+            angle += da
+
     # colour gradient:
     @staticmethod
     def linear_gradi(c: tuple[int, int, int], i):
@@ -561,6 +610,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
     # UPDATING:
     # long press logic for mouse buttons:
     def update(self, delta_time: float):
+        # gear wheel spinning:
+        self.twist_angle += 0.02
         # consecutive calls during key pressing:
         ticks_threshold = 12
         if self.cycle_breaker_right:
@@ -1186,7 +1237,7 @@ if __name__ == "__main__":
 # v4.7 save/load methods for wall now work correctly in alpha state, should be finished afterwards
 # v4.8 comments added, some refactoring and minor fixes
 # v4.9 some code reorganization and minor fixes
-#
+# v5.0 gear wheel and star drawing methods have been implemented
 #
 # TODO: add some other tiebreakers (medium, easy) +-
 # TODO: upgrade the visual part (medium, medium) -+

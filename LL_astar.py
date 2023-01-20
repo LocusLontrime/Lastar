@@ -23,8 +23,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.set_update_rate(1 / 60)
         # scaling:  TODO: add AI to calculate the sizes for every resolution possible:
         self.scale = 0
-        self.scale_names = {0: 5, 1: 10, 2: 15, 3: 22, 4: 33, 5: 45, 6: 66, 7: 90, 8: 110, 9: 165,
-                            10: 198}  # factors of 990 num
+        self.scale_names = {0: 10, 1: 15, 2: 22, 3: 33, 4: 45, 5: 66, 6: 90, 7: 110}  # {0: 5, 1: 10, 2: 15, 3: 22, 4: 33, 5: 45, 6: 66, 7: 90, 8: 110, 9: 165, 10: 198}  # factors of 990 num
         # initial data and info:
         self.line_width = None
         self.tiles_q = None
@@ -85,7 +84,17 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.a_star_view = arcade.View()
         self.wave_lee_view = arcade.View()
         self.game_choosing_view = arcade.View()
+        # GEAR WHEEL:
+        self.cx, self.cy = 0, 0
+        self.hole_rx, self.hole_ry = 0, 0
         self.twist_angle = 0
+        self.upper_vertices_list = []
+        self.multiplier = 1.5
+        self.inter_type = InterType.NONE
+        # LEE WAVES:
+        self.steps = 0
+        # A STAR LABEL:
+        self.a_star_angle = 0
 
     # INITIALIZATION AUX:
     # calculating grid visualization pars for vertical tiles number given:
@@ -329,95 +338,95 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     1050, SCREEN_HEIGHT - 35, arcade.color.PURPLE, bold=True).draw()
         # SET-UPS:
         # heuristics:
-        arcade.Text(f'Heuristics: ', SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70, arcade.color.BLACK, bold=True).draw()
+        arcade.Text(f'Heuristics: ', SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120, arcade.color.BLACK, bold=True).draw()
         for i in range(len(self.heuristic_names)):
-            arcade.draw_rectangle_outline(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - (18 + 2 * 2 + 18) * i, 18, 18,
+            arcade.draw_rectangle_outline(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * i, 18, 18,
                                           arcade.color.BLACK, 2)
             arcade.Text(f'{self.heuristic_names[i]}', SCREEN_WIDTH - 225 + (18 + 2 * 2),
-                        SCREEN_HEIGHT - 100 - (18 + 2 * 2 + 18) * i - 6, arcade.color.BLACK, bold=True).draw()
+                        SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * i - 6, arcade.color.BLACK, bold=True).draw()
 
-        arcade.draw_rectangle_filled(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - (18 + 2 * 2 + 18) * self.heuristic, 14,
+        arcade.draw_rectangle_filled(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * self.heuristic, 14,
                                      14,
                                      arcade.color.BLACK)
         # heuristics lock:
         if self.heuristic_lock:
-            self.draw_lock(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - (18 + 2 * 2 + 18) * self.heuristic)
+            self.draw_lock(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * self.heuristic)
             for i in range(len(self.heuristic_names)):
                 if i != self.heuristic:
-                    self.draw_cross(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - (18 + 2 * 2 + 18) * i)
+                    self.draw_cross(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * i)
         # tiebreakers:
-        arcade.Text(f'Tiebreakers: ', SCREEN_WIDTH - 235, SCREEN_HEIGHT - 100 - (18 + 2 * 2 + 18) * 3 - 18 * 3,
+        arcade.Text(f'Tiebreakers: ', SCREEN_WIDTH - 235, SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * 3 - 18 * 3,
                     arcade.color.BLACK, bold=True).draw()
         for i in range(len(self.tiebreaker_names)):
             arcade.draw_rectangle_outline(SCREEN_WIDTH - 225,
-                                          SCREEN_HEIGHT - 100 - (18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30, 18,
+                                          SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30, 18,
                                           18, arcade.color.BLACK, 2)
             arcade.Text(self.tiebreaker_names[i], SCREEN_WIDTH - 225 + (18 + 2 * 2),
-                        SCREEN_HEIGHT - 100 - (18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30 - 6, arcade.color.BLACK,
+                        SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30 - 6, arcade.color.BLACK,
                         bold=True).draw()
 
         if self.tiebreaker is not None:
             arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
-                                         SCREEN_HEIGHT - 100 - (18 + 2 * 2 + 18) * (3 + self.tiebreaker) - 18 * 3 - 30,
+                                         SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (3 + self.tiebreaker) - 18 * 3 - 30,
                                          14,
                                          14, arcade.color.BLACK)
         # tiebreakers lock:
         if self.tiebreakers_lock:
             if self.tiebreaker is not None:
                 self.draw_lock(SCREEN_WIDTH - 225,
-                               SCREEN_HEIGHT - 100 - (18 + 2 * 2 + 18) * (3 + self.tiebreaker) - 18 * 3 - 30)
+                               SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (3 + self.tiebreaker) - 18 * 3 - 30)
             for i in range(len(self.tiebreaker_names)):
                 if self.tiebreaker is None or i != self.tiebreaker:
                     self.draw_cross(SCREEN_WIDTH - 225,
-                                    SCREEN_HEIGHT - 100 - (18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30)
+                                    SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30)
         # greedy flag:
         arcade.Text('Is greedy: ', SCREEN_WIDTH - 235,
-                    SCREEN_HEIGHT - 130 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3,
+                    SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3,
                     arcade.color.BLACK, bold=True).draw()
         arcade.draw_rectangle_outline(SCREEN_WIDTH - 225,
-                                      SCREEN_HEIGHT - 130 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30, 18, 18,
+                                      SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30, 18, 18,
                                       arcade.color.BLACK, 2)
         arcade.Text(f'GREEDY_FLAG', SCREEN_WIDTH - 225 + (18 + 2 * 2),
-                    SCREEN_HEIGHT - 130 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 - 6,
+                    SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 - 6,
                     arcade.color.BLACK, bold=True).draw()
 
         if self.greedy_flag:
             # greedy flag lock:
             if self.greedy_flag_lock:
                 self.draw_lock(SCREEN_WIDTH - 225,
-                               SCREEN_HEIGHT - 130 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30)
+                               SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30)
             else:
                 arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
-                                             SCREEN_HEIGHT - 130 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30, 14,
+                                             SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30, 14,
                                              14,
                                              arcade.color.BLACK)
         else:
             if self.greedy_flag_lock:
                 self.draw_cross(SCREEN_WIDTH - 225,
-                                SCREEN_HEIGHT - 130 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30)
+                                SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30)
         # scaling:
         arcade.Text('Sizes in tiles: ', SCREEN_WIDTH - 235,
-                    SCREEN_HEIGHT - 160 - (18 + 2 * 2 + 18) * 4 - 3 * 18 * 3,
+                    SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * 4 - 3 * 18 * 3,
                     arcade.color.BLACK, bold=True).draw()
 
         for i in range(len(self.scale_names)):
             arcade.draw_rectangle_outline(SCREEN_WIDTH - 225,
-                                          SCREEN_HEIGHT - 160 - (18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30, 18, 18,
+                                          SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30, 18, 18,
                                           arcade.color.BLACK, 2)
             arcade.Text(f'{self.scale_names[i]}x{self.get_hor_tiles(i)}', SCREEN_WIDTH - 225 + (18 + 2 * 2),
-                        SCREEN_HEIGHT - 160 - (18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30 - 6,
+                        SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30 - 6,
                         arcade.color.BLACK, bold=True).draw()
         # scaling lock:
         if self.scale_lock:
             self.draw_lock(SCREEN_WIDTH - 225,
-                           SCREEN_HEIGHT - 160 - (18 + 2 * 2 + 18) * (4 + self.scale) - 3 * 18 * 3 - 30)
+                           SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * (4 + self.scale) - 3 * 18 * 3 - 30)
             for i in range(len(self.scale_names)):
                 if i != self.scale:
                     self.draw_cross(SCREEN_WIDTH - 225,
-                                    SCREEN_HEIGHT - 160 - (18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30)
+                                    SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30)
         else:
             arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
-                                         SCREEN_HEIGHT - 160 - (18 + 2 * 2 + 18) * (4 + self.scale) - 3 * 18 * 3 - 30,
+                                         SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * (4 + self.scale) - 3 * 18 * 3 - 30,
                                          14,
                                          14,
                                          arcade.color.BLACK)
@@ -463,6 +472,18 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                                           self.tile_size / 4,
                                           arcade.color.RED)
 
+        # GEAR WHEEL:
+        self.draw_gear_wheel(1750 - 30, 1020 - 73, 24, 24, 6)
+
+        # STAR:
+        # self.draw_star(1750 - 455, 1020 - 129, 5, 64)
+
+        # LEE WAVES:
+        self.draw_waves(1750 + 50 + 48 + 10, 1020 - 73, 48, 6)
+
+        # A STAR LABEL:
+        self.draw_a_star(1750 + 15, 1020 - 73 - 24 - 5, 48)  # 36 366 98 989
+
     # triangle points getting:
     def get_triangle(self, node: 'Node', point: tuple[int, int]):
         scaled_point = point[0] * (self.tile_size // 2 - 2), point[1] * (self.tile_size // 2 - 2)
@@ -488,36 +509,45 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
     def make_arrow(self):
         ...
 
-    def draw_gear_wheel(self, cx, cy, rx=32, ry=32, cog_size=8, line_w=2, shift=False, clockwise=True):
+    def draw_gear_wheel(self, cx, cy, rx=32, ry=32, cog_size=8, multiplier=1.5, line_w=2, shift=False, clockwise=True):
+        self.cx, self.cy = cx, cy
+        self.hole_rx, self.hole_ry = rx - multiplier * cog_size, ry - multiplier * cog_size
         circumference = math.pi * (rx + ry)  # approximately if cog_size << radius
         angular_size = (2 * math.pi) * cog_size / circumference
         max_cogs_fit_in_the_gear_wheel = int(circumference / cog_size)
         cogs_q = max_cogs_fit_in_the_gear_wheel // 2
         fit_angular_size = (2 * math.pi - cogs_q * angular_size) / cogs_q
         angle = (angular_size if shift else 0) + (self.twist_angle if clockwise else -self.twist_angle)  # in radians
-        upper_vertices_list = []
+        self.upper_vertices_list = []
         for i in range(cogs_q):
             # aux pars:
             _a, a_ = (angle - angular_size / 2), (angle + angular_size / 2)
             _rx, _ry, rx_, ry_ = rx * math.cos(_a), ry * math.sin(_a), rx * math.cos(a_), ry * math.sin(a_)
-            _dx, _dy = cog_size * math.cos(angle), cog_size * math.sin(angle)
-            dx_, dy_ = cog_size * math.cos(angle), cog_size * math.sin(angle)
+            _dx, _dy = cog_size * math.cos(_a), cog_size * math.sin(_a)
+            dx_, dy_ = cog_size * math.cos(a_), cog_size * math.sin(a_)
             # polygon's points:
-            upper_vertices_list.append([cx + _rx, cy + _ry])
-            upper_vertices_list.append([cx + _rx + _dx, cy + _ry + _dy])
-            upper_vertices_list.append([cx + rx_ + dx_, cy + ry_ + dy_])
-            upper_vertices_list.append([cx + rx_, cy + ry_])
+            self.upper_vertices_list.append([cx + _rx, cy + _ry])
+            self.upper_vertices_list.append([cx + _rx + _dx, cy + _ry + _dy])
+            self.upper_vertices_list.append([cx + rx_ + dx_, cy + ry_ + dy_])
+            self.upper_vertices_list.append([cx + rx_, cy + ry_])
             # angle incrementation:
             angle += angular_size + fit_angular_size
         # upper gear wheel:
-        arcade.draw_polygon_filled(upper_vertices_list, arcade.color.GRAY)
-        arcade.draw_polygon_outline(upper_vertices_list, arcade.color.BLACK, line_w)
+        # arcade.draw_polygon_filled(upper_vertices_list, arcade.color.PASTEL_GRAY)
+        arcade.draw_polygon_outline(self.upper_vertices_list, arcade.color.BLACK,
+                                    line_w + (0 if self.inter_type == InterType.NONE else 1))
         # hole:
-        arcade.draw_ellipse_filled(cx, cy, 2 * (rx - 1.5 * cog_size), 2 * (ry - 1.5 * cog_size),
-                                   arcade.color.AQUAMARINE)
-        arcade.draw_ellipse_outline(cx, cy, 2 * (rx - 1.5 * cog_size), 2 * (ry - 1.5 * cog_size), arcade.color.BLACK,
-                                    line_w)
-        return upper_vertices_list  # for further is_point_in_polygon() method call
+        arcade.draw_ellipse_filled(cx, cy, 2 * (rx - multiplier * cog_size), 2 * (ry - multiplier * cog_size),
+                                   arcade.color.DUTCH_WHITE)
+        arcade.draw_ellipse_outline(cx, cy, 2 * (rx - multiplier * cog_size), 2 * (ry - multiplier * cog_size),
+                                    arcade.color.BLACK,
+                                    line_w + (0 if self.inter_type == InterType.NONE else 1))
+
+    def draw_waves(self, cx, cy, size=32, waves_q=5, line_w=2):
+        ds = size / waves_q
+        for i in range(waves_q):
+            curr_s = (i * ds + self.steps) % size
+            arcade.draw_rectangle_outline(cx, cy, curr_s, curr_s, arcade.color.BLACK, line_w)
 
     def draw_star(self, cx, cy, vertices=5, r=32, line_w=2, clockwise=True):
         delta_angle = 2 * math.pi / vertices
@@ -531,6 +561,12 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                              cy + r * math.sin(angle + da),
                              arcade.color.BLACK, line_w)
             angle += da
+
+    def draw_a_star(self, cx, cy, size, line_w=2, clockwise=True):
+        # drawing A:
+        arcade.Text('A', cx, cy, arcade.color.BLACK, font_name='futuris', font_size=size, bold=True).draw()
+        # Star spinning around A:
+        self.draw_star(cx + size / 2 + size / 3, cy + size, r=size / 4, line_w=line_w, clockwise=clockwise)
 
     # colour gradient:
     @staticmethod
@@ -611,7 +647,10 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
     # long press logic for mouse buttons:
     def update(self, delta_time: float):
         # gear wheel spinning:
-        self.twist_angle += 0.02
+        if self.inter_type == InterType.PRESSED:
+            self.twist_angle += 0.02
+        self.steps += 0.5
+        self.a_star_angle += 0.05
         # consecutive calls during key pressing:
         ticks_threshold = 12
         if self.cycle_breaker_right:
@@ -790,32 +829,39 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                             self.walls_built_erased.append(([self.number_repr(n)], self.build_or_erase))
                             self.walls_index += 1
 
+        if self.inter_type != InterType.PRESSED:
+            if arcade.is_point_in_polygon(x, y,
+                                          self.upper_vertices_list):  # and (x - self.cx) ** 2 / self.hole_rx + (y - self.cy) / self.hole_ry ** 2 >= 1:
+                self.inter_type = InterType.HOVERED
+            else:
+                self.inter_type = InterType.NONE
+
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int):
         # setting_up heuristic and tiebreaker:
         if not self.heuristic_lock:
             for i in range(len(self.heuristic_names)):
-                if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 100 - (
-                        18 + 2 * 2 + 18) * i - 9 <= y <= SCREEN_HEIGHT - 100 - (18 + 2 * 2 + 18) * i + 9:
+                if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 100 - 120 - (
+                        18 + 2 * 2 + 18) * i - 9 <= y <= SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * i + 9:
                     self.heuristic = i
                     break
         if not self.tiebreakers_lock:
             for i in range(len(self.tiebreaker_names)):
-                if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 100 - (
-                        18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 100 - (
+                if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 100 - 120 - (
+                        18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 100 - 120 - (
                         18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30 + 9:
                     self.tiebreaker = None if self.tiebreaker == i else i
                     break
         # choosing the scale factor:
         if not self.scale_lock:
             for i in range(len(self.scale_names)):
-                if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 160 - (
-                        18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 160 - (
+                if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 160 - 120 - (
+                        18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 160 - 120 - (
                         18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30 + 9:
                     self.scale = i
                     self.rebuild_map()
         # setting up the greedy flag:
-        if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 130 - (
-                18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 130 - (
+        if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 130 - 120 - (
+                18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 130 - 120 - (
                 18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 + 9:
             if not self.greedy_flag_lock:
                 self.greedy_flag = not self.greedy_flag
@@ -867,6 +913,11 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     self.node_chosen = None
                 else:
                     self.a_star_choose_node(n)
+        if arcade.is_point_in_polygon(x, y, self.upper_vertices_list):
+            if self.inter_type == InterType.HOVERED:
+                self.inter_type = InterType.PRESSED
+            elif self.inter_type == InterType.PRESSED:
+                self.inter_type = InterType.HOVERED
 
     # game mode switching by scrolling the mouse wheel:
     def on_mouse_scroll(self, x: int, y: int, scroll_x: int, scroll_y: int):
@@ -1144,6 +1195,12 @@ class NodeType(Enum):
     PATH_NODE = arcade.color.RED
 
 
+class InterType(Enum):
+    NONE = 1
+    HOVERED = 2
+    PRESSED = 3
+
+
 # the main method for a game run:
 def main():
     # line_width par should be even number for correct grid&nodes representation:
@@ -1238,6 +1295,11 @@ if __name__ == "__main__":
 # v4.8 comments added, some refactoring and minor fixes
 # v4.9 some code reorganization and minor fixes
 # v5.0 gear wheel and star drawing methods have been implemented
+# v5.1 Lee waves and A star label drawing methods added, some tiles_q have been deleted. Now three icons are situated
+# on the left part of the main window, some flags and pars have been added to Lastar class. on_draw(), update()
+# and on_mouse_motion() / on_mouse_press() methods renewal
+#
+#
 #
 # TODO: add some other tiebreakers (medium, easy) +-
 # TODO: upgrade the visual part (medium, medium) -+
@@ -1254,7 +1316,7 @@ if __name__ == "__main__":
 # TODO: simplify the drawing (high, high)
 # TODO: add an info changing depending on a_star heuristic and greedy_flag (high, easy)
 # TODO: add correct UI system (high, high)
-# TODO:
-# TODO:
+# TODO: add a_star and wave_lee management menus (high, medium)
+# TODO: improve the icons interaction (high, high)
 # TODO:
 # TODO:

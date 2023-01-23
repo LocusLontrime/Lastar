@@ -9,6 +9,8 @@ import arcade.gui
 # data
 import shelve
 import pickle
+# queues:
+from collections import deque
 
 # screen sizes:
 SCREEN_WIDTH = 1920
@@ -21,6 +23,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         super().__init__(width, height)
         arcade.set_background_color(arcade.color.DUTCH_WHITE)
         self.set_update_rate(1 / 60)
+        print(f'walk: {Node.walk}')
         # scaling:  TODO: add AI to calculate the sizes for every resolution possible:
         self.scale = 0
         self.scale_names = {0: 10, 1: 15, 2: 22, 3: 33, 4: 45, 5: 66, 6: 90,
@@ -88,18 +91,26 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # GEAR WHEEL:
         self.cx, self.cy = 0, 0
         self.hole_rx, self.hole_ry = 0, 0
-        self.twist_angle = 0
         self.upper_vertices_list = []
         self.multiplier = 1.5
-        self.inter_type = InterType.NONE
-        # LEE WAVES:
-        self.steps = 0
+        # BFS/DFS:
+        self.bfs_dfs_cx, self.bfs_dfs_cy = 0, 0
+        self.bfs_dfs_size = 0
         # A STAR LABEL:
-        self.a_star_angle = 0
         self.a_outer_points = []
-        self.a_star_inter_type = InterType.NONE
+        # LEE WAVES:
+        ...
         # RIGHT MENU LOGIC:
-        self.menu_type = MenuType.SETTINGS
+        self.inter_types = [InterType.NONE for _ in range(4)]  # <<-- GEAR WHEEL, BFS/DFS, A_STAR and WAVE LEE <<--
+        self.incrementers = [0 for _ in range(4)]  # <<-- GEAR WHEEL, BFS/DFS, A_STAR and WAVE LEE <<--
+        # WAVE_LEE (LEVI GIN):
+        self.front_wave_lee = []
+        self.next_wave_lee = []
+        self.iterations_wave_lee = 0
+        self.fronts_dict = {}
+        self.curr_node_wave_lee = None
+        # BFS/DFS:
+        self.is_bfs = False
 
     # INITIALIZATION AUX:
     # calculating grid visualization pars for vertical tiles number given:
@@ -118,15 +129,26 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
     # A_STAR INTERACTIVE METHODS:
     # preparation for interactive a_star:
     def a_star_preparation(self):
+        # heap:
         self.nodes_to_be_visited = [self.start_node]
         hq.heapify(self.nodes_to_be_visited)
+        # heur/cost:
         self.start_node.g = 0
+        # transmitting the greedy flag to the Node class: TODO: fix this strange doing <<--
         Node.IS_GREEDY = self.greedy_flag
+        # important pars and dicts:
         self.iterations = 0
         self.neighs_added_to_heap_dict = {0: [self.start_node]}
         self.curr_node_dict = {0: None}
         self.max_times_visited_dict = {0: 0}
+        # path nullifying:
         self.path = None
+        # lockers locating:
+        self.in_interaction_mode_lock = True
+        self.greedy_flag_lock = True
+        self.heuristic_lock = True
+        self.tiebreakers_lock = True
+        self.scale_lock = True
 
     # path-recovering process for interactive a_star:
     def recover_path(self):
@@ -282,6 +304,69 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         heap[pos] = new_item
         Astar.siftdown(heap, start_pos, pos)
 
+    # WAVE LEE LEVI GIN WORK (APPROVED):
+    def wave_lee_preparation(self):
+        # starting pars:
+        self.front_wave_lee = []
+        self.next_wave_lee = [self.start_node]
+        self.start_node.val = 1
+        self.curr_node_wave_lee = self.end_node
+        # variable ones:
+        self.iterations_wave_lee = 0
+        self.fronts_dict = {}
+
+    def wave_lee_step_up(self):
+        self.iterations_wave_lee += 1
+        self.front_wave_lee = self.next_wave_lee[:]
+        self.fronts_dict[self.iterations_wave_lee] = self.front_wave_lee
+        self.next_wave_lee = []
+        for node in self.front_wave_lee:
+            node.val = self.iterations_wave_lee
+            if node not in [self.end_node, self.start_node]:
+                node.type = NodeType.VISITED_NODE
+                node.update_sprite_colour()
+            if node == self.end_node:
+                self.end_node.val = self.iterations_wave_lee
+                self.path = self.recover_path()
+                break
+            for neigh in node.get_neighs(self):
+                if neigh.val == 1 and neigh != self.start_node:
+                    if neigh not in self.next_wave_lee:
+                        if neigh != self.end_node:
+                            neigh.type = NodeType.NEIGH
+                            neigh.update_sprite_colour()
+                        self.next_wave_lee.append(neigh)
+                        neigh.previously_visited_node = node
+
+    def wave_lee_step_down(self):
+        # possibility check of wave_lee's stepping back:
+        if self.iterations_wave_lee > 0:
+            # decrementation:
+            self.iterations_wave_lee -= 1
+            # neighs have become EMPTY ones:
+            for neigh in self.next_wave_lee:
+                if neigh not in [self.start_node, self.end_node]:
+                    neigh.type = NodeType.EMPTY
+                    neigh.update_sprite_colour()
+            if self.iterations_wave_lee != 0:
+                # the front nodes have become NEIGHS:
+                for node in self.front_wave_lee:
+                    if node != self.start_node:
+                        if node != self.end_node:
+                            node.type = NodeType.NEIGH
+                        node.update_sprite_colour()
+                        node.val = 1
+                # current and next fronts stepping back:
+                self.next_wave_lee = self.front_wave_lee[:]
+                self.front_wave_lee = self.fronts_dict[self.iterations_wave_lee]
+            else:
+                # the starting point:
+                self.next_wave_lee = [self.start_node]
+                self.front_wave_lee = []
+
+    def bfs_dfs_preparation(self):
+        ...
+
     # PRESETS:
     def setup(self):
         # game set up is located below:
@@ -339,134 +424,146 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             if self.node_chosen:
                 arcade.Text(
                     f"NODE'S INFO -->> pos: {self.node_chosen.y, self.node_chosen.x}, g: {self.node_chosen.g}, "
-                    f"h: {self.node_chosen.h}, f=g+h: {self.node_chosen.g + self.node_chosen.h} t: {self.node_chosen.tiebreaker}, times visited: {self.node_chosen.times_visited}, type: {self.node_chosen.type}",
+                    f"h: {self.node_chosen.h}, f=g+h: {self.node_chosen.g + self.node_chosen.h}, val: {self.node_chosen.val}, t: {self.node_chosen.tiebreaker}, times visited: {self.node_chosen.times_visited}, type: {self.node_chosen.type}",
                     1050, SCREEN_HEIGHT - 35, arcade.color.PURPLE, bold=True).draw()
         # SET-UPS FOR A_STAR:
         # heuristics:
-        arcade.Text(f'Heuristics: ', SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120, arcade.color.BLACK, bold=True).draw()
-        for i in range(len(self.heuristic_names)):
-            arcade.draw_rectangle_outline(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * i, 18, 18,
-                                          arcade.color.BLACK, 2)
-            arcade.Text(f'{self.heuristic_names[i]}', SCREEN_WIDTH - 225 + (18 + 2 * 2),
-                        SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * i - 6, arcade.color.BLACK, bold=True).draw()
-
-        arcade.draw_rectangle_filled(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * self.heuristic,
-                                     14,
-                                     14,
-                                     arcade.color.BLACK)
-        # heuristics lock:
-        if self.heuristic_lock:
-            self.draw_lock(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * self.heuristic)
-            for i in range(len(self.heuristic_names)):
-                if i != self.heuristic:
-                    self.draw_cross(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * i)
-        # tiebreakers:
-        arcade.Text(f'Tiebreakers: ', SCREEN_WIDTH - 235, SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * 3 - 18 * 3,
-                    arcade.color.BLACK, bold=True).draw()
-        for i in range(len(self.tiebreaker_names)):
-            arcade.draw_rectangle_outline(SCREEN_WIDTH - 225,
-                                          SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30, 18,
-                                          18, arcade.color.BLACK, 2)
-            arcade.Text(self.tiebreaker_names[i], SCREEN_WIDTH - 225 + (18 + 2 * 2),
-                        SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30 - 6, arcade.color.BLACK,
+        if self.inter_types[2] == InterType.PRESSED:
+            arcade.Text(f'Heuristics: ', SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120, arcade.color.BLACK,
                         bold=True).draw()
+            for i in range(len(self.heuristic_names)):
+                arcade.draw_rectangle_outline(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * i, 18,
+                                              18,
+                                              arcade.color.BLACK, 2)
+                arcade.Text(f'{self.heuristic_names[i]}', SCREEN_WIDTH - 225 + (18 + 2 * 2),
+                            SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * i - 6, arcade.color.BLACK, bold=True).draw()
 
-        if self.tiebreaker is not None:
             arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
-                                         SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (
-                                                     3 + self.tiebreaker) - 18 * 3 - 30,
-                                         14,
-                                         14, arcade.color.BLACK)
-        # tiebreakers lock:
-        if self.tiebreakers_lock:
-            if self.tiebreaker is not None:
-                self.draw_lock(SCREEN_WIDTH - 225,
-                               SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (3 + self.tiebreaker) - 18 * 3 - 30)
-            for i in range(len(self.tiebreaker_names)):
-                if self.tiebreaker is None or i != self.tiebreaker:
-                    self.draw_cross(SCREEN_WIDTH - 225,
-                                    SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30)
-        # greedy flag:
-        arcade.Text('Is greedy: ', SCREEN_WIDTH - 235,
-                    SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3,
-                    arcade.color.BLACK, bold=True).draw()
-        arcade.draw_rectangle_outline(SCREEN_WIDTH - 225,
-                                      SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30, 18, 18,
-                                      arcade.color.BLACK, 2)
-        arcade.Text(f'GREEDY_FLAG', SCREEN_WIDTH - 225 + (18 + 2 * 2),
-                    SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 - 6,
-                    arcade.color.BLACK, bold=True).draw()
-
-        if self.greedy_flag:
-            # greedy flag lock:
-            if self.greedy_flag_lock:
-                self.draw_lock(SCREEN_WIDTH - 225,
-                               SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30)
-            else:
-                arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
-                                             SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30, 14,
-                                             14,
-                                             arcade.color.BLACK)
-        else:
-            if self.greedy_flag_lock:
-                self.draw_cross(SCREEN_WIDTH - 225,
-                                SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30)
-        # SETTINGS:
-        # scaling:
-        arcade.Text('Sizes in tiles: ', SCREEN_WIDTH - 235,
-                    SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * 4 - 3 * 18 * 3,
-                    arcade.color.BLACK, bold=True).draw()
-
-        for i in range(len(self.scale_names)):
-            arcade.draw_rectangle_outline(SCREEN_WIDTH - 225,
-                                          SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30, 18,
-                                          18,
-                                          arcade.color.BLACK, 2)
-            arcade.Text(f'{self.scale_names[i]}x{self.get_hor_tiles(i)}', SCREEN_WIDTH - 225 + (18 + 2 * 2),
-                        SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30 - 6,
-                        arcade.color.BLACK, bold=True).draw()
-        # scaling lock:
-        if self.scale_lock:
-            self.draw_lock(SCREEN_WIDTH - 225,
-                           SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * (4 + self.scale) - 3 * 18 * 3 - 30)
-            for i in range(len(self.scale_names)):
-                if i != self.scale:
-                    self.draw_cross(SCREEN_WIDTH - 225,
-                                    SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30)
-        else:
-            arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
-                                         SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * (
-                                                     4 + self.scale) - 3 * 18 * 3 - 30,
+                                         SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * self.heuristic,
                                          14,
                                          14,
                                          arcade.color.BLACK)
-        # a_star show mode:
-        arcade.Text('Show mode: ', SCREEN_WIDTH - 235,
-                    SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3, arcade.color.BLACK, bold=True).draw()
+            # heuristics lock:
+            if self.heuristic_lock:
+                self.draw_lock(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * self.heuristic)
+                for i in range(len(self.heuristic_names)):
+                    if i != self.heuristic:
+                        self.draw_cross(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * i)
+            # tiebreakers:
+            arcade.Text(f'Tiebreakers: ', SCREEN_WIDTH - 235,
+                        SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * 3 - 18 * 3,
+                        arcade.color.BLACK, bold=True).draw()
+            for i in range(len(self.tiebreaker_names)):
+                arcade.draw_rectangle_outline(SCREEN_WIDTH - 225,
+                                              SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30, 18,
+                                              18, arcade.color.BLACK, 2)
+                arcade.Text(self.tiebreaker_names[i], SCREEN_WIDTH - 225 + (18 + 2 * 2),
+                            SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30 - 6,
+                            arcade.color.BLACK,
+                            bold=True).draw()
 
-        arcade.draw_rectangle_outline(SCREEN_WIDTH - 225,
-                                      SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30, 18, 18,
-                                      arcade.color.BLACK, 2)
+            if self.tiebreaker is not None:
+                arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
+                                             SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (
+                                                     3 + self.tiebreaker) - 18 * 3 - 30,
+                                             14,
+                                             14, arcade.color.BLACK)
+            # tiebreakers lock:
+            if self.tiebreakers_lock:
+                if self.tiebreaker is not None:
+                    self.draw_lock(SCREEN_WIDTH - 225,
+                                   SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (3 + self.tiebreaker) - 18 * 3 - 30)
+                for i in range(len(self.tiebreaker_names)):
+                    if self.tiebreaker is None or i != self.tiebreaker:
+                        self.draw_cross(SCREEN_WIDTH - 225,
+                                        SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30)
+            # greedy flag:
+            arcade.Text('Is greedy: ', SCREEN_WIDTH - 235,
+                        SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3,
+                        arcade.color.BLACK, bold=True).draw()
+            arcade.draw_rectangle_outline(SCREEN_WIDTH - 225,
+                                          SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30, 18, 18,
+                                          arcade.color.BLACK, 2)
+            arcade.Text(f'GREEDY_FLAG', SCREEN_WIDTH - 225 + (18 + 2 * 2),
+                        SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 - 6,
+                        arcade.color.BLACK, bold=True).draw()
 
-        arcade.Text('IS_A_STAR_INTERACTIVE', SCREEN_WIDTH - 225 + (18 + 2 * 2),
-                    SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30 - 6, arcade.color.BLACK,
-                    bold=True).draw()
+            if self.greedy_flag:
+                # greedy flag lock:
+                if self.greedy_flag_lock:
+                    self.draw_lock(SCREEN_WIDTH - 225,
+                                   SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30)
+                else:
+                    arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
+                                                 SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30,
+                                                 14,
+                                                 14,
+                                                 arcade.color.BLACK)
+            else:
+                if self.greedy_flag_lock:
+                    self.draw_cross(SCREEN_WIDTH - 225,
+                                    SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30)
+            # a_star show mode:
+            arcade.Text('Show mode: ', SCREEN_WIDTH - 235,
+                        SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3, arcade.color.BLACK,
+                        bold=True).draw()
 
-        if self.is_interactive:
-            # a_star show mode lock:
-            if self.in_interaction_mode_lock:
+            arcade.draw_rectangle_outline(SCREEN_WIDTH - 225,
+                                          SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30, 18,
+                                          18,
+                                          arcade.color.BLACK, 2)
+
+            arcade.Text('IS_A_STAR_INTERACTIVE', SCREEN_WIDTH - 225 + (18 + 2 * 2),
+                        SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30 - 6, arcade.color.BLACK,
+                        bold=True).draw()
+
+            if self.is_interactive:
+                # a_star show mode lock:
+                if self.in_interaction_mode_lock:
+                    self.draw_lock(SCREEN_WIDTH - 225,
+                                   SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30)
+                else:
+                    arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
+                                                 SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30,
+                                                 14, 14,
+                                                 arcade.color.BLACK)
+        # SETTINGS:
+        elif self.inter_types[0] == InterType.PRESSED:
+            # scaling:
+            arcade.Text('Sizes in tiles: ', SCREEN_WIDTH - 235,
+                        SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * 4 - 3 * 18 * 3,
+                        arcade.color.BLACK, bold=True).draw()
+
+            for i in range(len(self.scale_names)):
+                arcade.draw_rectangle_outline(SCREEN_WIDTH - 225,
+                                              SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30,
+                                              18,
+                                              18,
+                                              arcade.color.BLACK, 2)
+                arcade.Text(f'{self.scale_names[i]}x{self.get_hor_tiles(i)}', SCREEN_WIDTH - 225 + (18 + 2 * 2),
+                            SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30 - 6,
+                            arcade.color.BLACK, bold=True).draw()
+            # scaling lock:
+            if self.scale_lock:
                 self.draw_lock(SCREEN_WIDTH - 225,
-                               SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30)
+                               SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * (4 + self.scale) - 3 * 18 * 3 - 30)
+                for i in range(len(self.scale_names)):
+                    if i != self.scale:
+                        self.draw_cross(SCREEN_WIDTH - 225,
+                                        SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30)
             else:
                 arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
-                                             SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30, 14, 14,
+                                             SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * (
+                                                     4 + self.scale) - 3 * 18 * 3 - 30,
+                                             14,
+                                             14,
                                              arcade.color.BLACK)
-        # NODE CHOSEN:
+        # NODE CHOSEN (should work for every algo):
         if self.node_chosen:
             arcade.draw_circle_filled(5 + self.node_chosen.x * self.tile_size + self.tile_size / 2,
                                       5 + self.node_chosen.y * self.tile_size + self.tile_size / 2, self.tile_size / 4,
                                       arcade.color.YELLOW)
-        # CURRENT PATH NODE ON START OR END NODE:
+        # CURRENT PATH NODE ON START OR END NODE (should work for every algo), TODO: should be implemented in a separated method:
         if self.in_interaction:
             if self.start_node and self.end_node:
                 if self.path is not None and self.path_index > 0:
@@ -481,25 +578,24 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                                           5 + self.end_node.y * self.tile_size + self.tile_size / 2,
                                           self.tile_size / 4,
                                           arcade.color.RED)
+        # ICONS OF INTERACTION:
 
         # GEAR WHEEL:
         self.draw_gear_wheel(1785, 1000, 24, 24, 6)
 
-        # STAR:
-        # self.draw_star(1750 - 455, 1020 - 129, 5, 64)
-
-        # LEE WAVES:
-        self.draw_waves(1750 + 50 + 48 + 10, 1020 - 73 - 25, 32, 6)
+        # BFS and DFS icons:
+        self.draw_bfs_dfs(1750 - 30, 1020 - 73 - 25, 54, 2)
 
         # A STAR LABEL:
         self.draw_a_star(1750 + 15, 1020 - 100 - 25, 22, 53)  # 36 366 98 989
 
+        # LEE WAVES:
+        self.draw_waves(1750 + 50 + 48 + 10, 1020 - 73 - 25, 32, 5)
+
+        # self.draw_bfs(1235, 935, 32, 2)
+
         # DASHED LINE CIRCLE:
         # self.draw_dashed_line_circle(1535, 935, 32, 16, 2)
-
-        # BFS and DFS icons:
-        self.draw_bfs_dfs(1750 - 30, 1020 - 73 - 25, 54, 2)
-        # self.draw_bfs(1235, 935, 32, 2)
 
     # triangle points getting:
     def get_triangle(self, node: 'Node', point: tuple[int, int]):
@@ -534,7 +630,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         max_cogs_fit_in_the_gear_wheel = int(circumference / cog_size)
         cogs_q = max_cogs_fit_in_the_gear_wheel // 2
         fit_angular_size = (2 * math.pi - cogs_q * angular_size) / cogs_q
-        angle = (angular_size if shift else 0) + (self.twist_angle if clockwise else -self.twist_angle)  # in radians
+        angle = (angular_size if shift else 0) + (
+            self.incrementers[0] if clockwise else -self.incrementers[0])  # in radians
         self.upper_vertices_list = []
         for i in range(cogs_q):
             # aux pars:
@@ -551,27 +648,30 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             angle += angular_size + fit_angular_size
         # upper gear wheel:
         # arcade.draw_polygon_filled(upper_vertices_list, arcade.color.PASTEL_GRAY)
-        if self.inter_type == InterType.PRESSED:
+        if self.inter_types[0] == InterType.PRESSED:
             arcade.draw_polygon_filled(self.upper_vertices_list, arcade.color.RED)
         arcade.draw_polygon_outline(self.upper_vertices_list, arcade.color.BLACK,
-                                    line_w + (0 if self.inter_type == InterType.NONE else 1))
+                                    line_w + (0 if self.inter_types[0] == InterType.NONE else 1))
         # hole:
         arcade.draw_ellipse_filled(cx, cy, 2 * (rx - multiplier * cog_size), 2 * (ry - multiplier * cog_size),
                                    arcade.color.DUTCH_WHITE)
         arcade.draw_ellipse_outline(cx, cy, 2 * (rx - multiplier * cog_size), 2 * (ry - multiplier * cog_size),
                                     arcade.color.BLACK,
-                                    line_w + (0 if self.inter_type == InterType.NONE else 1))
+                                    line_w + (0 if self.inter_types[0] == InterType.NONE else 1))
 
     def draw_waves(self, cx, cy, size=32, waves_q=5, line_w=2):
         ds = size / waves_q
-        for i in range(waves_q):
-            curr_s = (i * ds + self.steps) % size
-            arcade.draw_circle_outline(cx, cy, curr_s, arcade.color.BLACK, line_w)
+        s_list = sorted([(i * ds + self.incrementers[3]) % size for i in range(waves_q)], reverse=True)
+        for i, curr_s in enumerate(s_list):
+            if self.inter_types[3] == InterType.PRESSED:
+                arcade.draw_circle_filled(cx, cy, curr_s, arcade.color.RED if i % 2 == 0 else arcade.color.DUTCH_WHITE)
+            arcade.draw_circle_outline(cx, cy, curr_s, arcade.color.BLACK,
+                                       line_w + (0 if self.inter_types[3] == InterType.NONE else 1))
 
     def draw_star(self, cx, cy, vertices=5, r=32, line_w=2, clockwise=True):
         delta_angle = 2 * math.pi / vertices
         d = vertices // 2
-        angle = self.a_star_angle if clockwise else -self.a_star_angle  # in radians
+        angle = self.incrementers[2] if clockwise else -self.incrementers[2]  # in radians
         for i in range(vertices):
             da = d * delta_angle
             arcade.draw_line(cx + r * math.cos(angle),
@@ -611,10 +711,10 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             [cx + line_w_hour_projection + upper_k, cy + delta + a_w / 2]
         ]
 
-        if self.a_star_inter_type == InterType.NONE:
+        if self.inter_types[2] == InterType.NONE:
             arcade.draw_polygon_outline(self.a_outer_points, arcade.color.BLACK, line_w)
             arcade.draw_polygon_outline(a_inner_points, arcade.color.BLACK, line_w)
-        elif self.a_star_inter_type == InterType.HOVERED:
+        elif self.inter_types[2] == InterType.HOVERED:
             arcade.draw_polygon_outline(self.a_outer_points, arcade.color.BLACK, line_w + 1)
             arcade.draw_polygon_outline(a_inner_points, arcade.color.BLACK, line_w + 1)
         else:
@@ -633,14 +733,44 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
     def draw_dfs(self):
         ...
 
+    # simplified version:
     def draw_bfs_dfs(self, cx, cy, size, line_w):
+        self.bfs_dfs_cx, self.bfs_dfs_cy = cx, cy
+        self.bfs_dfs_size = size
+        # filling:
+        if self.inter_types[1] == InterType.PRESSED:
+            arcade.draw_rectangle_filled(cx, cy, size, size, arcade.color.RED)
         # border:
-        arcade.draw_rectangle_outline(cx, cy, size, size, arcade.color.BLACK, line_w)
+        arcade.draw_rectangle_outline(cx, cy, size, size, arcade.color.BLACK,
+                                      line_w + (0 if self.inter_types[1] == InterType.NONE else 1))
         # text:
         text_size = size / 4
-        arcade.Text('BFS', cx - size / 3, cy - text_size - text_size / 4, arcade.color.BLACK, text_size,
+        magnitude = size / 12
+        arcade.Text('B', cx - size / 3, cy + text_size / 4 + magnitude * math.sin(self.incrementers[1]),
+                    arcade.color.BLACK, text_size,
                     bold=True).draw()
-        arcade.Text('DFS', cx - size / 3, cy + text_size / 4, arcade.color.BLACK, text_size, bold=True).draw()
+        arcade.Text('D', cx - size / 3, cy - text_size - text_size / 4 + magnitude * math.sin(self.incrementers[1]),
+                    arcade.color.BLACK,
+                    text_size, bold=True).draw()
+
+        arcade.Text('F', cx - size / 3 + size / 4,
+                    cy + text_size / 4 + magnitude * math.sin(math.pi / 2 + self.incrementers[1]),
+                    arcade.color.BLACK,
+                    text_size,
+                    bold=True).draw()
+        arcade.Text('F', cx - size / 3 + size / 4,
+                    cy - text_size - text_size / 4 + magnitude * math.sin(math.pi / 2 + self.incrementers[1]),
+                    arcade.color.BLACK, text_size,
+                    bold=True).draw()
+
+        arcade.Text('S', cx - size / 3 + size / 4 + size / 4 - size / 32,
+                    cy + text_size / 4 + magnitude * math.sin(math.pi + self.incrementers[1]),
+                    arcade.color.BLACK, text_size,
+                    bold=True).draw()
+        arcade.Text('S', cx - size / 3 + size / 4 + size / 4 - size / 32,
+                    cy - text_size - text_size / 4 + magnitude * math.sin(math.pi + self.incrementers[1]),
+                    arcade.color.BLACK, text_size,
+                    bold=True).draw()
 
     def draw_dashed_line_circle(self, cx, cy, r, q, line_w, shift=False, clockwise=True):
         angular_size = math.pi / q
@@ -725,6 +855,11 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.tiebreakers_lock = False
         self.scale_lock = False
 
+    def clear_inter_types(self, ind):
+        for i, _ in enumerate(self.inter_types):
+            if i != ind:
+                self.inter_types[i] = InterType.NONE
+
     # erases all nodes, that are connected vertically, horizontally or diagonally to a chosen one,
     # then nodes connected to them the same way and so on recursively...
     def erase_all_linked_nodes(self, node: 'Node'):
@@ -739,20 +874,23 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
     # UPDATING:
     # long press logic for mouse buttons:
     def update(self, delta_time: float):
-        # gear wheel spinning:
-        if self.inter_type == InterType.HOVERED:
-            self.twist_angle += 0.02
-        if self.a_star_inter_type == InterType.HOVERED:
-            self.a_star_angle += 0.05
-        self.steps += 0.25
-
+        # icons spinning/moving:
+        increments = [0.02, 0.15, 0.05, 0.25]
+        for i, _ in enumerate(self.incrementers):
+            if self.inter_types[i] == InterType.HOVERED:
+                self.incrementers[i] += increments[i]
         # consecutive calls during key pressing:
         ticks_threshold = 12
         if self.cycle_breaker_right:
             self.ticks_before += 1
             if self.ticks_before >= ticks_threshold:
                 if self.path is None:
-                    self.a_star_step_up()
+                    if self.inter_types[1] == InterType.PRESSED:
+                        ...
+                    elif self.inter_types[2] == InterType.PRESSED:
+                        self.a_star_step_up()
+                    elif self.inter_types[3] == InterType.PRESSED:
+                        self.wave_lee_step_up()
                 else:
                     if self.path_index < len(self.path) - 1:
                         self.path_up()
@@ -761,7 +899,12 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             self.ticks_before += 1
             if self.ticks_before >= ticks_threshold:
                 if self.path is None:
-                    self.a_star_step_down()
+                    if self.inter_types[1] == InterType.PRESSED:
+                        ...
+                    elif self.inter_types[2] == InterType.PRESSED:
+                        self.a_star_step_down()
+                    elif self.inter_types[3] == InterType.PRESSED:
+                        self.wave_lee_step_down()
                 else:
                     if self.path_index > 0:
                         self.path_down()
@@ -778,21 +921,33 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             case arcade.key.SPACE:
                 if not self.loading:
                     if self.start_node and self.end_node:
+                        # STEP BY STEP:
                         if self.is_interactive:
+                            # game logic:
                             self.in_interaction = True
-                            self.in_interaction_mode_lock = True
-                            self.greedy_flag_lock = True
-                            self.heuristic_lock = True
-                            self.tiebreakers_lock = True
-                            self.scale_lock = True
-                            self.a_star_preparation()
+                            # prepare:
+                            if self.inter_types[1] == InterType.PRESSED:
+                                self.bfs_dfs_preparation()
+                            elif self.inter_types[2] == InterType.PRESSED:
+                                self.a_star_preparation()
+                            elif self.inter_types[3] == InterType.PRESSED:
+                                self.wave_lee_preparation()
+                        # ONE SPACEBAR PRESS:
                         else:
                             start = time.time_ns()
-                            the_shortest_path = self.start_node.a_star(self.end_node, self)
-                            self.path = the_shortest_path
+                            # getting paths:
+                            if self.inter_types[1] == InterType.PRESSED:
+                                self.path = self.start_node.bfs(self.end_node, self) if self.is_bfs \
+                                    else self.start_node.dfs(self.end_node, self)
+                            elif self.inter_types[2] == InterType.PRESSED:
+                                self.path = self.start_node.a_star(self.end_node, self)
+                            elif self.inter_types[3] == InterType.PRESSED:
+                                self.path = self.start_node.wave_lee(self.end_node, self)
                             finish = time.time_ns()
                             self.time_elapsed_ms = self.get_ms(start, finish)
-                            for node in the_shortest_path:
+                            # path's drawing:
+                            print(f"PATH'S LENGTH: {len(self.path)}")
+                            for node in self.path:
                                 if node.type not in [NodeType.START_NODE, NodeType.END_NODE]:
                                     node.type = NodeType.PATH_NODE
                                     node.update_sprite_colour()
@@ -807,7 +962,12 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 if self.in_interaction:
                     self.cycle_breaker_right = True
                     if self.path is None:
-                        self.a_star_step_up()
+                        if self.inter_types[1] == InterType.PRESSED:
+                            ...
+                        elif self.inter_types[2] == InterType.PRESSED:
+                            self.a_star_step_up()
+                        elif self.inter_types[3] == InterType.PRESSED:
+                            self.wave_lee_step_up()
                     else:
                         if self.path_index < len(self.path) - 1:
                             self.path_up()
@@ -820,14 +980,24 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 if self.in_interaction:
                     self.cycle_breaker_left = True
                     if self.path is None:
-                        self.a_star_step_down()
+                        if self.inter_types[1] == InterType.PRESSED:
+                            ...
+                        elif self.inter_types[2] == InterType.PRESSED:
+                            self.a_star_step_down()
+                        elif self.inter_types[3] == InterType.PRESSED:
+                            self.wave_lee_step_down()
                     else:
                         if self.path_index > 0:
                             self.path_down()
                             self.path_index -= 1
                         else:
                             self.path = None
-                            self.a_star_step_down()
+                            if self.inter_types[1] == InterType.PRESSED:
+                                ...
+                            elif self.inter_types[2] == InterType.PRESSED:
+                                self.a_star_step_down()
+                            elif self.inter_types[3] == InterType.PRESSED:
+                                self.wave_lee_step_down()
                 elif self.loading:
                     self.change_nodes_type(NodeType.EMPTY, self.walls[f'ornament {self.loading_ind}'])
                     self.loading_ind = (self.loading_ind - 1) % len(self.walls)
@@ -923,35 +1093,63 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                                 self.walls_built_erased = self.walls_built_erased[:self.walls_index + 1]
                             self.walls_built_erased.append(([self.number_repr(n)], self.build_or_erase))
                             self.walls_index += 1
-
-        if self.inter_type != InterType.PRESSED:
+        # GEAR WHEEL:
+        if self.inter_types[0] != InterType.PRESSED:
             if arcade.is_point_in_polygon(x, y,
                                           self.upper_vertices_list):  # and (x - self.cx) ** 2 / self.hole_rx + (y - self.cy) / self.hole_ry ** 2 >= 1:
-                self.inter_type = InterType.HOVERED
+                self.inter_types[0] = InterType.HOVERED
             else:
-                self.inter_type = InterType.NONE
-
-        if self.a_star_inter_type != InterType.PRESSED:
+                self.inter_types[0] = InterType.NONE
+        # BFS/DFS:
+        if self.inter_types[1] != InterType.PRESSED:
+            if self.bfs_dfs_cx - self.bfs_dfs_size // 2 <= x <= self.bfs_dfs_cx + self.bfs_dfs_size // 2 \
+                    and self.bfs_dfs_cy - self.bfs_dfs_size // 2 <= y <= self.bfs_dfs_cy + self.bfs_dfs_size // 2:
+                self.inter_types[1] = InterType.HOVERED
+            else:
+                self.inter_types[1] = InterType.NONE
+        # A_STAR:
+        if self.inter_types[2] != InterType.PRESSED:
             if arcade.is_point_in_polygon(x, y, self.a_outer_points):
-                self.a_star_inter_type = InterType.HOVERED
+                self.inter_types[2] = InterType.HOVERED
             else:
-                self.a_star_inter_type = InterType.NONE
+                self.inter_types[2] = InterType.NONE
+        # WAVE_LEE:
+        if self.inter_types[3] != InterType.PRESSED:
+            if (x - (1750 + 50 + 48 + 10)) ** 2 + (y - (1020 - 73 - 25)) ** 2 <= 32 ** 2:
+                self.inter_types[3] = InterType.HOVERED
+            else:
+                self.inter_types[3] = InterType.NONE
 
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int):
-        # setting_up heuristic and tiebreaker:
-        if not self.heuristic_lock:
-            for i in range(len(self.heuristic_names)):
-                if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 100 - 120 - (
-                        18 + 2 * 2 + 18) * i - 9 <= y <= SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * i + 9:
-                    self.heuristic = i
-                    break
-        if not self.tiebreakers_lock:
-            for i in range(len(self.tiebreaker_names)):
-                if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 100 - 120 - (
-                        18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 100 - 120 - (
-                        18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30 + 9:
-                    self.tiebreaker = None if self.tiebreaker == i else i
-                    break
+        # A_STAR BLOCK:
+        if self.inter_types[2] == InterType.PRESSED:
+            # setting_up heuristic and tiebreaker:
+            if not self.heuristic_lock:
+                for i in range(len(self.heuristic_names)):
+                    if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 100 - 120 - (
+                            18 + 2 * 2 + 18) * i - 9 <= y <= SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * i + 9:
+                        self.heuristic = i
+                        break
+            if not self.tiebreakers_lock:
+                for i in range(len(self.tiebreaker_names)):
+                    if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 100 - 120 - (
+                            18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 100 - 120 - (
+                            18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30 + 9:
+                        self.tiebreaker = None if self.tiebreaker == i else i
+                        break
+            # setting up the greedy flag:
+            if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 130 - 120 - (
+                    18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 130 - 120 - (
+                    18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 + 9:
+                if not self.greedy_flag_lock:
+                    self.greedy_flag = not self.greedy_flag
+            # setting up the interactive a_star flag:
+            if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 190 - (
+                    18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 190 - (
+                    18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30 + 9:
+                if not self.in_interaction_mode_lock:
+                    self.is_interactive = not self.is_interactive
+        # SETTINGS BLOCK:
         # choosing the scale factor:
         if not self.scale_lock:
             for i in range(len(self.scale_names)):
@@ -960,18 +1158,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                         18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30 + 9:
                     self.scale = i
                     self.rebuild_map()
-        # setting up the greedy flag:
-        if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 130 - 120 - (
-                18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 130 - 120 - (
-                18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 + 9:
-            if not self.greedy_flag_lock:
-                self.greedy_flag = not self.greedy_flag
-        # setting up the interactive a_star flag:
-        if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 190 - (
-                18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 190 - (
-                18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30 + 9:
-            if not self.in_interaction_mode_lock:
-                self.is_interactive = not self.is_interactive
+        # MODES OF DRAWING LOGIC:
         if self.mode == 0:
             self.building_walls_flag = True
             if button == arcade.MOUSE_BUTTON_LEFT:
@@ -1006,7 +1193,6 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     en.type = NodeType.END_NODE
                     self.end_node = en
                     self.end_node.update_sprite_colour()
-
         elif self.mode == 2:  # a_star interactive -->> info getting:
             n = self.get_node(x, y)
             if n:
@@ -1014,18 +1200,44 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     self.node_chosen = None
                 else:
                     self.a_star_choose_node(n)
-
+        # GEAR_WHEEL:
         if arcade.is_point_in_polygon(x, y, self.upper_vertices_list):
-            if self.inter_type == InterType.HOVERED:
-                self.inter_type = InterType.PRESSED
-            elif self.inter_type == InterType.PRESSED:
-                self.inter_type = InterType.HOVERED
-
+            if self.inter_types[0] == InterType.HOVERED:
+                self.inter_types[0] = InterType.PRESSED
+                self.clear_inter_types(0)
+            elif self.inter_types[0] == InterType.PRESSED:
+                self.inter_types[0] = InterType.HOVERED
+        # BFS/DFS:
+        if self.bfs_dfs_cx - self.bfs_dfs_size / 2 <= x <= self.bfs_dfs_cx + self.bfs_dfs_size / 2 \
+                and self.bfs_dfs_cy - self.bfs_dfs_size / 2 <= y <= self.bfs_dfs_cy + self.bfs_dfs_size / 2:
+            if self.inter_types[1] == InterType.HOVERED:
+                self.inter_types[1] = InterType.PRESSED
+                self.clear_inter_types(1)
+            elif self.inter_types[1] == InterType.PRESSED:
+                self.inter_types[1] = InterType.HOVERED
+        # A_STAR:
         if arcade.is_point_in_polygon(x, y, self.a_outer_points):
-            if self.a_star_inter_type == InterType.HOVERED:
-                self.a_star_inter_type = InterType.PRESSED
-            elif self.a_star_inter_type == InterType.PRESSED:
-                self.a_star_inter_type = InterType.HOVERED
+            if self.inter_types[2] == InterType.HOVERED:
+                self.inter_types[2] = InterType.PRESSED
+                self.clear_inter_types(2)
+            elif self.inter_types[2] == InterType.PRESSED:
+                self.inter_types[2] = InterType.HOVERED
+        # WAVE_LEE:
+        if (x - (1750 + 50 + 48 + 10)) ** 2 + (y - (1020 - 73 - 25)) ** 2 <= 32 ** 2:
+            if self.inter_types[3] == InterType.HOVERED:
+                self.inter_types[3] = InterType.PRESSED
+                self.clear_inter_types(3)
+            elif self.inter_types[3] == InterType.PRESSED:
+                self.inter_types[3] = InterType.HOVERED
+
+    # helpful auxiliary methods:
+    @staticmethod
+    def is_point_in_square(cx, cy, size, x, y):
+        return cx - size / 2 <= x <= cx + size / 2 and cy - size / 2 <= y <= cy + size / 2
+
+    @staticmethod
+    def is_point_in_circle(cx, cy, r, x, y):
+        return (cx - x) ** 2 + (cy - y) ** 2 <= r ** 2
 
     # game mode switching by scrolling the mouse wheel:
     def on_mouse_scroll(self, x: int, y: int, scroll_x: int, scroll_y: int):
@@ -1137,6 +1349,12 @@ class Node:
     def update_sprite_colour(self):
         self.sprite.color = self.type.value
 
+    def __str__(self):
+        return f'{self.y, self.x} -->> {self.val}'
+
+    def __repr__(self):
+        return str(self)
+
     # DUNDERS:
     def __eq__(self, other):
         if type(self) != type(other):
@@ -1170,6 +1388,8 @@ class Node:
         self.neighs = set()
         # bfs/dfs:
         self.visited = False
+        # wave lee:
+        self.val = 1
 
     # HEURISTICS:
     @staticmethod
@@ -1217,68 +1437,65 @@ class Node:
                 yield game.grid[ny][nx]
 
     # PATHFINDING:
-    # Witchdoctor algos:
+    # Witchdoctor's algos:
     def bfs(self, other: 'Node', game: 'Astar'):  # iterative one:
-        queue = [self]
+        queue = deque()
+        queue.append(self)
         self.visited = True
         while queue:
-            current_node = queue.pop(0)
-            current_node.visited = True
+            game.iterations += 1
+            current_node = queue.pop()
+            current_node.type = NodeType.VISITED_NODE
+            current_node.update_sprite_colour()
             current_node.times_visited += 1
             if current_node == other:
                 return self.restore_path(other)
             for neigh in current_node.get_neighs(game):
                 if not neigh.visited:
+                    neigh.visited = True
                     neigh.previously_visited_node = current_node
-                    queue.append(neigh)
+                    queue.appendleft(neigh)
 
     def dfs(self, other: 'Node', game: 'Astar'):  # recursive one (can be easily implemented through the queue/stack):
-        queue = [self]
-        self.visited = True
-        while queue:
-            current_node = queue.pop()
-            current_node.visited = True
+        def rec_dfs(current_node):
+            game.iterations += 1
+            print(f'{game.iterations}-th iteration, current node: {current_node}')
+            current_node.type = NodeType.VISITED_NODE
+            current_node.update_sprite_colour()
             current_node.times_visited += 1
             if current_node == other:
                 return self.restore_path(other)
             for neigh in current_node.get_neighs(game):
                 if not neigh.visited:
                     neigh.previously_visited_node = current_node
-                    queue.append(neigh)
+                    neigh.visited = True
+                    if (r := rec_dfs(neigh)) is not None:
+                        return r
+        path = rec_dfs(self)
+        return path if path is not None else []
 
     # finished, tested and approved by Levi Gin:
     def wave_lee(self, other: 'Node', game: 'Astar'):
-        other.get_neighs(game)
-        flag = True
+        # other.get_neighs(game)  # Why is it necessary???
         front_wave = [self]
-        other.val, iteration = 0, 0
+        iteration = 0
         # wave-spreading:
         while front_wave:
             iteration += 1
             new_front_wave = []
             for front_node in front_wave:
                 front_node.val = iteration
+                if front_node not in [self, other]:
+                    front_node.type = NodeType.VISITED_NODE
+                    front_node.update_sprite_colour()
                 if front_node == other:
-                    flag = False
-                    break
+                    return self.restore_path(other)
                 for front_neigh in front_node.get_neighs(game):
-                    if front_neigh.val == 0:
+                    if front_neigh.val == 1 and front_neigh not in new_front_wave and front_neigh != self:
+                        front_neigh.previously_visited_node = front_node
                         new_front_wave.append(front_neigh)
-            if not flag:
-                break
             front_wave = new_front_wave[:]
-        # path restoration:
-        if other.val == 0:
-            return []
-        curr_node = other
-        the_shortest_path = []
-        while curr_node != self:
-            the_shortest_path.append(curr_node)
-            for neigh in curr_node.neighs:
-                if neigh.val < curr_node.val:
-                    curr_node = neigh
-                    break
-        return the_shortest_path
+        return []
 
     # a common a_star:
     def a_star(self, other: 'Node', game: 'Astar'):
@@ -1313,7 +1530,6 @@ class Node:
                     hq.heappush(nodes_to_be_visited, neigh)
         game.max_times_visited = max_times_visited
         # start point of path restoration (here we begin from the end node of the shortest path found):
-
         return self.restore_path(other)
 
     def restore_path(self, other: 'Node'):

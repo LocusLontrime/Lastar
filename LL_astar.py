@@ -1132,7 +1132,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                                 self.path = self.start_node.wave_lee(self.end_node, self)
                             finish = time.time_ns()
                             self.time_elapsed_ms = self.get_ms(start, finish)
-                            # path's drawing:
+                            # path's drawing for all three algos cores:
                             print(f"PATH'S LENGTH: {len(self.path)}")
                             for i, node in enumerate(self.path):
                                 if node.type not in [NodeType.START_NODE, NodeType.END_NODE]:

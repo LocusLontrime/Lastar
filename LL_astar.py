@@ -43,6 +43,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.node_chosen = None
         self.path = None
         self.path_index = 0
+        self.triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
+        self.arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
         # a_star important pars:
         self.start_node = None
         self.end_node = None
@@ -64,6 +66,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # interactive pars (game logic):
         self.is_interactive = False
         self.in_interaction = False
+        self.arrows_flag = False  # !!!
         self.cycle_breaker_right = False
         self.cycle_breaker_left = False
         self.ticks_before = 0
@@ -76,6 +79,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.heuristic_lock = False
         self.tiebreakers_lock = False
         self.scale_lock = False
+        self.arrows_lock = False  # !!!
         # walls building/erasing dicts:
         self.walls_built_erased = [([], True)]
         self.walls_index = 0
@@ -111,6 +115,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.curr_node_wave_lee = None
         # BFS/DFS:
         self.is_bfs = False
+        self.queue = deque()
 
     # INITIALIZATION AUX:
     # calculating grid visualization pars for vertical tiles number given:
@@ -149,6 +154,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.heuristic_lock = True
         self.tiebreakers_lock = True
         self.scale_lock = True
+        # arrows list renewal:
+        self.arrow_shape_list = arcade.ShapeElementList()
 
     # path-recovering process for interactive a_star:
     def recover_path(self):
@@ -168,12 +175,29 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         if (path_node := self.path[self.path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
             path_node.type = NodeType.PATH_NODE
             path_node.update_sprite_colour()
+        # arrows:
+        p = -self.path[self.path_index + 1].x + self.path[self.path_index].x, \
+            -self.path[self.path_index + 1].y + self.path[self.path_index].y
+        p1, p2, p3 = self.get_triangle(self.path[self.path_index + 1], p)
+        triangle_shape = arcade.create_triangles_filled_with_colors(
+            [p1, p2, p3],
+            [arcade.color.WHITE, arcade.color.RED, arcade.color.RED])
+        self.triangle_shape_list.append(triangle_shape)
+        # line arrows removing:
+        node = self.path[self.path_index + 1]
+        if node not in [self.start_node, self.end_node]:
+            node.remove_arrow(self)
 
     # a step back for path restoring phase visualisation (interactive a_star mode):
     def path_down(self):
         if (path_node := self.path[self.path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
             path_node.type = NodeType.VISITED_NODE
             path_node.update_sprite_colour()
+        # arrows:
+        self.triangle_shape_list.remove(self.triangle_shape_list[self.path_index - 1])
+        # line arrows restoring:
+        if path_node not in [self.start_node, self.end_node]:
+            path_node.append_arrow(self)
 
     # a step forward in path-finding phase visualisation (interactive a_star mode)
     def a_star_step_up(self):
@@ -215,9 +239,12 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                         self.start_node, self.end_node, neigh)
                 # previous visited node memoization for further path-recovering process:
                 neigh.previously_visited_node = curr_node
-                if neigh not in self.nodes_visited and neigh not in [self.start_node, self.end_node]:
+                if neigh not in [self.start_node, self.end_node]:  # neigh not in self.nodes_visited and
                     neigh.type = NodeType.NEIGH
                     neigh.update_sprite_colour()
+                    arrow = self.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y))
+                    neigh.arrow_shape = arrow
+                    neigh.append_arrow(self)
                 # adding all the valid neighs to the priority heap:
                 hq.heappush(self.nodes_to_be_visited, neigh)
         # incrementation:
@@ -239,6 +266,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 curr_node.update_sprite_colour()
             if self.iterations > 2:
                 self.curr_node_dict[self.iterations - 1].type = NodeType.CURRENT_NODE
+                self.curr_node_dict[self.iterations - 1].update_sprite_colour()
         if self.iterations > 0:
             # removing the current node from nodes visited:
             if self.nodes_visited[curr_node] > 1:
@@ -251,6 +279,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 node = self.grid[y][x]
                 self.remove_from_heapq(self.nodes_to_be_visited, self.nodes_to_be_visited.index(node))
                 node.restore(neigh)
+                if node not in [self.start_node, self.end_node]:
+                    node.remove_arrow(self)
             # adding current node (popped out at the current iteration) to the heap:
             hq.heappush(self.nodes_to_be_visited, curr_node)
             # iteration steps back:
@@ -309,7 +339,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # starting pars:
         self.front_wave_lee = []
         self.next_wave_lee = [self.start_node]
-        self.start_node.val = 1
+        self.start_node.val = 1  # ??? what about clearing?
         self.curr_node_wave_lee = self.end_node
         # variable ones:
         self.iterations_wave_lee = 0
@@ -364,7 +394,64 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 self.next_wave_lee = [self.start_node]
                 self.front_wave_lee = []
 
-    def bfs_dfs_preparation(self):
+    # WITCHDOCTOR'S BLOCK (IN PROCESS):
+
+    # BFS:
+    def bfs_preparation(self):
+        self.queue = deque()
+        self.queue.append(self.start_node)
+        self.iterations = 0
+        # dicts:
+        self.curr_node_dict = {0: None}
+
+    def bfs_step_up(self):
+        # one bfs step up:
+        self.iterations += 0
+        current_node = self.queue.pop()
+        self.curr_node_dict[self.iterations + 1] = current_node
+        if self.iterations > 0:
+            current_node.type = NodeType.CURRENT_NODE
+            current_node.update_sprite_colour()
+        if self.iterations > 1:
+            self.curr_node_dict[self.iterations].type = NodeType.VISITED_NODE
+            self.curr_node_dict[self.iterations].update_sprite_colour()
+        current_node.times_visited += 1
+        if current_node == self.end_node:
+            self.path = self.recover_path()
+        for neigh in current_node.get_neighs(self):
+            if neigh.type != NodeType.VISITED_NODE:
+                if not neigh.visited:
+                    if neigh.type != NodeType.END_NODE:
+                        neigh.type = NodeType.NEIGH
+                        neigh.update_sprite_colour()
+                    neigh.visited = True
+                    neigh.previously_visited_node = current_node
+                    self.queue.appendleft(neigh)
+        self.iterations += 1
+
+    def bfs_step_down(self):
+        if self.iterations > 1:
+            # now the neighs of current node should become EMPTY ones:
+            for neigh in (current_node := self.curr_node_dict[self.iterations]).get_neighs(self):
+                if neigh.type == NodeType.NEIGH:
+                    neigh.type = NodeType.EMPTY
+            # current node has become the visited one:
+            current_node.type = NodeType.VISITED_NODE
+            current_node.update_sprite_colour()
+            if self.iterations > 2:
+                # previous step current node has become the current step current node:
+                self.curr_node_dict[self.iterations - 1].type = NodeType.CURRENT_NODE
+                self.curr_node_dict[self.iterations - 1].update_sprite_colour()
+        self.iterations -= 1
+
+    # DFS:
+    def dfs_preparation(self):
+        ...
+
+    def dfs_step_up(self):
+        ...
+
+    def dfs_step_down(self):
         ...
 
     # PRESETS:
@@ -410,14 +497,13 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.grid_line_shapes.draw()
         # blocks:
         self.node_sprite_list.draw()
-        # arcade.draw_arc_outline(1825, 500, 56, 28, arcade.color.BLACK, 90, 180, border_width=18, num_segments=128)
-        # arcade.create_line_loop([(1815, 500), (1825 + 11, 500 + 9), (1825 + 11, 500 + 4), (1825 + 11 + 22, 500 + 4),
-        #                          (1825 + 11 + 22, 500 - 4), (1825 + 11, 500 - 4), (1825 + 11, 500 - 9)],
-        #                         arcade.color.BLACK, 2).draw()
+        # arrows:
+        if self.arrows_flag:
+            if len(self.arrow_shape_list) > 0:
+                self.arrow_shape_list.draw()
         # HINTS:
         arcade.Text(
-            f'A* iters: {self.iterations}, path length: {len(self.path) if self.path else "No path found"}, nodes visited: {len(self.nodes_visited)}, '
-            f'max times visited: {self.max_times_visited_dict[self.iterations] if self.is_interactive else "LALA"}, time elapsed: {self.time_elapsed_ms} ms',
+            f'A* iters: {self.iterations}, path length: {len(self.path) if self.path else "No path found"}, nodes visited: {len(self.nodes_visited)}, time elapsed: {self.time_elapsed_ms} ms',
             365, SCREEN_HEIGHT - 35, arcade.color.BROWN, bold=True).draw()
         arcade.Text(f'Mode: {self.mode_names[self.mode]}', 25, SCREEN_HEIGHT - 35, arcade.color.BLACK, bold=True).draw()
         if self.mode == 2:
@@ -503,6 +589,22 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 if self.greedy_flag_lock:
                     self.draw_cross(SCREEN_WIDTH - 225,
                                     SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30)
+            # arrows:
+            arcade.Text('Guide arrows: ', SCREEN_WIDTH - 235,
+                        SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * 4 - 3 * 18 * 3,
+                        arcade.color.BLACK, bold=True).draw()
+            arcade.draw_rectangle_outline(SCREEN_WIDTH - 225,
+                                          SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * 4 - 3 * 18 * 3 - 30, 18, 18,
+                                          arcade.color.BLACK, 2)
+            arcade.Text(f'ON/OFF', SCREEN_WIDTH - 225 + (18 + 2 * 2),
+                        SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * 4 - 3 * 18 * 3 - 30 - 6,
+                        arcade.color.BLACK, bold=True).draw()
+
+            if self.arrows_flag:
+                arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
+                                             SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * 4 - 3 * 18 * 3 - 30,
+                                             14, 14, arcade.color.BLACK)
+
             # a_star show mode:
             arcade.Text('Show mode: ', SCREEN_WIDTH - 235,
                         SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3, arcade.color.BLACK,
@@ -527,6 +629,22 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                                                  SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30,
                                                  14, 14,
                                                  arcade.color.BLACK)
+        # BFS and DFS PARS:
+        elif self.inter_types[1] == InterType.PRESSED:
+            arcade.Text('Core: ', SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120, arcade.color.BLACK,
+                        bold=True).draw()
+
+            arcade.draw_rectangle_outline(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120, 18, 18,
+                                          arcade.color.BLACK, 2)
+            arcade.Text(f'BFS', SCREEN_WIDTH - 225 + (18 + 2 * 2),
+                        SCREEN_HEIGHT - 100 - 120 - 6, arcade.color.BLACK, bold=True).draw()
+            arcade.draw_rectangle_outline(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18), 18, 18,
+                                          arcade.color.BLACK, 2)
+            arcade.Text(f'DFS', SCREEN_WIDTH - 225 + (18 + 2 * 2),
+                        SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) - 6, arcade.color.BLACK, bold=True).draw()
+            arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
+                                         SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (0 if self.is_bfs else 1),
+                                         14, 14, arcade.color.BLACK)
         # SETTINGS:
         elif self.inter_types[0] == InterType.PRESSED:
             # scaling:
@@ -564,20 +682,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                                       5 + self.node_chosen.y * self.tile_size + self.tile_size / 2, self.tile_size / 4,
                                       arcade.color.YELLOW)
         # CURRENT PATH NODE ON START OR END NODE (should work for every algo), TODO: should be implemented in a separated method:
-        if self.in_interaction:
-            if self.start_node and self.end_node:
-                if self.path is not None and self.path_index > 0:
-                    p = -self.path[self.path_index].x + self.path[self.path_index - 1].x, -self.path[
-                        self.path_index].y + \
-                        self.path[self.path_index - 1].y
-                    points = self.get_triangle(self.path[self.path_index], p)
-                    arcade.draw_triangle_filled(points[0], points[1], points[2], points[3], points[4], points[5],
-                                                arcade.color.RED)
-            if self.path:
-                arcade.draw_circle_filled(5 + self.end_node.x * self.tile_size + self.tile_size / 2,
-                                          5 + self.end_node.y * self.tile_size + self.tile_size / 2,
-                                          self.tile_size / 4,
-                                          arcade.color.RED)
+        if self.triangle_shape_list:
+            self.triangle_shape_list.draw()
+
         # ICONS OF INTERACTION:
 
         # GEAR WHEEL:
@@ -592,18 +699,21 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # LEE WAVES:
         self.draw_waves(1750 + 50 + 48 + 10, 1020 - 73 - 25, 32, 5)
 
-        # self.draw_bfs(1235, 935, 32, 2)
-
-        # DASHED LINE CIRCLE:
-        # self.draw_dashed_line_circle(1535, 935, 32, 16, 2)
-
     # triangle points getting:
     def get_triangle(self, node: 'Node', point: tuple[int, int]):
         scaled_point = point[0] * (self.tile_size // 2 - 2), point[1] * (self.tile_size // 2 - 2)
-        deltas = (scaled_point[0] - scaled_point[1], scaled_point[0] + scaled_point[1]), (
-            scaled_point[0] + scaled_point[1], -scaled_point[0] + scaled_point[1])
+        deltas = (
+            (
+                scaled_point[0] - scaled_point[1],
+                scaled_point[0] + scaled_point[1]
+            ),
+            (
+                scaled_point[0] + scaled_point[1],
+                -scaled_point[0] + scaled_point[1]
+            )
+        )
         cx, cy = 5 + node.x * self.tile_size + self.tile_size / 2, 5 + node.y * self.tile_size + self.tile_size / 2
-        return cx, cy, cx + deltas[0][0], cy + deltas[0][1], cx + deltas[1][0], cy + deltas[1][1]
+        return (cx, cy), (cx + deltas[0][0], cy + deltas[0][1]), (cx + deltas[1][0], cy + deltas[1][1])
 
     # draws a lock for right window part:
     @staticmethod
@@ -619,8 +729,24 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                          center_y - 9, arcade.color.BLACK, line_width=2)
 
     # draws left or right arrow:
-    def make_arrow(self):
-        ...
+    def make_arrow(self, node: 'Node', point: tuple[int, int], colour: tuple[int, int, int]):
+        cx, cy = 5 + node.x * self.tile_size + self.tile_size / 2, 5 + node.y * self.tile_size + self.tile_size / 2
+        arrow_height = self.tile_size / 5
+        arrow_length = 2 * self.tile_size / 3
+        cx_ = cx - point[0] * arrow_height / 2
+        cy_ = cy - point[1] * arrow_height / 2
+
+        arcade.draw_rectangle_filled(cx_, cy_,
+                                     abs(point[0]) * (arrow_length - arrow_height) + abs(point[1]) * arrow_height,
+                                     abs(point[0]) * arrow_height + abs(point[1]) * (arrow_length - arrow_height),
+                                     colour)
+
+        arcade.draw_triangle_filled(cx + point[0] * (arrow_length / 2 - arrow_height) + point[1] * arrow_height,
+                                    cy + point[1] * (arrow_length / 2 - arrow_height) + point[0] * arrow_height,
+                                    cx + point[0] * (arrow_length / 2 - arrow_height) - point[1] * arrow_height,
+                                    cy + point[1] * (arrow_length / 2 - arrow_height) - point[0] * arrow_height,
+                                    cx + point[0] * arrow_length / 2, cy + point[1] * arrow_length / 2,
+                                    colour)
 
     def draw_gear_wheel(self, cx, cy, rx=32, ry=32, cog_size=8, multiplier=1.5, line_w=2, shift=False, clockwise=True):
         self.cx, self.cy = cx, cy
@@ -783,13 +909,23 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             angle += angular_size * 2
 
     # by default the arrow to be drawn is left sided:
-    def draw_line_arrow(self, cx, cy, length=50, angle=math.pi / 4, arrow_l=8, is_left=False, line_w=2):
-        _cx_ = cx + (-length if is_left else length)
-        arcade.draw_line(cx, cy, _cx_, cy, arcade.color.BLACK, line_w)
-        arcade.draw_line(_cx_, cy, _cx_ + (1 if is_left else -1) * arrow_l * math.cos(angle),
-                         cy + arrow_l * math.sin(angle), arcade.color.BLACK, line_w)
-        arcade.draw_line(_cx_, cy, _cx_ + (1 if is_left else -1) * arrow_l * math.cos(angle),
-                         cy - arrow_l * math.sin(angle), arcade.color.BLACK, line_w)
+    def create_line_arrow(self, node: 'Node', deltas: tuple[int, int] = (-1, 0)):  # left arrow by default
+        cx, cy = 5 + node.x * self.tile_size + self.tile_size / 2, 5 + node.y * self.tile_size + self.tile_size / 2
+        h = 2 * self.tile_size // 3
+        _h, h_, dh = h / 6, h / 3, h / 2  # for 90 degrees triangle
+        shape = arcade.create_triangles_filled_with_colors(
+            (
+                (cx + deltas[0] * h_, cy + deltas[1] * h_),
+                (cx - (deltas[0] * _h + deltas[1] * dh), cy - (deltas[0] * dh + deltas[1] * _h)),
+                (cx - (deltas[0] * _h - deltas[1] * dh), cy - (-deltas[0] * dh + deltas[1] * _h))
+            ),
+            (
+                arcade.color.BLACK,
+                arcade.color.BLACK,
+                arcade.color.BLACK
+            )
+        )
+        return shape
 
     # colour gradient:
     @staticmethod
@@ -886,7 +1022,10 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             if self.ticks_before >= ticks_threshold:
                 if self.path is None:
                     if self.inter_types[1] == InterType.PRESSED:
-                        ...
+                        if self.is_bfs:
+                            self.bfs_step_up()
+                        else:
+                            self.dfs_step_up()
                     elif self.inter_types[2] == InterType.PRESSED:
                         self.a_star_step_up()
                     elif self.inter_types[3] == InterType.PRESSED:
@@ -900,7 +1039,10 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             if self.ticks_before >= ticks_threshold:
                 if self.path is None:
                     if self.inter_types[1] == InterType.PRESSED:
-                        ...
+                        if self.is_bfs:
+                            self.bfs_step_down()
+                        else:
+                            self.dfs_step_down()
                     elif self.inter_types[2] == InterType.PRESSED:
                         self.a_star_step_down()
                     elif self.inter_types[3] == InterType.PRESSED:
@@ -911,7 +1053,15 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                         self.path_index -= 1
                     else:
                         self.path = None
-                        self.a_star_step_down()
+                        if self.inter_types[1] == InterType.PRESSED:
+                            if self.is_bfs:
+                                self.bfs_step_down()
+                            else:
+                                self.dfs_step_down()
+                        elif self.inter_types[2] == InterType.PRESSED:
+                            self.a_star_step_down()
+                        elif self.inter_types[3] == InterType.PRESSED:
+                            self.wave_lee_step_down()
 
     # KEYBOARD:
     def on_key_press(self, symbol: int, modifiers: int):
@@ -927,7 +1077,10 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                             self.in_interaction = True
                             # prepare:
                             if self.inter_types[1] == InterType.PRESSED:
-                                self.bfs_dfs_preparation()
+                                if self.is_bfs:
+                                    self.bfs_preparation()
+                                else:
+                                    self.dfs_preparation()
                             elif self.inter_types[2] == InterType.PRESSED:
                                 self.a_star_preparation()
                             elif self.inter_types[3] == InterType.PRESSED:
@@ -963,7 +1116,10 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     self.cycle_breaker_right = True
                     if self.path is None:
                         if self.inter_types[1] == InterType.PRESSED:
-                            ...
+                            if self.is_bfs:
+                                self.bfs_step_up()
+                            else:
+                                self.dfs_step_up()
                         elif self.inter_types[2] == InterType.PRESSED:
                             self.a_star_step_up()
                         elif self.inter_types[3] == InterType.PRESSED:
@@ -981,7 +1137,10 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     self.cycle_breaker_left = True
                     if self.path is None:
                         if self.inter_types[1] == InterType.PRESSED:
-                            ...
+                            if self.is_bfs:
+                                self.bfs_step_down()
+                            else:
+                                self.dfs_step_down()
                         elif self.inter_types[2] == InterType.PRESSED:
                             self.a_star_step_down()
                         elif self.inter_types[3] == InterType.PRESSED:
@@ -993,7 +1152,10 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                         else:
                             self.path = None
                             if self.inter_types[1] == InterType.PRESSED:
-                                ...
+                                if self.is_bfs:
+                                    self.bfs_step_down()
+                                else:
+                                    self.dfs_step_down()
                             elif self.inter_types[2] == InterType.PRESSED:
                                 self.a_star_step_down()
                             elif self.inter_types[3] == InterType.PRESSED:
@@ -1143,21 +1305,39 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 + 9:
                 if not self.greedy_flag_lock:
                     self.greedy_flag = not self.greedy_flag
+            # setting up the arrows:
+            if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 160 - 120 - (
+                    18 + 2 * 2 + 18) * 4 - 3 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 160 - 120 - (
+                    18 + 2 * 2 + 18) * 4 - 3 * 18 * 3 - 30 + 9:
+                self.arrows_flag = not self.arrows_flag
             # setting up the interactive a_star flag:
             if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 190 - (
                     18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 190 - (
                     18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30 + 9:
                 if not self.in_interaction_mode_lock:
                     self.is_interactive = not self.is_interactive
+        # BFS/DFS BLOCK:
+        elif self.inter_types[1] == InterType.PRESSED:
+            if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and \
+                    SCREEN_HEIGHT - 100 - 120 - 9 <= y <= SCREEN_HEIGHT - 100 - 120 + 9:
+                self.is_bfs = True
+            elif SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 100 - 120 - (
+                    18 + 2 * 2 + 18) - 9 <= y <= SCREEN_HEIGHT - 100 - 120 - (
+                    18 + 2 * 2 + 18) + 9:
+                self.is_bfs = False
+        # WAVE LEE BLOCK:
+        elif self.inter_types[3] == InterType.PRESSED:
+            ...
         # SETTINGS BLOCK:
         # choosing the scale factor:
-        if not self.scale_lock:
-            for i in range(len(self.scale_names)):
-                if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 160 - 120 - (
-                        18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 160 - 120 - (
-                        18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30 + 9:
-                    self.scale = i
-                    self.rebuild_map()
+        elif self.inter_types[0] == InterType.PRESSED:
+            if not self.scale_lock:
+                for i in range(len(self.scale_names)):
+                    if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 160 - 120 - (
+                            18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 160 - 120 - (
+                            18 + 2 * 2 + 18) * (4 + i) - 3 * 18 * 3 - 30 + 9:
+                        self.scale = i
+                        self.rebuild_map()
         # MODES OF DRAWING LOGIC:
         if self.mode == 0:
             self.building_walls_flag = True
@@ -1294,10 +1474,11 @@ class Node:
         # type and sprite:
         self.type = node_type
         self.sprite = None
+        # arrow shape:
+        self.arrow_shape = None  # for more comprehensive visualization, consist of three line shapes
         # important pars:
         self.y, self.x = y, x
         self.val = val
-        self.neighs = set()  # the nearest neighbouring nodes, now this par is not needed
         self.previously_visited_node = None  # for building the shortest path of Nodes from the starting point to the ending one
         self.times_visited = 0
         # cost and heuristic vars:
@@ -1319,6 +1500,7 @@ class Node:
         copied_node.g = self.g
         copied_node.h = self.h
         copied_node.tiebreaker = self.tiebreaker
+        copied_node.type = self.type
         return copied_node
 
     # restore the node from its auxiliary copy:
@@ -1326,9 +1508,8 @@ class Node:
         self.g = copied_node.g
         self.h = copied_node.h
         self.tiebreaker = copied_node.tiebreaker
-        if self.type != NodeType.END_NODE:
-            self.type = NodeType.EMPTY
-            self.sprite.color = arcade.color.WHITE
+        self.type = copied_node.type  # NodeType.EMPTY ???
+        self.update_sprite_colour()
 
     # TYPE/SPRITE CHANGE/INIT:
     # makes a solid colour sprite for a node:
@@ -1348,6 +1529,14 @@ class Node:
     # updates the sprite's color (calls after node's type switching)
     def update_sprite_colour(self):
         self.sprite.color = self.type.value
+
+    # appends the arrow shape of the node to the arrow_shape_list in Astar class
+    def append_arrow(self, game: Astar):
+        game.arrow_shape_list.append(self.arrow_shape)
+
+    # removes the arrow shape of the node from the arrow_shape_list in Astar class
+    def remove_arrow(self, game: Astar):
+        game.arrow_shape_list.remove(self.arrow_shape)
 
     def __str__(self):
         return f'{self.y, self.x} -->> {self.val}'
@@ -1385,9 +1574,6 @@ class Node:
         self.tiebreaker = None
         self.previously_visited_node = None
         self.times_visited = 0
-        self.neighs = set()
-        # bfs/dfs:
-        self.visited = False
         # wave lee:
         self.val = 1
 
@@ -1425,11 +1611,11 @@ class Node:
         for dy, dx in self.walk:
             ny, nx = self.y + dy, self.x + dx
             if 0 <= ny < game.tiles_q and 0 <= nx < game.hor_tiles_q:
-                if game.grid[ny][nx].type in [NodeType.EMPTY, NodeType.END_NODE]:
-                    self.neighs.add(game.grid[ny][nx])
-        return self.neighs
+                # by default can visit the already visited nodes
+                if game.grid[ny][nx].type in [NodeType.EMPTY, NodeType.VISITED_NODE, NodeType.END_NODE]:
+                    yield game.grid[ny][nx]
 
-    # gets extended neighs (with diagonal ones) of the node:
+    # gets extended neighs (with diagonal ones) of the node, generator:
     def get_extended_neighs(self, game: 'Astar') -> list['Node']:
         for dy, dx in self.extended_walk:
             ny, nx = self.y + dy, self.x + dx
@@ -1457,22 +1643,29 @@ class Node:
                     queue.appendleft(neigh)
 
     def dfs(self, other: 'Node', game: 'Astar'):  # recursive one (can be easily implemented through the queue/stack):
+        stop_flag = True
+
+        # core:
         def rec_dfs(current_node):
+            nonlocal stop_flag
             game.iterations += 1
             print(f'{game.iterations}-th iteration, current node: {current_node}')
+            current_node.visited = True
             current_node.type = NodeType.VISITED_NODE
             current_node.update_sprite_colour()
             current_node.times_visited += 1
             if current_node == other:
-                return self.restore_path(other)
-            for neigh in current_node.get_neighs(game):
-                if not neigh.visited:
-                    neigh.previously_visited_node = current_node
+                stop_flag = False
+            for neigh in (neighs := current_node.get_neighs(game)):
+                print(f'neighs: {neighs}')
+                print(f'neigh: {neigh}')
+                if stop_flag and not neigh.visited:
                     neigh.visited = True
-                    if (r := rec_dfs(neigh)) is not None:
-                        return r
-        path = rec_dfs(self)
-        return path if path is not None else []
+                    neigh.previously_visited_node = current_node
+                    rec_dfs(neigh)
+
+        rec_dfs(self)
+        return self.restore_path(other)
 
     # finished, tested and approved by Levi Gin:
     def wave_lee(self, other: 'Node', game: 'Astar'):
@@ -1684,7 +1877,12 @@ if __name__ == "__main__":
 # TODO: simplify the drawing (high, high)
 # TODO: add an info changing depending on a_star heuristic and greedy_flag (high, easy)
 # TODO: add correct UI system (high, high)
-# TODO: add a_star and wave_lee management menus (high, medium)
+# TODO: add bfs/dfs, a_star and wave_lee management menus (high, medium)
 # TODO: improve the icons interaction (high, high)
 # TODO: fix bug with red arrow during the path restoring phase (high, high)
+# TODO: wise class refactoring with SOLID principles (very high, very high)
+# TODO: add BFS/DFS interactive modes (high, high)
+# TODO: add arrows to a_star (high, medium))
+# TODO:
+# TODO:
 # TODO:

@@ -1,4 +1,5 @@
 import heapq as hq
+import sys
 import time
 import math
 from enum import Enum
@@ -16,6 +17,8 @@ from collections import deque
 SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1050
 TILE_SIZE: int
+
+sys.setrecursionlimit(29000)
 
 
 class Astar(arcade.Window):  # 36 366 98 989 LL
@@ -80,8 +83,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.tiebreakers_lock = False
         self.scale_lock = False
         self.arrows_lock = False  # !!!
+        self.dict_something = {}
         # walls building/erasing dicts:
-        self.walls_built_erased = [([], True)]
+        self.walls_built_erased = [([], True)]  # TODO: swap to DICT!!!
         self.walls_index = 0
         self.walls = set()  # all walls located on the map at the time being
         # blocks:
@@ -110,7 +114,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # WAVE_LEE (LEVI GIN):
         self.front_wave_lee = []
         self.next_wave_lee = []
-        self.iterations_wave_lee = 0
+        self.iterations_wave_lee = 0  # TODO: to be deleted!!!
         self.fronts_dict = {}
         self.curr_node_wave_lee = None
         # BFS/DFS:
@@ -185,6 +189,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.triangle_shape_list.append(triangle_shape)
         # line arrows removing:
         node = self.path[self.path_index + 1]
+        # if self.inter_types[2] == InterType.PRESSED:
         if node not in [self.start_node, self.end_node]:
             node.remove_arrow(self)
 
@@ -196,6 +201,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # arrows:
         self.triangle_shape_list.remove(self.triangle_shape_list[self.path_index - 1])
         # line arrows restoring:
+        # if self.inter_types[2] == InterType.PRESSED:
         if path_node not in [self.start_node, self.end_node]:
             path_node.append_arrow(self)
 
@@ -350,23 +356,26 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.front_wave_lee = self.next_wave_lee[:]
         self.fronts_dict[self.iterations_wave_lee] = self.front_wave_lee
         self.next_wave_lee = []
-        for node in self.front_wave_lee:
-            node.val = self.iterations_wave_lee
-            if node not in [self.end_node, self.start_node]:
-                node.type = NodeType.VISITED_NODE
-                node.update_sprite_colour()
-            if node == self.end_node:
+        for curr_node in self.front_wave_lee:
+            curr_node.val = self.iterations_wave_lee
+            if curr_node not in [self.end_node, self.start_node]:
+                curr_node.type = NodeType.VISITED_NODE
+                curr_node.update_sprite_colour()
+            if curr_node == self.end_node:
                 self.end_node.val = self.iterations_wave_lee
                 self.path = self.recover_path()
                 break
-            for neigh in node.get_neighs(self):
+            for neigh in curr_node.get_neighs(self):
                 if neigh.val == 1 and neigh != self.start_node:
                     if neigh not in self.next_wave_lee:
                         if neigh != self.end_node:
                             neigh.type = NodeType.NEIGH
                             neigh.update_sprite_colour()
+                            arrow = self.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y))
+                            neigh.arrow_shape = arrow
+                            neigh.append_arrow(self)
                         self.next_wave_lee.append(neigh)
-                        neigh.previously_visited_node = node
+                        neigh.previously_visited_node = curr_node
 
     def wave_lee_step_down(self):
         # possibility check of wave_lee's stepping back:
@@ -378,6 +387,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 if neigh not in [self.start_node, self.end_node]:
                     neigh.type = NodeType.EMPTY
                     neigh.update_sprite_colour()
+                    neigh.remove_arrow(self)
             if self.iterations_wave_lee != 0:
                 # the front nodes have become NEIGHS:
                 for node in self.front_wave_lee:
@@ -407,42 +417,63 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
     def bfs_step_up(self):
         # one bfs step up:
         self.iterations += 0
-        current_node = self.queue.pop()
-        self.curr_node_dict[self.iterations + 1] = current_node
+        curr_node = self.queue.pop()
+        self.curr_node_dict[self.iterations + 1] = curr_node
         if self.iterations > 0:
-            current_node.type = NodeType.CURRENT_NODE
-            current_node.update_sprite_colour()
+            if curr_node.type != NodeType.END_NODE:
+                curr_node.type = NodeType.CURRENT_NODE
+                curr_node.update_sprite_colour()
         if self.iterations > 1:
             self.curr_node_dict[self.iterations].type = NodeType.VISITED_NODE
             self.curr_node_dict[self.iterations].update_sprite_colour()
-        current_node.times_visited += 1
-        if current_node == self.end_node:
+        curr_node.times_visited += 1
+        if curr_node == self.end_node:
             self.path = self.recover_path()
-        for neigh in current_node.get_neighs(self):
+        self.neighs_added_to_heap_dict[self.iterations + 1] = set()
+        for neigh in curr_node.get_neighs(self):
             if neigh.type != NodeType.VISITED_NODE:
                 if not neigh.visited:
                     if neigh.type != NodeType.END_NODE:
                         neigh.type = NodeType.NEIGH
                         neigh.update_sprite_colour()
+                        arrow = self.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y))
+                        neigh.arrow_shape = arrow
+                        neigh.append_arrow(self)
+                        # memoization:
+                        self.neighs_added_to_heap_dict[self.iterations + 1].add(neigh)
                     neigh.visited = True
-                    neigh.previously_visited_node = current_node
+                    neigh.previously_visited_node = curr_node
                     self.queue.appendleft(neigh)
+
         self.iterations += 1
 
     def bfs_step_down(self):
-        if self.iterations > 1:
+        if self.iterations > 0:
             # now the neighs of current node should become EMPTY ones:
-            for neigh in (current_node := self.curr_node_dict[self.iterations]).get_neighs(self):
+            for neigh in self.neighs_added_to_heap_dict[self.iterations]:
                 if neigh.type == NodeType.NEIGH:
                     neigh.type = NodeType.EMPTY
-            # current node has become the visited one:
-            current_node.type = NodeType.VISITED_NODE
-            current_node.update_sprite_colour()
-            if self.iterations > 2:
+                    neigh.update_sprite_colour()
+                    neigh.remove_arrow(self)
+                    # unlocking:
+                    neigh.visited = False
+                    # deque changing:
+                    self.queue.popleft()
+            # current node has become the NEIGH:
+            curr_node = self.curr_node_dict[self.iterations]
+            if curr_node not in [self.start_node, self.end_node]:
+                curr_node.type = NodeType.NEIGH
+                curr_node.update_sprite_colour()
+            # adding back to the deque:
+            self.queue.append(curr_node)
+            if self.iterations > 1:
                 # previous step current node has become the current step current node:
-                self.curr_node_dict[self.iterations - 1].type = NodeType.CURRENT_NODE
-                self.curr_node_dict[self.iterations - 1].update_sprite_colour()
-        self.iterations -= 1
+                prev_node = self.curr_node_dict[self.iterations - 1]
+                if prev_node not in [self.start_node, self.end_node]:
+                    prev_node.type = NodeType.CURRENT_NODE
+                    prev_node.update_sprite_colour()
+            # step back:
+            self.iterations -= 1
 
     # DFS:
     def dfs_preparation(self):
@@ -990,6 +1021,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.heuristic_lock = False
         self.tiebreakers_lock = False
         self.scale_lock = False
+        # arrows and path triangles:
+        self.arrow_shape_list = arcade.ShapeElementList()
+        self.triangle_shape_list = arcade.ShapeElementList()
 
     def clear_inter_types(self, ind):
         for i, _ in enumerate(self.inter_types):
@@ -1100,10 +1134,18 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                             self.time_elapsed_ms = self.get_ms(start, finish)
                             # path's drawing:
                             print(f"PATH'S LENGTH: {len(self.path)}")
-                            for node in self.path:
+                            for i, node in enumerate(self.path):
                                 if node.type not in [NodeType.START_NODE, NodeType.END_NODE]:
                                     node.type = NodeType.PATH_NODE
                                     node.update_sprite_colour()
+                                if i + 1 < len(self.path):
+                                    p = -self.path[i + 1].x + self.path[i].x, \
+                                        -self.path[i + 1].y + self.path[i].y
+                                    p1, p2, p3 = self.get_triangle(self.path[i + 1], p)
+                                    triangle_shape = arcade.create_triangles_filled_with_colors(
+                                        [p1, p2, p3],
+                                        [arcade.color.WHITE, arcade.color.RED, arcade.color.RED])
+                                    self.triangle_shape_list.append(triangle_shape)
             # entirely grid clearing:
             case arcade.key.ENTER:
                 self.clear_grid()
@@ -1631,9 +1673,10 @@ class Node:
         while queue:
             game.iterations += 1
             current_node = queue.pop()
-            current_node.type = NodeType.VISITED_NODE
-            current_node.update_sprite_colour()
-            current_node.times_visited += 1
+            if current_node.type not in [NodeType.START_NODE, NodeType.END_NODE]:
+                current_node.type = NodeType.VISITED_NODE
+                current_node.update_sprite_colour()
+                current_node.times_visited += 1
             if current_node == other:
                 return self.restore_path(other)
             for neigh in current_node.get_neighs(game):
@@ -1642,30 +1685,24 @@ class Node:
                     neigh.previously_visited_node = current_node
                     queue.appendleft(neigh)
 
-    def dfs(self, other: 'Node', game: 'Astar'):  # recursive one (can be easily implemented through the queue/stack):
-        stop_flag = True
-
-        # core:
-        def rec_dfs(current_node):
-            nonlocal stop_flag
+    def dfs(self, other: 'Node', game: 'Astar'):
+        queue = deque()
+        queue.append(self)
+        self.visited = True
+        while queue:
             game.iterations += 1
-            print(f'{game.iterations}-th iteration, current node: {current_node}')
+            current_node = queue.pop()
             current_node.visited = True
-            current_node.type = NodeType.VISITED_NODE
-            current_node.update_sprite_colour()
-            current_node.times_visited += 1
+            if current_node.type not in [NodeType.START_NODE, NodeType.END_NODE]:
+                current_node.type = NodeType.VISITED_NODE
+                current_node.update_sprite_colour()
+                current_node.times_visited += 1
             if current_node == other:
-                stop_flag = False
-            for neigh in (neighs := current_node.get_neighs(game)):
-                print(f'neighs: {neighs}')
-                print(f'neigh: {neigh}')
-                if stop_flag and not neigh.visited:
-                    neigh.visited = True
+                return self.restore_path(other)
+            for neigh in current_node.get_neighs(game):
+                if not neigh.visited:
                     neigh.previously_visited_node = current_node
-                    rec_dfs(neigh)
-
-        rec_dfs(self)
-        return self.restore_path(other)
+                    queue.append(neigh)
 
     # finished, tested and approved by Levi Gin:
     def wave_lee(self, other: 'Node', game: 'Astar'):

@@ -218,7 +218,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             curr_node.update_sprite_colour()
         curr_node.times_visited += 1
         if self.iterations > 1:
-            if (prev_node := self.curr_node_dict[self.iterations]).type != NodeType.END_NODE:
+            if (prev_node := self.curr_node_dict[self.iterations]).type not in [NodeType.END_NODE, NodeType.TWICE_VISITED]:
                 prev_node.type = NodeType.VISITED_NODE
                 prev_node.update_sprite_colour()
         self.max_times_visited_dict[self.iterations + 1] = max(self.max_times_visited_dict[self.iterations],
@@ -227,6 +227,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # memoization for correct movement back:
         if curr_node in self.nodes_visited.keys():
             self.nodes_visited[curr_node] += 1
+            curr_node.type = NodeType.TWICE_VISITED
+            curr_node.update_sprite_colour()
         else:
             self.nodes_visited[curr_node] = 1
         # base case of finding the shortest path:
@@ -244,7 +246,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                             'h',
                             'tiebreaker',
                             'type',
-                            'previously_visited_node'
+                            'previously_visited_node',
                         ]
                     )
                 )
@@ -257,7 +259,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                         self.start_node, self.end_node, neigh)
                 # previous visited node memoization for further path-recovering process:
                 neigh.previously_visited_node = curr_node
-                if neigh not in [self.start_node, self.end_node]:  # neigh not in self.nodes_visited and
+                if neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:  # neigh not in self.nodes_visited and
                     neigh.type = NodeType.NEIGH
                     neigh.update_sprite_colour()
                     arrow = self.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y))
@@ -282,8 +284,11 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 if curr_node.type != NodeType.END_NODE:
                     curr_node.type = NodeType.NEIGH
                     curr_node.update_sprite_colour()
-            else:
+            elif curr_node.times_visited == 1:
                 curr_node.type = NodeType.VISITED_NODE
+                curr_node.update_sprite_colour()
+            else:
+                curr_node.type = NodeType.TWICE_VISITED
                 curr_node.update_sprite_colour()
             if self.iterations > 2:
                 self.curr_node_dict[self.iterations - 1].type = NodeType.CURRENT_NODE
@@ -308,11 +313,12 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                         'h',
                         'tiebreaker',
                         'type',
-                        'previously_visited_node'
+                        'previously_visited_node',
                     ]
                 )
-                if node not in [self.start_node, self.end_node]:
-                    node.remove_arrow(self)
+                if node.type not in [NodeType.START_NODE, NodeType.END_NODE]:
+                    if node.arrow_shape is not None:
+                        node.remove_arrow(self)
                 if node.type == NodeType.NEIGH:
                     # here the arrow rotates backwards:
                     arrow = self.create_line_arrow(node, (
@@ -1812,6 +1818,7 @@ class NodeType(Enum):
     START_NODE = arcade.color.GREEN
     END_NODE = (75, 150, 0)
     PATH_NODE = arcade.color.RED
+    TWICE_VISITED = arcade.color.PURPLE
 
 
 class InterType(Enum):
@@ -1934,8 +1941,9 @@ if __name__ == "__main__":
 # v6.3 some interface reorganization for Lastar app in order to achieve more convenience and become user friendlier
 # v6.4 methods of getting copy of node and restoring then have become smarter and now can be easily set up
 # v6.5 many various bugs fixed, some minor improvements
-#
-#
+# v6.6 fixed bugs with a_star interactive, arrows are rarely removed not in a proper way and sometimes arrow-shapes,
+# saved in smart copies of neighs were incorrect
+# v6.7 now the rare nodes that have been visited twice and more times are displayed by PURPLE colour and have type 'TWICE_VISITED'
 #
 #
 #

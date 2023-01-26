@@ -191,7 +191,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         node = self.path[self.path_index + 1]
         # if self.inter_types[2] == InterType.PRESSED:
         if node not in [self.start_node, self.end_node]:
-            node.remove_arrow(self)
+            node.remove_arrow_from_shape_list(self)
 
     # a step back for path restoring phase visualisation (interactive a_star mode):
     def path_down(self):
@@ -207,6 +207,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
 
     # a step forward in path-finding phase visualisation (interactive a_star mode)
     def a_star_step_up(self):
+        if self.iterations == 0:
+            self.nodes_to_be_visited = [self.start_node]
         self.neighs_added_to_heap_dict[self.iterations + 1] = []  # memoization
         # popping out the most priority node for a_star from the heap:
         self.curr_node_dict[self.iterations + 1] = hq.heappop(self.nodes_to_be_visited)  # + memoization
@@ -231,11 +233,21 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         if curr_node == self.end_node:
             self.path = self.recover_path()
         # next step:
-        # we can search for neighs on the fly or use precalculated sets:
-        for neigh in curr_node.get_neighs(self):  # getting all the neighs 'on the fly;
+        # we can search for neighs on the fly or use precalculated sets (outdated):
+        for neigh in curr_node.get_neighs(self, [NodeType.WALL]):  # getting all the neighs 'on the fly;
             if neigh.g > curr_node.g + neigh.val:
                 # memoization for further 'undoing':
-                self.neighs_added_to_heap_dict[self.iterations + 1].append(neigh.aux_copy())
+                self.neighs_added_to_heap_dict[self.iterations + 1].append(
+                    neigh.smart_copy(
+                        [
+                            'g',
+                            'h',
+                            'tiebreaker',
+                            'type',
+                            'previously_visited_node'
+                        ]
+                    )
+                )
                 # cost and heuristic computing:
                 neigh.g = curr_node.g + neigh.val
                 neigh.h = neigh.heuristics[self.heuristic](neigh, self.end_node)
@@ -249,6 +261,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     neigh.type = NodeType.NEIGH
                     neigh.update_sprite_colour()
                     arrow = self.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y))
+                    # here the arrow rotates (re-estimating of neigh g-cost):
+                    if neigh.arrow_shape is not None:
+                        neigh.remove_arrow(self)
                     neigh.arrow_shape = arrow
                     neigh.append_arrow(self)
                 # adding all the valid neighs to the priority heap:
@@ -283,10 +298,27 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             for neigh in self.neighs_added_to_heap_dict[self.iterations]:
                 y, x = neigh.y, neigh.x
                 node = self.grid[y][x]
+                Node.aux_equal_flag = True
                 self.remove_from_heapq(self.nodes_to_be_visited, self.nodes_to_be_visited.index(node))
-                node.restore(neigh)
+                Node.aux_equal_flag = False
+                node.smart_restore(
+                    neigh,
+                    [
+                        'g',
+                        'h',
+                        'tiebreaker',
+                        'type',
+                        'previously_visited_node'
+                    ]
+                )
                 if node not in [self.start_node, self.end_node]:
                     node.remove_arrow(self)
+                if node.type == NodeType.NEIGH:
+                    # here the arrow rotates backwards:
+                    arrow = self.create_line_arrow(node, (
+                        node.x - node.previously_visited_node.x, node.y - node.previously_visited_node.y))
+                    node.arrow_shape = arrow
+                    node.append_arrow(self)
             # adding current node (popped out at the current iteration) to the heap:
             hq.heappush(self.nodes_to_be_visited, curr_node)
             # iteration steps back:
@@ -365,8 +397,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 self.end_node.val = self.iterations_wave_lee
                 self.path = self.recover_path()
                 break
-            for neigh in curr_node.get_neighs(self):
-                if neigh.val == 1 and neigh != self.start_node:
+            for neigh in curr_node.get_neighs(self, [NodeType.START_NODE, NodeType.VISITED_NODE]):
+                if neigh.val == 1:  # it is equivalent to if neigh.type == NodeType.EMPTY
                     if neigh not in self.next_wave_lee:
                         if neigh != self.end_node:
                             neigh.type = NodeType.NEIGH
@@ -430,41 +462,63 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         if curr_node == self.end_node:
             self.path = self.recover_path()
         self.neighs_added_to_heap_dict[self.iterations + 1] = set()
-        for neigh in curr_node.get_neighs(self):
-            if neigh.type != NodeType.VISITED_NODE:
-                if not neigh.visited:
-                    if neigh.type != NodeType.END_NODE:
-                        neigh.type = NodeType.NEIGH
-                        neigh.update_sprite_colour()
-                        arrow = self.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y))
-                        neigh.arrow_shape = arrow
-                        neigh.append_arrow(self)
-                        # memoization:
-                        self.neighs_added_to_heap_dict[self.iterations + 1].add(neigh)
-                    neigh.visited = True
-                    neigh.previously_visited_node = curr_node
-                    self.queue.appendleft(neigh)
-
+        for neigh in curr_node.get_neighs(self, [NodeType.START_NODE, NodeType.VISITED_NODE, NodeType.WALL] + (
+                [NodeType.NEIGH] if self.is_bfs else [])):
+            if neigh.type != NodeType.END_NODE:
+                # at first memoization for further 'undoing':
+                self.neighs_added_to_heap_dict[self.iterations + 1].add(neigh.aux_copy())
+                # then changing neigh's pars:
+                neigh.type = NodeType.NEIGH
+                neigh.update_sprite_colour()
+                arrow = self.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y))
+                if neigh.arrow_shape is not None:
+                    neigh.remove_arrow(self)
+                neigh.arrow_shape = arrow
+                neigh.append_arrow(self)
+            neigh.previously_visited_node = curr_node
+            # BFS:
+            if self.is_bfs:
+                self.queue.appendleft(neigh)
+            # DFS:
+            else:
+                self.queue.append(neigh)
         self.iterations += 1
 
     def bfs_step_down(self):
         if self.iterations > 0:
             # now the neighs of current node should become EMPTY ones:
             for neigh in self.neighs_added_to_heap_dict[self.iterations]:
-                if neigh.type == NodeType.NEIGH:
-                    neigh.type = NodeType.EMPTY
-                    neigh.update_sprite_colour()
-                    neigh.remove_arrow(self)
-                    # unlocking:
-                    neigh.visited = False
+                # TODO: neigh type restoring needed!!!
+                y, x = neigh.y, neigh.x
+                node = self.grid[y][x]
+                node.restore(neigh)
+                if node not in [self.start_node, self.end_node]:
+                    node.remove_arrow(self)
+                if node.type == NodeType.NEIGH:
+                    # here the arrow rotates backwards:
+                    arrow = self.create_line_arrow(
+                        node,
+                        (
+                            node.x - self.curr_node_dict[self.iterations].x,
+                            node.y - self.curr_node_dict[self.iterations].y
+                        )
+                    )
+                    node.arrow_shape = arrow
+                    node.append_arrow(self)
                     # deque changing:
-                    self.queue.popleft()
+                    # BFS:
+                    if self.is_bfs:
+                        self.queue.popleft()
+                    # DFS:
+                    else:
+                        self.queue.pop()
             # current node has become the NEIGH:
             curr_node = self.curr_node_dict[self.iterations]
             if curr_node not in [self.start_node, self.end_node]:
                 curr_node.type = NodeType.NEIGH
                 curr_node.update_sprite_colour()
             # adding back to the deque:
+            # BFS & DFS:
             self.queue.append(curr_node)
             if self.iterations > 1:
                 # previous step current node has become the current step current node:
@@ -474,16 +528,6 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     prev_node.update_sprite_colour()
             # step back:
             self.iterations -= 1
-
-    # DFS:
-    def dfs_preparation(self):
-        ...
-
-    def dfs_step_up(self):
-        ...
-
-    def dfs_step_down(self):
-        ...
 
     # PRESETS:
     def setup(self):
@@ -511,12 +555,6 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         for row in self.grid:
             for node in row:
                 node.get_solid_colour_sprite(self)
-
-    # pre-calculations (kind of optimization, but really is not needed at all...)
-    def get_all_neighs(self):
-        for row in self.grid:
-            for node in row:
-                node.get_neighs(self)
 
     # DRAWING:
     # the main drawing method, that is called one times per frame:
@@ -1056,10 +1094,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             if self.ticks_before >= ticks_threshold:
                 if self.path is None:
                     if self.inter_types[1] == InterType.PRESSED:
-                        if self.is_bfs:
-                            self.bfs_step_up()
-                        else:
-                            self.dfs_step_up()
+                        self.bfs_step_up()
                     elif self.inter_types[2] == InterType.PRESSED:
                         self.a_star_step_up()
                     elif self.inter_types[3] == InterType.PRESSED:
@@ -1073,10 +1108,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             if self.ticks_before >= ticks_threshold:
                 if self.path is None:
                     if self.inter_types[1] == InterType.PRESSED:
-                        if self.is_bfs:
-                            self.bfs_step_down()
-                        else:
-                            self.dfs_step_down()
+                        self.bfs_step_down()
                     elif self.inter_types[2] == InterType.PRESSED:
                         self.a_star_step_down()
                     elif self.inter_types[3] == InterType.PRESSED:
@@ -1088,10 +1120,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     else:
                         self.path = None
                         if self.inter_types[1] == InterType.PRESSED:
-                            if self.is_bfs:
-                                self.bfs_step_down()
-                            else:
-                                self.dfs_step_down()
+                            self.bfs_step_down()
                         elif self.inter_types[2] == InterType.PRESSED:
                             self.a_star_step_down()
                         elif self.inter_types[3] == InterType.PRESSED:
@@ -1111,10 +1140,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                             self.in_interaction = True
                             # prepare:
                             if self.inter_types[1] == InterType.PRESSED:
-                                if self.is_bfs:
-                                    self.bfs_preparation()
-                                else:
-                                    self.dfs_preparation()
+                                self.bfs_preparation()
                             elif self.inter_types[2] == InterType.PRESSED:
                                 self.a_star_preparation()
                             elif self.inter_types[3] == InterType.PRESSED:
@@ -1124,8 +1150,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                             start = time.time_ns()
                             # getting paths:
                             if self.inter_types[1] == InterType.PRESSED:
-                                self.path = self.start_node.bfs(self.end_node, self) if self.is_bfs \
-                                    else self.start_node.dfs(self.end_node, self)
+                                self.path = self.start_node.bfs(self.end_node, self)
                             elif self.inter_types[2] == InterType.PRESSED:
                                 self.path = self.start_node.a_star(self.end_node, self)
                             elif self.inter_types[3] == InterType.PRESSED:
@@ -1158,10 +1183,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     self.cycle_breaker_right = True
                     if self.path is None:
                         if self.inter_types[1] == InterType.PRESSED:
-                            if self.is_bfs:
-                                self.bfs_step_up()
-                            else:
-                                self.dfs_step_up()
+                            self.bfs_step_up()
                         elif self.inter_types[2] == InterType.PRESSED:
                             self.a_star_step_up()
                         elif self.inter_types[3] == InterType.PRESSED:
@@ -1179,10 +1201,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     self.cycle_breaker_left = True
                     if self.path is None:
                         if self.inter_types[1] == InterType.PRESSED:
-                            if self.is_bfs:
-                                self.bfs_step_down()
-                            else:
-                                self.dfs_step_down()
+                            self.bfs_step_down()
                         elif self.inter_types[2] == InterType.PRESSED:
                             self.a_star_step_down()
                         elif self.inter_types[3] == InterType.PRESSED:
@@ -1194,10 +1213,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                         else:
                             self.path = None
                             if self.inter_types[1] == InterType.PRESSED:
-                                if self.is_bfs:
-                                    self.bfs_step_down()
-                                else:
-                                    self.dfs_step_down()
+                                self.bfs_step_down()
                             elif self.inter_types[2] == InterType.PRESSED:
                                 self.a_star_step_down()
                             elif self.inter_types[3] == InterType.PRESSED:
@@ -1511,6 +1527,8 @@ class Node:
     walk = [(dy, dx) for dx in range(-1, 2) for dy in range(-1, 2) if dy * dx == 0 and (dy, dx) != (0, 0)]
     extended_walk = [(dy, dx) for dx in range(-1, 2) for dy in range(-1, 2) if (dy, dx) != (0, 0)]
     IS_GREEDY = False
+    # for a_star:
+    aux_equal_flag = False
 
     def __init__(self, y, x, val, node_type: 'NodeType'):
         # type and sprite:
@@ -1532,8 +1550,6 @@ class Node:
         self.heuristics = {0: self.manhattan_distance, 1: self.euclidian_distance, 2: self.max_delta,
                            3: self.no_heuristic}
         self.tiebreakers = {0: self.vector_cross_product_deviation, 1: self.coordinates_pair}
-        # bfs/dfs pars:
-        self.visited = False
 
     # COPYING/RESTORING:
     # makes an auxiliary copy for a nde, it is needed for a_star interactive:
@@ -1543,6 +1559,7 @@ class Node:
         copied_node.h = self.h
         copied_node.tiebreaker = self.tiebreaker
         copied_node.type = self.type
+        copied_node.previously_visited_node = self.previously_visited_node
         return copied_node
 
     # restore the node from its auxiliary copy:
@@ -1552,6 +1569,22 @@ class Node:
         self.tiebreaker = copied_node.tiebreaker
         self.type = copied_node.type  # NodeType.EMPTY ???
         self.update_sprite_colour()
+        self.previously_visited_node = copied_node.previously_visited_node
+
+    # SMART COPYING/RESTORING:
+    def smart_copy(self, attributes: list[str]):
+        copied_node = Node(self.y, self.x, self.type, self.val)
+        self.smart_core(copied_node, attributes)
+        return copied_node
+
+    def smart_restore(self, other: 'Node', attributes: list[str]):
+        other.smart_core(self, attributes)
+        if 'type' in attributes:
+            self.update_sprite_colour()
+
+    def smart_core(self, other: 'Node', attributes: list[str]):
+        for attribute in attributes:
+            other.__dict__[attribute] = self.__getattribute__(attribute)
 
     # TYPE/SPRITE CHANGE/INIT:
     # makes a solid colour sprite for a node:
@@ -1579,6 +1612,10 @@ class Node:
     # removes the arrow shape of the node from the arrow_shape_list in Astar class
     def remove_arrow(self, game: Astar):
         game.arrow_shape_list.remove(self.arrow_shape)
+        self.arrow_shape = None
+
+    def remove_arrow_from_shape_list(self, game: 'Astar'):
+        game.arrow_shape_list.remove(self.arrow_shape)
 
     def __str__(self):
         return f'{self.y, self.x} -->> {self.val}'
@@ -1590,7 +1627,10 @@ class Node:
     def __eq__(self, other):
         if type(self) != type(other):
             return False
-        return (self.y, self.x) == (other.y, other.x)
+        if Node.aux_equal_flag:
+            return (self.y, self.x, self.g, self.h) == (other.y, other.x, other.g, other.h)  # .tiebreaker???
+        else:
+            return (self.y, self.x) == (other.y, other.x)
 
     # this is needed for using Node objects in priority queue like heapq and so on
     def __lt__(self, other: 'Node'):
@@ -1608,6 +1648,7 @@ class Node:
         self.heur_clear()
         self.type = NodeType.EMPTY
         self.update_sprite_colour()
+        self.arrow_shape = None
 
     # clears the node heuristically:
     def heur_clear(self):
@@ -1648,13 +1689,13 @@ class Node:
         return neigh.y, neigh.x
 
     # NEIGHS:
-    # gets neighs of the node:
-    def get_neighs(self, game: 'Astar'):
+    # gets neighs of the node, now can be set up:
+    def get_neighs(self, game: 'Astar', forbidden_node_types: list['NodeType']):  # has become smarter
         for dy, dx in self.walk:
             ny, nx = self.y + dy, self.x + dx
             if 0 <= ny < game.tiles_q and 0 <= nx < game.hor_tiles_q:
                 # by default can visit the already visited nodes
-                if game.grid[ny][nx].type in [NodeType.EMPTY, NodeType.VISITED_NODE, NodeType.END_NODE]:
+                if game.grid[ny][nx].type not in forbidden_node_types:
                     yield game.grid[ny][nx]
 
     # gets extended neighs (with diagonal ones) of the node, generator:
@@ -1669,7 +1710,6 @@ class Node:
     def bfs(self, other: 'Node', game: 'Astar'):  # iterative one:
         queue = deque()
         queue.append(self)
-        self.visited = True
         while queue:
             game.iterations += 1
             current_node = queue.pop()
@@ -1679,40 +1719,28 @@ class Node:
                 current_node.times_visited += 1
             if current_node == other:
                 return self.restore_path(other)
-            for neigh in current_node.get_neighs(game):
-                if not neigh.visited:
-                    neigh.visited = True
-                    neigh.previously_visited_node = current_node
+            for neigh in current_node.get_neighs(game, [NodeType.START_NODE, NodeType.VISITED_NODE, NodeType.WALL] + (
+                    [NodeType.NEIGH] if game.is_bfs else [])):
+                if neigh.type != NodeType.END_NODE:
+                    neigh.type = NodeType.NEIGH
+                    neigh.update_sprite_colour()
+                neigh.previously_visited_node = current_node
+                # BFS:
+                if game.is_bfs:
                     queue.appendleft(neigh)
-
-    def dfs(self, other: 'Node', game: 'Astar'):
-        queue = deque()
-        queue.append(self)
-        self.visited = True
-        while queue:
-            game.iterations += 1
-            current_node = queue.pop()
-            current_node.visited = True
-            if current_node.type not in [NodeType.START_NODE, NodeType.END_NODE]:
-                current_node.type = NodeType.VISITED_NODE
-                current_node.update_sprite_colour()
-                current_node.times_visited += 1
-            if current_node == other:
-                return self.restore_path(other)
-            for neigh in current_node.get_neighs(game):
-                if not neigh.visited:
-                    neigh.previously_visited_node = current_node
+                # DFS:
+                else:
                     queue.append(neigh)
 
     # finished, tested and approved by Levi Gin:
-    def wave_lee(self, other: 'Node', game: 'Astar'):
+    def wave_lee(self, other: 'Node', game: 'Astar'):  # TODO: make it MORE INFORMATIVE:::
         # other.get_neighs(game)  # Why is it necessary???
-        front_wave = [self]
+        front_wave = {self}
         iteration = 0
         # wave-spreading:
         while front_wave:
             iteration += 1
-            new_front_wave = []
+            new_front_wave = set()
             for front_node in front_wave:
                 front_node.val = iteration
                 if front_node not in [self, other]:
@@ -1720,11 +1748,11 @@ class Node:
                     front_node.update_sprite_colour()
                 if front_node == other:
                     return self.restore_path(other)
-                for front_neigh in front_node.get_neighs(game):
-                    if front_neigh.val == 1 and front_neigh not in new_front_wave and front_neigh != self:
+                for front_neigh in front_node.get_neighs(game, [NodeType.START_NODE, NodeType.VISITED_NODE, NodeType.WALL]):
+                    if front_neigh not in new_front_wave:
                         front_neigh.previously_visited_node = front_node
-                        new_front_wave.append(front_neigh)
-            front_wave = new_front_wave[:]
+                        new_front_wave.add(front_neigh)
+            front_wave = set() | new_front_wave
         return []
 
     # a common a_star:
@@ -1749,7 +1777,7 @@ class Node:
             if curr_node == other:
                 break
             # next step:
-            for neigh in curr_node.get_neighs(game):
+            for neigh in curr_node.get_neighs(game, [NodeType.WALL]):
                 if neigh.g > curr_node.g + neigh.val:
                     neigh.g = curr_node.g + neigh.val
                     neigh.h = neigh.heuristics[game.heuristic](neigh, other)
@@ -1897,6 +1925,18 @@ if __name__ == "__main__":
 # on the left part of the main window, some flags and pars have been added to Lastar class. on_draw(), update()
 # and on_mouse_motion() / on_mouse_press() methods renewal
 # v5.2 BFS/DFS label added, other icons improved, some minor bugs fixed
+# v6.0 BIG BUG with get_neighs() method's two problems has been fixed, now get_neighs has become smarter and works correctly,
+# the path now is being visualized more comprehensive (guiding arrows added)
+# v6.1 BIG UPDATE: now all the interactive algos has a new option of showing the guided arrows from previous node to its neigh
+# for visualizing the way the appropriate algorithm flows, the arrows-icon has been added in order to turn on/off this option,
+# many new bugs fixed, some minor refactoring
+# v6.2 fixed interactive and lightning bfs and dfs algos' bugs, now it works in the proper way
+# v6.3 some interface reorganization for Lastar app in order to achieve more convenience and become user friendlier
+# v6.4 methods of getting copy of node and restoring then have become smarter and now can be easily set up
+# v6.5 many various bugs fixed, some minor improvements
+#
+#
+#
 #
 #
 # TODO: add some other tiebreakers (medium, easy) +-

@@ -9,7 +9,6 @@ import arcade
 import arcade.gui
 # data
 import shelve
-import pickle
 # queues:
 from collections import deque
 
@@ -20,11 +19,13 @@ sys.setrecursionlimit(29000)
 
 
 class Astar(arcade.Window):  # 36 366 98 989 LL
+    # initial directions prority for all algorithms:
+    walk = [(1, 0), (0, -1), (-1, 0), (0, 1)]
+
     def __init__(self, width: int, height: int):
         super().__init__(width, height)
         arcade.set_background_color(arcade.color.DUTCH_WHITE)
         self.set_update_rate(1 / 60)
-        print(f'walk: {Node.walk}')
         # scaling:  TODO: add AI to calculate the sizes for every resolution possible:
         self.scale = 0
         self.scale_names = {0: 10, 1: 15, 2: 22, 3: 33, 4: 45, 5: 66, 6: 90,
@@ -47,7 +48,6 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
         self.arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
         # important general settings:
-        self.walk = [(1, 0), (0, -1), (-1, 0), (0, 1)]
         self.arrows_indices = []
         self.walk_index = 0
         self.arrows_vertices = None
@@ -89,7 +89,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.heuristic_lock = False
         self.tiebreakers_lock = False
         self.scale_lock = False
-        self.arrows_lock = False  # !!!
+        # self.arrows_lock = False  # is not needed, since it is an options that can be turned on/off during the interactive algo phase
+        self.bfs_dfs_lock = False
         self.dict_something = {}
         # walls building/erasing dicts:
         self.walls_built_erased = [([], True)]  # TODO: swap to DICT!!!
@@ -125,7 +126,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.fronts_dict = {}
         self.curr_node_wave_lee = None
         # BFS/DFS:
-        self.is_bfs = False
+        self.bfs_dfs_ind = 0
         self.queue = deque()
         # imported classes' objects:
         # self.cleaner = Cleaner(self)
@@ -168,6 +169,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.heuristic_lock = True
         self.tiebreakers_lock = True
         self.scale_lock = True
+        self.bfs_dfs_lock = True
         # arrows list renewal:
         self.arrow_shape_list = arcade.ShapeElementList()
 
@@ -480,7 +482,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             self.path = self.recover_path()
         self.neighs_added_to_heap_dict[self.iterations + 1] = set()
         for neigh in curr_node.get_neighs(self, [NodeType.START_NODE, NodeType.VISITED_NODE, NodeType.WALL] + (
-                [NodeType.NEIGH] if self.is_bfs else [])):
+                [NodeType.NEIGH] if self.bfs_dfs_ind == 0 else [])):
             if neigh.type != NodeType.END_NODE:
                 # at first memoization for further 'undoing':
                 self.neighs_added_to_heap_dict[self.iterations + 1].add(neigh.aux_copy())
@@ -494,7 +496,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 neigh.append_arrow(self)
             neigh.previously_visited_node = curr_node
             # BFS:
-            if self.is_bfs:
+            if self.bfs_dfs_ind == 0:
                 self.queue.appendleft(neigh)
             # DFS:
             else:
@@ -524,7 +526,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     node.append_arrow(self)
                     # deque changing:
                     # BFS:
-                    if self.is_bfs:
+                    if self.bfs_dfs_ind == 0:
                         self.queue.popleft()
                     # DFS:
                     else:
@@ -607,17 +609,17 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             self.renderer.draw_area(bot_menu_x, bot_menu_y, f'Heuristics', self.heuristic_names,
                                     self.heuristic, self.heuristic_lock)
             bot_menu_y -= 30 + (
-                        len(self.heuristic_names) - 1) * self.renderer.get_delta() + 3 * self.renderer.get_sq_size()
+                    len(self.heuristic_names) - 1) * self.renderer.get_delta() + 3 * self.renderer.get_sq_size()
             # tiebreakers:
             self.renderer.draw_area(bot_menu_x, bot_menu_y, f'Tiebreakers', self.tiebreaker_names,
                                     self.tiebreaker, self.tiebreakers_lock)
             bot_menu_y -= 30 + (
-                        len(self.tiebreaker_names) - 1) * self.renderer.get_delta() + 3 * self.renderer.get_sq_size()
+                    len(self.tiebreaker_names) - 1) * self.renderer.get_delta() + 3 * self.renderer.get_sq_size()
             # greedy flag:
             self.renderer.draw_area(bot_menu_x, bot_menu_y, f'Is greedy', {0: f'GREEDY_FLAG'}, self.greedy_ind,
                                     self.greedy_flag_lock)
             bot_menu_y -= 30 + 3 * self.renderer.get_sq_size()
-            # arrows:
+            # guiding arrows:
             self.renderer.draw_area(bot_menu_x, bot_menu_y, f'Guide arrows', {0: f'ON/OFF'}, self.guide_arrows_ind,
                                     False)
             bot_menu_y -= 30 + 3 * self.renderer.get_sq_size()
@@ -627,65 +629,23 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
 
         # BFS and DFS PARS:
         elif self.inter_types[1] == InterType.PRESSED:
-            arcade.Text('Core: ', SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120, arcade.color.BLACK,
-                        bold=True).draw()
+            bot_menu_x, bot_menu_y = SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120
+            # algo choosing (bfs or dfs):
+            self.renderer.draw_area(bot_menu_x, bot_menu_y, f'Core', {0: f'BFS', 1: f'DFS'}, self.bfs_dfs_ind,
+                                    self.bfs_dfs_lock)
 
-            arcade.draw_rectangle_outline(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120, 18, 18,
-                                          arcade.color.BLACK, 2)
-            arcade.Text(f'BFS', SCREEN_WIDTH - 225 + (18 + 2 * 2),
-                        SCREEN_HEIGHT - 100 - 120 - 6, arcade.color.BLACK, bold=True).draw()
-            arcade.draw_rectangle_outline(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18), 18, 18,
-                                          arcade.color.BLACK, 2)
-            arcade.Text(f'DFS', SCREEN_WIDTH - 225 + (18 + 2 * 2),
-                        SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) - 6, arcade.color.BLACK, bold=True).draw()
-            arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
-                                         SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (0 if self.is_bfs else 1),
-                                         14, 14, arcade.color.BLACK)
         # SETTINGS:
         elif self.inter_types[0] == InterType.PRESSED:
+            bot_menu_x, bot_menu_y = SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120
             # directions priority arrows (walk setting up):
-            arcade.draw_text(f'Directions priority: ', SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120, arcade.color.BLACK,
-                             bold=True)
-
-            for dx, dy in self.walk:
-                self.make_arrow(1755 + dx * self.arrow_length, 785 + dy * self.arrow_length, self.arrow_length,
-                                self.arrow_height, 2,
-                                (dx, dy), arcade.color.LIGHT_BROWN)
-
-            # ARROWS RESET:
-            arcade.draw_rectangle_outline(1755, 785, self.arrow_height, self.arrow_height, arcade.color.BLACK,
-                                          2 + (0 if self.inter_type_reset_square == InterType.NONE else 1))
-
+            self.renderer.draw_arrows_menu(bot_menu_x, bot_menu_y, 36, 18, self)
+            bot_menu_y -= 3 * 3 * self.renderer.get_sq_size()
             # scaling:
-            arcade.Text('Sizes in tiles: ', SCREEN_WIDTH - 235,
-                        SCREEN_HEIGHT - 70 - 120 - 3 * 18 * 3,
-                        arcade.color.BLACK, bold=True).draw()
+            self.renderer.draw_area(bot_menu_x, bot_menu_y, f'Sizes in tiles',
+                                    {k: f'{v}x{self.get_hor_tiles(k)}' for k, v in self.scale_names.items()},
+                                    self.scale, self.scale_lock)
 
-            for i in range(len(self.scale_names)):
-                arcade.draw_rectangle_outline(SCREEN_WIDTH - 225,
-                                              SCREEN_HEIGHT - 70 - 120 - (18 + 2 * 2 + 18) * i - 3 * 18 * 3 - 30,
-                                              18,
-                                              18,
-                                              arcade.color.BLACK, 2)
-                arcade.Text(f'{self.scale_names[i]}x{self.get_hor_tiles(i)}', SCREEN_WIDTH - 225 + (18 + 2 * 2),
-                            SCREEN_HEIGHT - 70 - 120 - (18 + 2 * 2 + 18) * i - 3 * 18 * 3 - 30 - 6,
-                            arcade.color.BLACK, bold=True).draw()
-            # scaling lock:
-            if self.scale_lock:
-                self.draw_lock(SCREEN_WIDTH - 225,
-                               SCREEN_HEIGHT - 70 - 120 - (18 + 2 * 2 + 18) * self.scale - 3 * 18 * 3 - 30)
-                for i in range(len(self.scale_names)):
-                    if i != self.scale:
-                        self.draw_cross(SCREEN_WIDTH - 225,
-                                        SCREEN_HEIGHT - 70 - 120 - (18 + 2 * 2 + 18) * i - 3 * 18 * 3 - 30)
-            else:
-                arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
-                                             SCREEN_HEIGHT - 70 - 120 - (
-                                                     18 + 2 * 2 + 18) * self.scale - 3 * 18 * 3 - 30,
-                                             14,
-                                             14,
-                                             arcade.color.BLACK)
-        # NODE CHOSEN (should work for every algo):
+        # NODE CHOSEN (should work for every algo) TODO: should be reworked!!!
         if self.node_chosen:
             arcade.draw_circle_filled(5 + self.node_chosen.x * self.tile_size + self.tile_size / 2,
                                       5 + self.node_chosen.y * self.tile_size + self.tile_size / 2, self.tile_size / 4,
@@ -697,16 +657,16 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # ICONS OF INTERACTION:
 
         # GEAR WHEEL:
-        self.draw_gear_wheel(1785 + 6, 1000, 24, 24, 6)
+        self.renderer.draw_gear_wheel(1785 + 6, 1000, 24, 24, 6, game=self)
 
         # BFS and DFS icons:
-        self.draw_bfs_dfs(1750 - 30 + 6, 1020 - 73 - 25, 54, 2)
+        self.renderer.draw_bfs_dfs(1750 - 30 + 6, 1020 - 73 - 25, 54, 2, game=self)
 
         # A STAR LABEL:
-        self.draw_a_star(1750 + 15 + 6, 1020 - 100 - 25, 22, 53)  # 36 366 98 989
+        self.renderer.draw_a_star(1750 + 15 + 6, 1020 - 100 - 25, 22, 53, game=self)  # 36 366 98 989
 
         # LEE WAVES:
-        self.draw_waves(1750 + 50 + 48 + 10 + 6, 1020 - 73 - 25, 32, 5)
+        self.renderer.draw_waves(1750 + 50 + 48 + 10 + 6, 1020 - 73 - 25, 32, 5, game=self)
 
     # triangle points getting:
     def get_triangle(self, node: 'Node', point: tuple[int, int]):
@@ -723,170 +683,6 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         )
         cx, cy = 5 + node.x * self.tile_size + self.tile_size / 2, 5 + node.y * self.tile_size + self.tile_size / 2
         return (cx, cy), (cx + deltas[0][0], cy + deltas[0][1]), (cx + deltas[1][0], cy + deltas[1][1])
-
-    # draws a lock for right window part:
-    @staticmethod
-    def draw_lock(center_x: int, center_y: int):
-        arcade.draw_rectangle_filled(center_x, center_y, 14, 14, arcade.color.RED)
-        arcade.draw_rectangle_outline(center_x, center_y + 7, 8.4, 16.8, arcade.color.RED, border_width=2)
-
-    # draws the cross of forbiddance:
-    @staticmethod
-    def draw_cross(center_x: int, center_y: int):
-        arcade.draw_line(center_x - 9, center_y + 9, center_x + 9, center_y - 9, arcade.color.BLACK, line_width=2)
-        arcade.draw_line(center_x + 9, center_y + 9, center_x - 9,
-                         center_y - 9, arcade.color.BLACK, line_width=2)
-
-    # draws left or right arrow:
-    def make_arrow(self, cx, cy, arrow_length, arrow_height, line_w, point: tuple[int, int],
-                   colour: tuple[int, int, int]):
-        # index:
-        ind = self.walk.index(point)
-        # center coords:
-        cx_ = cx - point[0] * arrow_height / 2
-        cy_ = cy - point[1] * arrow_height / 2
-
-        w, h = abs(point[0]) * (arrow_length - arrow_height) + abs(point[1]) * arrow_height, abs(
-            point[0]) * arrow_height + abs(point[1]) * (arrow_length - arrow_height)
-        _dx, dx_ = arrow_length / 2 - arrow_height, arrow_length / 2
-        h_ = arrow_height / 2
-
-        if self.inter_types_arrows[ind] == InterType.PRESSED:
-            arcade.draw_rectangle_filled(cx_, cy_, w, h, colour)
-
-            arcade.draw_triangle_filled(cx + point[0] * _dx + point[1] * arrow_height,
-                                        cy + point[1] * _dx + point[0] * arrow_height,
-                                        cx + point[0] * _dx - point[1] * arrow_height,
-                                        cy + point[1] * _dx - point[0] * arrow_height,
-                                        cx + point[0] * arrow_length / 2, cy + point[1] * arrow_length / 2,
-                                        colour)
-
-            # numbers-hints:
-            signed_delta = arrow_height / 2 - arrow_height / 12
-            arcade.Text(f'{self.arrows_indices.index(ind) + 1}',
-                        cx - arrow_height / 3 + arrow_height / 12 - point[0] * signed_delta,
-                        cy - arrow_height / 3 - point[1] * signed_delta, arcade.color.BLACK, 2 * arrow_height / 3,
-                        bold=True).draw()
-
-        if self.arrows_vertices is None:
-            self.arrows_vertices = {}
-
-        if len(self.arrows_vertices) < 4:
-            self.arrows_vertices[self.walk.index(point)] = [
-                [cx + point[0] * arrow_length / 2, cy + point[1] * arrow_length / 2],
-                [cx + point[0] * _dx + point[1] * arrow_height,
-                 cy + point[1] * _dx + point[0] * arrow_height],
-                [cx + point[0] * _dx + point[1] * h_, cy + point[1] * _dx + point[0] * h_],
-                [cx - point[0] * dx_ + point[1] * h_, cy - point[1] * dx_ + point[0] * h_],
-                [cx - point[0] * dx_ - point[1] * h_, cy - point[1] * dx_ - point[0] * h_],
-                [cx + point[0] * _dx - point[1] * h_, cy + point[1] * _dx - point[0] * h_],
-                [cx + point[0] * _dx - point[1] * arrow_height,
-                 cy + point[1] * _dx - point[0] * arrow_height]
-            ]
-
-        arcade.draw_polygon_outline(self.arrows_vertices[ind], arcade.color.BLACK,
-                                    line_w if self.inter_types_arrows[ind] == InterType.NONE else line_w + 1)
-
-    def draw_gear_wheel(self, cx, cy, rx=32, ry=32, cog_size=8, multiplier=1.5, line_w=2, shift=False, clockwise=True):
-        self.cx, self.cy = cx, cy
-        self.hole_rx, self.hole_ry = rx - multiplier * cog_size, ry - multiplier * cog_size
-        circumference = math.pi * (rx + ry)  # approximately if cog_size << radius
-        angular_size = (2 * math.pi) * cog_size / circumference
-        max_cogs_fit_in_the_gear_wheel = int(circumference / cog_size)
-        cogs_q = max_cogs_fit_in_the_gear_wheel // 2
-        fit_angular_size = (2 * math.pi - cogs_q * angular_size) / cogs_q
-        angle = (angular_size if shift else 0) + (
-            self.incrementers[0] if clockwise else -self.incrementers[0])  # in radians
-        self.upper_vertices_list = []
-        for i in range(cogs_q):
-            # aux pars:
-            _a, a_ = (angle - angular_size / 2), (angle + angular_size / 2)
-            _rx, _ry, rx_, ry_ = rx * math.cos(_a), ry * math.sin(_a), rx * math.cos(a_), ry * math.sin(a_)
-            _dx, _dy = cog_size * math.cos(_a), cog_size * math.sin(_a)
-            dx_, dy_ = cog_size * math.cos(a_), cog_size * math.sin(a_)
-            # polygon's points:
-            self.upper_vertices_list.append([cx + _rx, cy + _ry])
-            self.upper_vertices_list.append([cx + _rx + _dx, cy + _ry + _dy])
-            self.upper_vertices_list.append([cx + rx_ + dx_, cy + ry_ + dy_])
-            self.upper_vertices_list.append([cx + rx_, cy + ry_])
-            # angle incrementation:
-            angle += angular_size + fit_angular_size
-        # upper gear wheel:
-        # arcade.draw_polygon_filled(upper_vertices_list, arcade.color.PASTEL_GRAY)
-        if self.inter_types[0] == InterType.PRESSED:
-            arcade.draw_polygon_filled(self.upper_vertices_list, arcade.color.RED)
-        arcade.draw_polygon_outline(self.upper_vertices_list, arcade.color.BLACK,
-                                    line_w + (0 if self.inter_types[0] == InterType.NONE else 1))
-        # hole:
-        arcade.draw_ellipse_filled(cx, cy, 2 * (rx - multiplier * cog_size), 2 * (ry - multiplier * cog_size),
-                                   arcade.color.DUTCH_WHITE)
-        arcade.draw_ellipse_outline(cx, cy, 2 * (rx - multiplier * cog_size), 2 * (ry - multiplier * cog_size),
-                                    arcade.color.BLACK,
-                                    line_w + (0 if self.inter_types[0] == InterType.NONE else 1))
-
-    def draw_waves(self, cx, cy, size=32, waves_q=5, line_w=2):
-        ds = size / waves_q
-        s_list = sorted([(i * ds + self.incrementers[3]) % size for i in range(waves_q)], reverse=True)
-        for i, curr_s in enumerate(s_list):
-            if self.inter_types[3] == InterType.PRESSED:
-                arcade.draw_circle_filled(cx, cy, curr_s, arcade.color.RED if i % 2 == 0 else arcade.color.DUTCH_WHITE)
-            arcade.draw_circle_outline(cx, cy, curr_s, arcade.color.BLACK,
-                                       line_w + (0 if self.inter_types[3] == InterType.NONE else 1))
-
-    def draw_star(self, cx, cy, vertices=5, r=32, line_w=2, clockwise=True):
-        delta_angle = 2 * math.pi / vertices
-        d = vertices // 2
-        angle = self.incrementers[2] if clockwise else -self.incrementers[2]  # in radians
-        for i in range(vertices):
-            da = d * delta_angle
-            arcade.draw_line(cx + r * math.cos(angle),
-                             cy + r * math.sin(angle),
-                             cx + r * math.cos(angle + da),
-                             cy + r * math.sin(angle + da),
-                             arcade.color.BLACK, line_w)
-            angle += da
-
-    def draw_a_star(self, cx, cy, size_w, size_h, line_w=2, clockwise=True):
-        # drawing A:
-        self.draw_a(cx, cy, size_w, size_h, size_w / 3, line_w)
-        # Star spinning around A:
-        self.draw_star(cx + size_h / 2 + size_h / 3, cy + size_h, r=size_h / 4, line_w=line_w, clockwise=clockwise)
-
-    def draw_a(self, cx, cy, length, height, a_w, line_w):
-        upper_hypot = math.sqrt(length ** 2 + height ** 2)
-        cos, sin = height / upper_hypot, length / upper_hypot
-        line_w_hour_projection = a_w / cos
-        dh = a_w / sin
-        delta = (height - a_w - dh) / 2
-        k, upper_k = (delta - a_w / 2) * length / height, (delta + a_w / 2) * length / height
-
-        self.a_outer_points = [
-            [cx, cy],
-            [cx + length, cy + height],
-            [cx + 2 * length, cy],
-            [cx + 2 * length - line_w_hour_projection, cy],
-            [cx + 2 * length - line_w_hour_projection - k, cy + delta - a_w / 2],
-            [cx + k + line_w_hour_projection, cy + delta - a_w / 2],
-            [cx + line_w_hour_projection, cy]
-        ]
-
-        a_inner_points = [
-            [cx + length, cy + height - dh],
-            [cx + 2 * length - line_w_hour_projection - upper_k, cy + delta + a_w / 2],
-            [cx + line_w_hour_projection + upper_k, cy + delta + a_w / 2]
-        ]
-
-        if self.inter_types[2] == InterType.NONE:
-            arcade.draw_polygon_outline(self.a_outer_points, arcade.color.BLACK, line_w)
-            arcade.draw_polygon_outline(a_inner_points, arcade.color.BLACK, line_w)
-        elif self.inter_types[2] == InterType.HOVERED:
-            arcade.draw_polygon_outline(self.a_outer_points, arcade.color.BLACK, line_w + 1)
-            arcade.draw_polygon_outline(a_inner_points, arcade.color.BLACK, line_w + 1)
-        else:
-            arcade.draw_polygon_filled(self.a_outer_points, arcade.color.RED)
-            arcade.draw_polygon_outline(self.a_outer_points, arcade.color.BLACK, line_w + 1)
-            arcade.draw_polygon_filled(a_inner_points, arcade.color.DUTCH_WHITE)
-            arcade.draw_polygon_outline(a_inner_points, arcade.color.BLACK, line_w + 1)
 
     # TODO: DECIDE IF IT IS NEEDED!!!
     # def draw_bfs(self, cx, cy, r, line_w):
@@ -907,65 +703,6 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
     #         rx_, ry_ = r * math.cos(a_), r * math.sin(a_)
     #         arcade.draw_line(cx + _rx, cy + _ry, cx + rx_, cy + ry_, arcade.color.BLACK, line_w)
     #         angle += angular_size * 2
-
-    # simplified version:
-    def draw_bfs_dfs(self, cx, cy, size, line_w):
-        self.bfs_dfs_cx, self.bfs_dfs_cy = cx, cy
-        self.bfs_dfs_size = size
-        # filling:
-        if self.inter_types[1] == InterType.PRESSED:
-            arcade.draw_rectangle_filled(cx, cy, size, size, arcade.color.RED)
-        # border:
-        arcade.draw_rectangle_outline(cx, cy, size, size, arcade.color.BLACK,
-                                      line_w + (0 if self.inter_types[1] == InterType.NONE else 1))
-        # text:
-        text_size = size / 4
-        magnitude = size / 12
-        arcade.Text('B', cx - size / 3, cy + text_size / 4 + magnitude * math.sin(self.incrementers[1]),
-                    arcade.color.BLACK, text_size,
-                    bold=True).draw()
-        arcade.Text('D', cx - size / 3, cy - text_size - text_size / 4 + magnitude * math.sin(self.incrementers[1]),
-                    arcade.color.BLACK,
-                    text_size, bold=True).draw()
-
-        arcade.Text('F', cx - size / 3 + size / 4,
-                    cy + text_size / 4 + magnitude * math.sin(math.pi / 2 + self.incrementers[1]),
-                    arcade.color.BLACK,
-                    text_size,
-                    bold=True).draw()
-        arcade.Text('F', cx - size / 3 + size / 4,
-                    cy - text_size - text_size / 4 + magnitude * math.sin(math.pi / 2 + self.incrementers[1]),
-                    arcade.color.BLACK, text_size,
-                    bold=True).draw()
-
-        arcade.Text('S', cx - size / 3 + size / 4 + size / 4 - size / 32,
-                    cy + text_size / 4 + magnitude * math.sin(math.pi + self.incrementers[1]),
-                    arcade.color.BLACK, text_size,
-                    bold=True).draw()
-        arcade.Text('S', cx - size / 3 + size / 4 + size / 4 - size / 32,
-                    cy - text_size - text_size / 4 + magnitude * math.sin(math.pi + self.incrementers[1]),
-                    arcade.color.BLACK, text_size,
-                    bold=True).draw()
-
-    # by default the arrow to be drawn is left sided:
-    def create_line_arrow(self, node: 'Node', deltas: tuple[int, int] = (-1, 0)):  # left arrow by default
-        cx, cy = 5 + node.x * self.tile_size + self.tile_size / 2, 5 + node.y * self.tile_size + self.tile_size / 2
-        h = 2 * self.tile_size // 3
-        _h, h_, dh = h / 6, h / 3, h / 2  # for 90 degrees triangle
-        shape = arcade.create_triangles_filled_with_colors(
-            (
-                (cx + deltas[0] * h_, cy + deltas[1] * h_),
-                (cx - (deltas[0] * _h + deltas[1] * dh), cy - (deltas[0] * dh + deltas[1] * _h)),
-                (cx - (deltas[0] * _h - deltas[1] * dh), cy - (-deltas[0] * dh + deltas[1] * _h))
-            ),
-            (
-                arcade.color.BLACK,
-                arcade.color.BLACK,
-                arcade.color.BLACK
-            )
-        )
-
-        return shape
 
     # colour gradient:
     @staticmethod
@@ -1030,6 +767,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.heuristic_lock = False
         self.tiebreakers_lock = False
         self.scale_lock = False
+        self.bfs_dfs_lock = False
         # arrows and path triangles:
         self.arrow_shape_list = arcade.ShapeElementList()
         self.triangle_shape_list = arcade.ShapeElementList()
@@ -1228,6 +966,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     index = len(shelf)
                     shelf[f'ornament {index}'] = self.walls
             case arcade.key.L:
+                # cannot loading while in interaction:
                 if not self.in_interaction:
                     if self.loading:
                         self.loading = False
@@ -1372,11 +1111,11 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         elif self.inter_types[1] == InterType.PRESSED:
             if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and \
                     SCREEN_HEIGHT - 100 - 120 - 9 <= y <= SCREEN_HEIGHT - 100 - 120 + 9:
-                self.is_bfs = True
+                self.bfs_dfs_ind = 0
             elif SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 100 - 120 - (
                     18 + 2 * 2 + 18) - 9 <= y <= SCREEN_HEIGHT - 100 - 120 - (
                     18 + 2 * 2 + 18) + 9:
-                self.is_bfs = False
+                self.bfs_dfs_ind = 1
         # WAVE LEE BLOCK:
         elif self.inter_types[3] == InterType.PRESSED:
             ...  # mhe 36 366 98 989 LL
@@ -1533,6 +1272,10 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         return (finish - start) // 10 ** 6
 
 
+class Processor:
+    ...
+
+
 class Renderer:
 
     def __init__(self):
@@ -1552,6 +1295,7 @@ class Renderer:
     def draw_levi_gin(self):
         arcade.draw_circle_outline(1000, 500, 250, arcade.color.BLACK, 2)
 
+    # draws the area (part) of right-sided menu:
     def draw_area(self, x, y, header_name: str, el_names: dict, el_ind: int, el_lock: bool):
         arcade.Text(f'{header_name}: ', x, y, arcade.color.BLACK, bold=True).draw()
 
@@ -1584,6 +1328,216 @@ class Renderer:
         arcade.draw_line(center_x - 9, center_y + 9, center_x + 9, center_y - 9, arcade.color.BLACK, line_width=2)
         arcade.draw_line(center_x + 9, center_y + 9, center_x - 9,
                          center_y - 9, arcade.color.BLACK, line_width=2)
+
+    # draws directions priority choosing menu:
+    def draw_arrows_menu(self, x, y, arrow_length, arrow_height, game: Astar):
+        arcade.draw_text(f'Directions priority: ', x, y, arcade.color.BLACK,
+                         bold=True)
+
+        for dx, dy in Astar.walk:
+            self.make_arrow(1755 + dx * arrow_length, 785 + dy * arrow_length, arrow_length,
+                            arrow_height, 2,
+                            (dx, dy), arcade.color.LIGHT_BROWN, game)
+
+        # ARROWS RESET:
+        arcade.draw_rectangle_outline(1755, 785, arrow_height, arrow_height, arcade.color.BLACK,
+                                      2 + (0 if game.inter_type_reset_square == InterType.NONE else 1))
+
+    # draws left, right, up or down arrow:
+    def make_arrow(self, cx, cy, arrow_length, arrow_height, line_w, point: tuple[int, int],
+                   colour: tuple[int, int, int], game: Astar):
+        # index:
+        ind = Astar.walk.index(point)
+        # center coords:
+        cx_ = cx - point[0] * arrow_height / 2
+        cy_ = cy - point[1] * arrow_height / 2
+
+        w, h = abs(point[0]) * (arrow_length - arrow_height) + abs(point[1]) * arrow_height, abs(
+            point[0]) * arrow_height + abs(point[1]) * (arrow_length - arrow_height)
+        _dx, dx_ = arrow_length / 2 - arrow_height, arrow_length / 2
+        h_ = arrow_height / 2
+
+        if game.inter_types_arrows[ind] == InterType.PRESSED:
+            arcade.draw_rectangle_filled(cx_, cy_, w, h, colour)
+
+            arcade.draw_triangle_filled(cx + point[0] * _dx + point[1] * arrow_height,
+                                        cy + point[1] * _dx + point[0] * arrow_height,
+                                        cx + point[0] * _dx - point[1] * arrow_height,
+                                        cy + point[1] * _dx - point[0] * arrow_height,
+                                        cx + point[0] * arrow_length / 2, cy + point[1] * arrow_length / 2,
+                                        colour)
+
+            # numbers-hints:
+            signed_delta = arrow_height / 2 - arrow_height / 12
+            arcade.Text(f'{game.arrows_indices.index(ind) + 1}',
+                        cx - arrow_height / 3 + arrow_height / 12 - point[0] * signed_delta,
+                        cy - arrow_height / 3 - point[1] * signed_delta, arcade.color.BLACK, 2 * arrow_height / 3,
+                        bold=True).draw()
+
+        if game.arrows_vertices is None:
+            game.arrows_vertices = {}
+
+        if len(game.arrows_vertices) < 4:
+            game.arrows_vertices[Astar.walk.index(point)] = [
+                [cx + point[0] * arrow_length / 2, cy + point[1] * arrow_length / 2],
+                [cx + point[0] * _dx + point[1] * arrow_height,
+                 cy + point[1] * _dx + point[0] * arrow_height],
+                [cx + point[0] * _dx + point[1] * h_, cy + point[1] * _dx + point[0] * h_],
+                [cx - point[0] * dx_ + point[1] * h_, cy - point[1] * dx_ + point[0] * h_],
+                [cx - point[0] * dx_ - point[1] * h_, cy - point[1] * dx_ - point[0] * h_],
+                [cx + point[0] * _dx - point[1] * h_, cy + point[1] * _dx - point[0] * h_],
+                [cx + point[0] * _dx - point[1] * arrow_height,
+                 cy + point[1] * _dx - point[0] * arrow_height]
+            ]
+
+        arcade.draw_polygon_outline(game.arrows_vertices[ind], arcade.color.BLACK,
+                                    line_w if game.inter_types_arrows[ind] == InterType.NONE else line_w + 1)
+
+    # draws a spinning gear wheel:
+    def draw_gear_wheel(self, cx, cy, rx=32, ry=32, cog_size=8, multiplier=1.5, line_w=2, shift=False, clockwise=True,
+                        game: Astar = None):
+        game.cx, game.cy = cx, cy
+        game.hole_rx, game.hole_ry = rx - multiplier * cog_size, ry - multiplier * cog_size
+        circumference = math.pi * (rx + ry)  # approximately if cog_size << radius
+        angular_size = (2 * math.pi) * cog_size / circumference
+        max_cogs_fit_in_the_gear_wheel = int(circumference / cog_size)
+        cogs_q = max_cogs_fit_in_the_gear_wheel // 2
+        fit_angular_size = (2 * math.pi - cogs_q * angular_size) / cogs_q
+        angle = (angular_size if shift else 0) + (
+            game.incrementers[0] if clockwise else -game.incrementers[0])  # in radians
+        game.upper_vertices_list = []
+        for i in range(cogs_q):
+            # aux pars:
+            _a, a_ = (angle - angular_size / 2), (angle + angular_size / 2)
+            _rx, _ry, rx_, ry_ = rx * math.cos(_a), ry * math.sin(_a), rx * math.cos(a_), ry * math.sin(a_)
+            _dx, _dy = cog_size * math.cos(_a), cog_size * math.sin(_a)
+            dx_, dy_ = cog_size * math.cos(a_), cog_size * math.sin(a_)
+            # polygon's points:
+            game.upper_vertices_list.append([cx + _rx, cy + _ry])
+            game.upper_vertices_list.append([cx + _rx + _dx, cy + _ry + _dy])
+            game.upper_vertices_list.append([cx + rx_ + dx_, cy + ry_ + dy_])
+            game.upper_vertices_list.append([cx + rx_, cy + ry_])
+            # angle incrementation:
+            angle += angular_size + fit_angular_size
+        # upper gear wheel:
+        # arcade.draw_polygon_filled(upper_vertices_list, arcade.color.PASTEL_GRAY)
+        if game.inter_types[0] == InterType.PRESSED:
+            arcade.draw_polygon_filled(game.upper_vertices_list, arcade.color.RED)
+        arcade.draw_polygon_outline(game.upper_vertices_list, arcade.color.BLACK,
+                                    line_w + (0 if game.inter_types[0] == InterType.NONE else 1))
+        # hole:
+        arcade.draw_ellipse_filled(cx, cy, 2 * (rx - multiplier * cog_size), 2 * (ry - multiplier * cog_size),
+                                   arcade.color.DUTCH_WHITE)
+        arcade.draw_ellipse_outline(cx, cy, 2 * (rx - multiplier * cog_size), 2 * (ry - multiplier * cog_size),
+                                    arcade.color.BLACK,
+                                    line_w + (0 if game.inter_types[0] == InterType.NONE else 1))
+
+    # draws round expending waves:
+    def draw_waves(self, cx, cy, size=32, waves_q=5, line_w=2, game: Astar = None):
+        ds = size / waves_q
+        s_list = sorted([(i * ds + game.incrementers[3]) % size for i in range(waves_q)], reverse=True)
+        for i, curr_s in enumerate(s_list):
+            if game.inter_types[3] == InterType.PRESSED:
+                arcade.draw_circle_filled(cx, cy, curr_s, arcade.color.RED if i % 2 == 0 else arcade.color.DUTCH_WHITE)
+            arcade.draw_circle_outline(cx, cy, curr_s, arcade.color.BLACK,
+                                       line_w + (0 if game.inter_types[3] == InterType.NONE else 1))
+
+    # draws an a_star label:
+    def draw_a_star(self, cx, cy, size_w, size_h, line_w=2, clockwise=True, game: Astar = None):
+        # drawing A:
+        self.draw_a(cx, cy, size_w, size_h, size_w / 3, line_w, game)
+        # Star spinning around A:
+        self.draw_star(cx + size_h / 2 + size_h / 3, cy + size_h, r=size_h / 4, line_w=line_w, clockwise=clockwise, game=game)
+
+    # draws a spinning star:
+    def draw_star(self, cx, cy, vertices=5, r=32, line_w=2, clockwise=True, game: Astar = None):
+        delta_angle = 2 * math.pi / vertices
+        d = vertices // 2
+        angle = game.incrementers[2] if clockwise else -game.incrementers[2]  # in radians
+        for i in range(vertices):
+            da = d * delta_angle
+            arcade.draw_line(cx + r * math.cos(angle),
+                             cy + r * math.sin(angle),
+                             cx + r * math.cos(angle + da),
+                             cy + r * math.sin(angle + da),
+                             arcade.color.BLACK, line_w)
+            angle += da
+
+    # draws 'A' letter:
+    def draw_a(self, cx, cy, length, height, a_w, line_w, game: Astar = None):
+        upper_hypot = math.sqrt(length ** 2 + height ** 2)
+        cos, sin = height / upper_hypot, length / upper_hypot
+        line_w_hour_projection = a_w / cos
+        dh = a_w / sin
+        delta = (height - a_w - dh) / 2
+        k, upper_k = (delta - a_w / 2) * length / height, (delta + a_w / 2) * length / height
+
+        game.a_outer_points = [
+            [cx, cy],
+            [cx + length, cy + height],
+            [cx + 2 * length, cy],
+            [cx + 2 * length - line_w_hour_projection, cy],
+            [cx + 2 * length - line_w_hour_projection - k, cy + delta - a_w / 2],
+            [cx + k + line_w_hour_projection, cy + delta - a_w / 2],
+            [cx + line_w_hour_projection, cy]
+        ]
+
+        a_inner_points = [
+            [cx + length, cy + height - dh],
+            [cx + 2 * length - line_w_hour_projection - upper_k, cy + delta + a_w / 2],
+            [cx + line_w_hour_projection + upper_k, cy + delta + a_w / 2]
+        ]
+
+        if game.inter_types[2] == InterType.NONE:
+            arcade.draw_polygon_outline(game.a_outer_points, arcade.color.BLACK, line_w)
+            arcade.draw_polygon_outline(a_inner_points, arcade.color.BLACK, line_w)
+        elif game.inter_types[2] == InterType.HOVERED:
+            arcade.draw_polygon_outline(game.a_outer_points, arcade.color.BLACK, line_w + 1)
+            arcade.draw_polygon_outline(a_inner_points, arcade.color.BLACK, line_w + 1)
+        else:
+            arcade.draw_polygon_filled(game.a_outer_points, arcade.color.RED)
+            arcade.draw_polygon_outline(game.a_outer_points, arcade.color.BLACK, line_w + 1)
+            arcade.draw_polygon_filled(a_inner_points, arcade.color.DUTCH_WHITE)
+            arcade.draw_polygon_outline(a_inner_points, arcade.color.BLACK, line_w + 1)
+
+    # simplified version, draws a living BFS/DFS label:
+    def draw_bfs_dfs(self, cx, cy, size, line_w, game: Astar = None):
+        game.bfs_dfs_cx, game.bfs_dfs_cy = cx, cy
+        game.bfs_dfs_size = size
+        # filling:
+        if game.inter_types[1] == InterType.PRESSED:
+            arcade.draw_rectangle_filled(cx, cy, size, size, arcade.color.RED)
+        # border:
+        arcade.draw_rectangle_outline(cx, cy, size, size, arcade.color.BLACK,
+                                      line_w + (0 if game.inter_types[1] == InterType.NONE else 1))
+        # text:
+        text_size = size / 4
+        magnitude = size / 12
+        arcade.Text('B', cx - size / 3, cy + text_size / 4 + magnitude * math.sin(game.incrementers[1]),
+                    arcade.color.BLACK, text_size,
+                    bold=True).draw()
+        arcade.Text('D', cx - size / 3, cy - text_size - text_size / 4 + magnitude * math.sin(game.incrementers[1]),
+                    arcade.color.BLACK,
+                    text_size, bold=True).draw()
+
+        arcade.Text('F', cx - size / 3 + size / 4,
+                    cy + text_size / 4 + magnitude * math.sin(math.pi / 2 + game.incrementers[1]),
+                    arcade.color.BLACK,
+                    text_size,
+                    bold=True).draw()
+        arcade.Text('F', cx - size / 3 + size / 4,
+                    cy - text_size - text_size / 4 + magnitude * math.sin(math.pi / 2 + game.incrementers[1]),
+                    arcade.color.BLACK, text_size,
+                    bold=True).draw()
+
+        arcade.Text('S', cx - size / 3 + size / 4 + size / 4 - size / 32,
+                    cy + text_size / 4 + magnitude * math.sin(math.pi + game.incrementers[1]),
+                    arcade.color.BLACK, text_size,
+                    bold=True).draw()
+        arcade.Text('S', cx - size / 3 + size / 4 + size / 4 - size / 32,
+                    cy - text_size - text_size / 4 + magnitude * math.sin(math.pi + game.incrementers[1]),
+                    arcade.color.BLACK, text_size,
+                    bold=True).draw()
 
 
 # class for a node representation:
@@ -1785,13 +1739,13 @@ class Node:
             if current_node == other:
                 return self.restore_path(other)
             for neigh in current_node.get_neighs(game, [NodeType.START_NODE, NodeType.VISITED_NODE, NodeType.WALL] + (
-                    [NodeType.NEIGH] if game.is_bfs else [])):
+                    [NodeType.NEIGH] if game.bfs_dfs_ind == 0 else [])):
                 if neigh.type != NodeType.END_NODE:
                     neigh.type = NodeType.NEIGH
                     neigh.update_sprite_colour()
                 neigh.previously_visited_node = current_node
                 # BFS:
-                if game.is_bfs:
+                if game.bfs_dfs_ind == 0:
                     queue.appendleft(neigh)
                 # DFS:
                 else:
@@ -2005,7 +1959,7 @@ if __name__ == "__main__":
 # saved in smart copies of neighs were incorrect
 # v6.7 now the rare nodes that have been visited twice and more times are displayed by PURPLE colour and have type 'TWICE_VISITED'
 # v7.0 GLOBAL UPDATE: added choosing of directions priorities in .het_neighs() method, relative interface part implemented too, someUI reorganization
-#
+# v7.1 serious reorganization of drawing methods, new class Renderer that now draws everything non-elementary, weighty refactoring
 #
 # TODO: add some other tiebreakers (medium, easy) +-
 # TODO: upgrade the visual part (medium, medium) -+

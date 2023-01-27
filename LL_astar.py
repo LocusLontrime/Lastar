@@ -16,8 +16,6 @@ from collections import deque
 # screen sizes:
 SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1050
-TILE_SIZE: int
-
 sys.setrecursionlimit(29000)
 
 
@@ -64,7 +62,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.heuristic_names = {0: 'MANHATTAN', 1: 'EUCLIDIAN', 2: 'MAX_DELTA', 3: 'DIJKSTRA'}
         self.tiebreaker = None
         self.tiebreaker_names = {0: 'VECTOR_CROSS', 1: 'COORDINATES'}
-        self.greedy_flag = False  # is algorithm greedy?
+        self.greedy_ind = None  # is algorithm greedy?
         self.nodes_to_be_visited = []
         self.iterations = 0
         self.nodes_visited = {}
@@ -76,9 +74,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # lee_wave_spreading important pars:
         # Levi Gin area!
         # interactive pars (game logic):
-        self.is_interactive = False
+        self.interactive_ind = None
         self.in_interaction = False
-        self.arrows_flag = False  # !!!
+        self.guide_arrows_ind = None
         self.cycle_breaker_right = False
         self.cycle_breaker_left = False
         self.ticks_before = 0
@@ -129,6 +127,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # BFS/DFS:
         self.is_bfs = False
         self.queue = deque()
+        # imported classes' objects:
+        # self.cleaner = Cleaner(self)
+        self.renderer = Renderer()
 
     # INITIALIZATION AUX:
     # calculating grid visualization pars for vertical tiles number given:
@@ -153,7 +154,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # heur/cost:
         self.start_node.g = 0
         # transmitting the greedy flag to the Node class: TODO: fix this strange doing <<--
-        Node.IS_GREEDY = self.greedy_flag
+        Node.IS_GREEDY = False if self.greedy_ind is None else True
         # important pars and dicts:
         self.iterations = 0
         self.neighs_added_to_heap_dict = {0: [self.start_node]}
@@ -256,7 +257,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                             'h',
                             'tiebreaker',
                             'type',
-                            'previously_visited_node',
+                            'previously_visited_node'
                         ]
                     )
                 )
@@ -323,7 +324,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                         'h',
                         'tiebreaker',
                         'type',
-                        'previously_visited_node',
+                        'previously_visited_node'
                     ]
                 )
                 if node.type not in [NodeType.START_NODE, NodeType.END_NODE]:
@@ -583,9 +584,10 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # blocks:
         self.node_sprite_list.draw()
         # arrows:
-        if self.arrows_flag:
+        if self.guide_arrows_ind is not None:
             if len(self.arrow_shape_list) > 0:
                 self.arrow_shape_list.draw()
+
         # HINTS:
         arcade.Text(
             f'A* iters: {self.iterations}, path length: {len(self.path) if self.path else "No path found"}, nodes visited: {len(self.nodes_visited)}, time elapsed: {self.time_elapsed_ms} ms',
@@ -597,123 +599,32 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     f"NODE'S INFO -->> pos: {self.node_chosen.y, self.node_chosen.x}, g: {self.node_chosen.g}, "
                     f"h: {self.node_chosen.h}, f=g+h: {self.node_chosen.g + self.node_chosen.h}, val: {self.node_chosen.val}, t: {self.node_chosen.tiebreaker}, times visited: {self.node_chosen.times_visited}, type: {self.node_chosen.type}",
                     1050, SCREEN_HEIGHT - 35, arcade.color.PURPLE, bold=True).draw()
+
         # SET-UPS FOR A_STAR:
-        # heuristics:
         if self.inter_types[2] == InterType.PRESSED:
-            arcade.Text(f'Heuristics: ', SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120, arcade.color.BLACK,
-                        bold=True).draw()
-            for i in range(len(self.heuristic_names)):
-                arcade.draw_rectangle_outline(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * i, 18,
-                                              18,
-                                              arcade.color.BLACK, 2)
-                arcade.Text(f'{self.heuristic_names[i]}', SCREEN_WIDTH - 225 + (18 + 2 * 2),
-                            SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * i - 6, arcade.color.BLACK, bold=True).draw()
-
-            arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
-                                         SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * self.heuristic,
-                                         14,
-                                         14,
-                                         arcade.color.BLACK)
-            # heuristics lock:
-            if self.heuristic_lock:
-                self.draw_lock(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * self.heuristic)
-                for i in range(len(self.heuristic_names)):
-                    if i != self.heuristic:
-                        self.draw_cross(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * i)
+            bot_menu_x, bot_menu_y = SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120
+            # heuristics:
+            self.renderer.draw_area(bot_menu_x, bot_menu_y, f'Heuristics', self.heuristic_names,
+                                    self.heuristic, self.heuristic_lock)
+            bot_menu_y -= 30 + (
+                        len(self.heuristic_names) - 1) * self.renderer.get_delta() + 3 * self.renderer.get_sq_size()
             # tiebreakers:
-            arcade.Text(f'Tiebreakers: ', SCREEN_WIDTH - 235,
-                        SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * 3 - 18 * 3,
-                        arcade.color.BLACK, bold=True).draw()
-            for i in range(len(self.tiebreaker_names)):
-                arcade.draw_rectangle_outline(SCREEN_WIDTH - 225,
-                                              SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30, 18,
-                                              18, arcade.color.BLACK, 2)
-                arcade.Text(self.tiebreaker_names[i], SCREEN_WIDTH - 225 + (18 + 2 * 2),
-                            SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30 - 6,
-                            arcade.color.BLACK,
-                            bold=True).draw()
-
-            if self.tiebreaker is not None:
-                arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
-                                             SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (
-                                                     3 + self.tiebreaker) - 18 * 3 - 30,
-                                             14,
-                                             14, arcade.color.BLACK)
-            # tiebreakers lock:
-            if self.tiebreakers_lock:
-                if self.tiebreaker is not None:
-                    self.draw_lock(SCREEN_WIDTH - 225,
-                                   SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (3 + self.tiebreaker) - 18 * 3 - 30)
-                for i in range(len(self.tiebreaker_names)):
-                    if self.tiebreaker is None or i != self.tiebreaker:
-                        self.draw_cross(SCREEN_WIDTH - 225,
-                                        SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30)
+            self.renderer.draw_area(bot_menu_x, bot_menu_y, f'Tiebreakers', self.tiebreaker_names,
+                                    self.tiebreaker, self.tiebreakers_lock)
+            bot_menu_y -= 30 + (
+                        len(self.tiebreaker_names) - 1) * self.renderer.get_delta() + 3 * self.renderer.get_sq_size()
             # greedy flag:
-            arcade.Text('Is greedy: ', SCREEN_WIDTH - 235,
-                        SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3,
-                        arcade.color.BLACK, bold=True).draw()
-            arcade.draw_rectangle_outline(SCREEN_WIDTH - 225,
-                                          SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30, 18, 18,
-                                          arcade.color.BLACK, 2)
-            arcade.Text(f'GREEDY_FLAG', SCREEN_WIDTH - 225 + (18 + 2 * 2),
-                        SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 - 6,
-                        arcade.color.BLACK, bold=True).draw()
-
-            if self.greedy_flag:
-                # greedy flag lock:
-                if self.greedy_flag_lock:
-                    self.draw_lock(SCREEN_WIDTH - 225,
-                                   SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30)
-                else:
-                    arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
-                                                 SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30,
-                                                 14,
-                                                 14,
-                                                 arcade.color.BLACK)
-            else:
-                if self.greedy_flag_lock:
-                    self.draw_cross(SCREEN_WIDTH - 225,
-                                    SCREEN_HEIGHT - 130 - 120 - (18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30)
+            self.renderer.draw_area(bot_menu_x, bot_menu_y, f'Is greedy', {0: f'GREEDY_FLAG'}, self.greedy_ind,
+                                    self.greedy_flag_lock)
+            bot_menu_y -= 30 + 3 * self.renderer.get_sq_size()
             # arrows:
-            arcade.Text('Guide arrows: ', SCREEN_WIDTH - 235,
-                        SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * 4 - 3 * 18 * 3,
-                        arcade.color.BLACK, bold=True).draw()
-            arcade.draw_rectangle_outline(SCREEN_WIDTH - 225,
-                                          SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * 4 - 3 * 18 * 3 - 30, 18, 18,
-                                          arcade.color.BLACK, 2)
-            arcade.Text(f'ON/OFF', SCREEN_WIDTH - 225 + (18 + 2 * 2),
-                        SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * 4 - 3 * 18 * 3 - 30 - 6,
-                        arcade.color.BLACK, bold=True).draw()
-
-            if self.arrows_flag:
-                arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
-                                             SCREEN_HEIGHT - 160 - 120 - (18 + 2 * 2 + 18) * 4 - 3 * 18 * 3 - 30,
-                                             14, 14, arcade.color.BLACK)
-
+            self.renderer.draw_area(bot_menu_x, bot_menu_y, f'Guide arrows', {0: f'ON/OFF'}, self.guide_arrows_ind,
+                                    False)
+            bot_menu_y -= 30 + 3 * self.renderer.get_sq_size()
             # a_star show mode:
-            arcade.Text('Show mode: ', SCREEN_WIDTH - 235,
-                        SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3, arcade.color.BLACK,
-                        bold=True).draw()
+            self.renderer.draw_area(bot_menu_x, bot_menu_y, f'Show mode', {0: f'IS_INTERACTIVE'}, self.interactive_ind,
+                                    self.in_interaction_mode_lock)
 
-            arcade.draw_rectangle_outline(SCREEN_WIDTH - 225,
-                                          SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30, 18,
-                                          18,
-                                          arcade.color.BLACK, 2)
-
-            arcade.Text('IS_A_STAR_INTERACTIVE', SCREEN_WIDTH - 225 + (18 + 2 * 2),
-                        SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30 - 6, arcade.color.BLACK,
-                        bold=True).draw()
-
-            if self.is_interactive:
-                # a_star show mode lock:
-                if self.in_interaction_mode_lock:
-                    self.draw_lock(SCREEN_WIDTH - 225,
-                                   SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30)
-                else:
-                    arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
-                                                 SCREEN_HEIGHT - 190 - (18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30,
-                                                 14, 14,
-                                                 arcade.color.BLACK)
         # BFS and DFS PARS:
         elif self.inter_types[1] == InterType.PRESSED:
             arcade.Text('Core: ', SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120, arcade.color.BLACK,
@@ -770,7 +681,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             else:
                 arcade.draw_rectangle_filled(SCREEN_WIDTH - 225,
                                              SCREEN_HEIGHT - 70 - 120 - (
-                                                         18 + 2 * 2 + 18) * self.scale - 3 * 18 * 3 - 30,
+                                                     18 + 2 * 2 + 18) * self.scale - 3 * 18 * 3 - 30,
                                              14,
                                              14,
                                              arcade.color.BLACK)
@@ -977,15 +888,25 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             arcade.draw_polygon_filled(a_inner_points, arcade.color.DUTCH_WHITE)
             arcade.draw_polygon_outline(a_inner_points, arcade.color.BLACK, line_w + 1)
 
-    def draw_bfs(self, cx, cy, r, line_w):
-        arcade.draw_circle_outline(cx, cy, r, arcade.color.BLACK, line_w)
-        self.draw_line_arrow(cx + r + r / 3, cy, r, arrow_l=r / 4, is_left=False, line_w=line_w)
-        self.draw_line_arrow(cx - r - r / 3, cy, r, arrow_l=r / 4, is_left=True, line_w=line_w)
-        self.draw_dashed_line_circle(cx + 3 * r + 2 * r / 3, cy, r, r // 2, line_w)
-        self.draw_dashed_line_circle(cx - 3 * r - 2 * r / 3, cy, r, r // 2, line_w)
-
-    def draw_dfs(self):
-        ...
+    # TODO: DECIDE IF IT IS NEEDED!!!
+    # def draw_bfs(self, cx, cy, r, line_w):
+    #     arcade.draw_circle_outline(cx, cy, r, arcade.color.BLACK, line_w)
+    #     self.draw_line_arrow(cx + r + r / 3, cy, r, arrow_l=r / 4, is_left=False, line_w=line_w)
+    #     self.draw_line_arrow(cx - r - r / 3, cy, r, arrow_l=r / 4, is_left=True, line_w=line_w)
+    #     self.draw_dashed_line_circle(cx + 3 * r + 2 * r / 3, cy, r, r // 2, line_w)
+    #     self.draw_dashed_line_circle(cx - 3 * r - 2 * r / 3, cy, r, r // 2, line_w)
+    #
+    # def draw_dfs(self):
+    #     ...
+    # def draw_dashed_line_circle(self, cx, cy, r, q, line_w, shift=False, clockwise=True):
+    #     angular_size = math.pi / q
+    #     angle = (angular_size if shift else 0) + (self.twist_angle if clockwise else -self.twist_angle)  # in radians
+    #     for i in range(q):
+    #         _a, a_ = (angle - angular_size / 2), (angle + angular_size / 2)
+    #         _rx, _ry = r * math.cos(_a), r * math.sin(_a)
+    #         rx_, ry_ = r * math.cos(a_), r * math.sin(a_)
+    #         arcade.draw_line(cx + _rx, cy + _ry, cx + rx_, cy + ry_, arcade.color.BLACK, line_w)
+    #         angle += angular_size * 2
 
     # simplified version:
     def draw_bfs_dfs(self, cx, cy, size, line_w):
@@ -1026,16 +947,6 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     arcade.color.BLACK, text_size,
                     bold=True).draw()
 
-    def draw_dashed_line_circle(self, cx, cy, r, q, line_w, shift=False, clockwise=True):
-        angular_size = math.pi / q
-        angle = (angular_size if shift else 0) + (self.twist_angle if clockwise else -self.twist_angle)  # in radians
-        for i in range(q):
-            _a, a_ = (angle - angular_size / 2), (angle + angular_size / 2)
-            _rx, _ry = r * math.cos(_a), r * math.sin(_a)
-            rx_, ry_ = r * math.cos(a_), r * math.sin(a_)
-            arcade.draw_line(cx + _rx, cy + _ry, cx + rx_, cy + ry_, arcade.color.BLACK, line_w)
-            angle += angular_size * 2
-
     # by default the arrow to be drawn is left sided:
     def create_line_arrow(self, node: 'Node', deltas: tuple[int, int] = (-1, 0)):  # left arrow by default
         cx, cy = 5 + node.x * self.tile_size + self.tile_size / 2, 5 + node.y * self.tile_size + self.tile_size / 2
@@ -1053,6 +964,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 arcade.color.BLACK
             )
         )
+
         return shape
 
     # colour gradient:
@@ -1194,7 +1106,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 if not self.loading:
                     if self.start_node and self.end_node:
                         # STEP BY STEP:
-                        if self.is_interactive:
+                        if self.interactive_ind is not None:
                             # game logic:
                             self.in_interaction = True
                             # prepare:
@@ -1435,18 +1347,27 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 130 - 120 - (
                     18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 + 9:
                 if not self.greedy_flag_lock:
-                    self.greedy_flag = not self.greedy_flag
+                    if self.greedy_ind is None:
+                        self.greedy_ind = 0
+                    else:
+                        self.greedy_ind = None
             # setting up the arrows:
             if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 160 - 120 - (
                     18 + 2 * 2 + 18) * 4 - 3 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 160 - 120 - (
                     18 + 2 * 2 + 18) * 4 - 3 * 18 * 3 - 30 + 9:
-                self.arrows_flag = not self.arrows_flag
+                if self.guide_arrows_ind is None:
+                    self.guide_arrows_ind = 0
+                else:
+                    self.guide_arrows_ind = None
             # setting up the interactive a_star flag:
-            if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 190 - (
-                    18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 190 - (
-                    18 + 2 * 2 + 18) * 14 - 4 * 18 * 3 - 30 + 9:
+            if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 190 - 120 - (
+                    18 + 2 * 2 + 18) * 4 - 4 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 190 - 120 - (
+                    18 + 2 * 2 + 18) * 4 - 4 * 18 * 3 - 30 + 9:
                 if not self.in_interaction_mode_lock:
-                    self.is_interactive = not self.is_interactive
+                    if self.interactive_ind is None:
+                        self.interactive_ind = 0
+                    else:
+                        self.interactive_ind = None
         # BFS/DFS BLOCK:
         elif self.inter_types[1] == InterType.PRESSED:
             if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and \
@@ -1610,6 +1531,59 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
     @staticmethod
     def get_ms(start, finish):
         return (finish - start) // 10 ** 6
+
+
+class Renderer:
+
+    def __init__(self):
+        self._sq_size = 18
+        self._sq_line_w = 2
+        self._delta = 2 * (self._sq_size + self._sq_line_w)
+
+    def get_delta(self):
+        return self._delta
+
+    def get_sq_size(self):
+        return self._sq_size
+
+    def get_sq_line_w(self):
+        return self._sq_line_w
+
+    def draw_levi_gin(self):
+        arcade.draw_circle_outline(1000, 500, 250, arcade.color.BLACK, 2)
+
+    def draw_area(self, x, y, header_name: str, el_names: dict, el_ind: int, el_lock: bool):
+        arcade.Text(f'{header_name}: ', x, y, arcade.color.BLACK, bold=True).draw()
+
+        for i in range(len(el_names)):
+            arcade.draw_rectangle_outline(x + 10, y - 30 - self._delta * i, self._sq_size, self._sq_size,
+                                          arcade.color.BLACK, self._sq_line_w)
+            arcade.Text(f'{el_names[i]}', x + 10 + self._sq_size + 2 * self._sq_line_w,
+                        y - 30 - self._delta * i - 6, arcade.color.BLACK, bold=True).draw()
+
+        if el_ind is not None:
+            arcade.draw_rectangle_filled(x + 10, y - 30 - self._delta * el_ind,
+                                         14, 14, arcade.color.BLACK)
+        # heuristics lock:
+        if el_lock:
+            if el_ind is not None:
+                self.draw_lock(x + 10, y - 30 - self._delta * el_ind)
+            for i in range(len(el_names)):
+                if el_ind is None or i != el_ind:
+                    self.draw_cross(x + 10, y - 30 - self._delta * i)
+
+    # draws a lock for right window part: 36 366 98 989
+    @staticmethod
+    def draw_lock(center_x: int, center_y: int):
+        arcade.draw_rectangle_filled(center_x, center_y, 14, 14, arcade.color.RED)
+        arcade.draw_rectangle_outline(center_x, center_y + 7, 8.4, 16.8, arcade.color.RED, border_width=2)
+
+    # draws the cross of forbiddance:
+    @staticmethod
+    def draw_cross(center_x: int, center_y: int):
+        arcade.draw_line(center_x - 9, center_y + 9, center_x + 9, center_y - 9, arcade.color.BLACK, line_width=2)
+        arcade.draw_line(center_x + 9, center_y + 9, center_x - 9,
+                         center_y - 9, arcade.color.BLACK, line_width=2)
 
 
 # class for a node representation:
@@ -1849,7 +1823,7 @@ class Node:
 
     # a common a_star:
     def a_star(self, other: 'Node', game: 'Astar'):
-        Node.IS_GREEDY = game.greedy_flag
+        Node.IS_GREEDY = False if game.greedy_ind is None else True
         # game.get_all_neighs()
         nodes_to_be_visited = [self]
         self.g = 0

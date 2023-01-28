@@ -275,7 +275,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 if neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:  # neigh not in self.nodes_visited and
                     neigh.type = NodeType.NEIGH
                     neigh.update_sprite_colour()
-                    arrow = self.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y))
+                    arrow = self.renderer.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y), self)
                     # here the arrow rotates (re-estimating of neigh g-cost):
                     if neigh.arrow_shape is not None:
                         neigh.remove_arrow(self)
@@ -334,8 +334,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                         node.remove_arrow(self)
                 if node.type == NodeType.NEIGH:
                     # here the arrow rotates backwards:
-                    arrow = self.create_line_arrow(node, (
-                        node.x - node.previously_visited_node.x, node.y - node.previously_visited_node.y))
+                    arrow = self.renderer.create_line_arrow(node, (
+                        node.x - node.previously_visited_node.x, node.y - node.previously_visited_node.y), self)
                     node.arrow_shape = arrow
                     node.append_arrow(self)
             # adding current node (popped out at the current iteration) to the heap:
@@ -422,7 +422,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                         if neigh != self.end_node:
                             neigh.type = NodeType.NEIGH
                             neigh.update_sprite_colour()
-                            arrow = self.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y))
+                            arrow = self.renderer.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y), self)
                             neigh.arrow_shape = arrow
                             neigh.append_arrow(self)
                         self.next_wave_lee.append(neigh)
@@ -489,7 +489,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 # then changing neigh's pars:
                 neigh.type = NodeType.NEIGH
                 neigh.update_sprite_colour()
-                arrow = self.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y))
+                arrow = self.renderer.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y), self)
                 if neigh.arrow_shape is not None:
                     neigh.remove_arrow(self)
                 neigh.arrow_shape = arrow
@@ -515,12 +515,13 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     node.remove_arrow(self)
                 if node.type == NodeType.NEIGH:
                     # here the arrow rotates backwards:
-                    arrow = self.create_line_arrow(
+                    arrow = self.renderer.create_line_arrow(
                         node,
                         (
                             node.x - self.curr_node_dict[self.iterations].x,
                             node.y - self.curr_node_dict[self.iterations].y
-                        )
+                        ),
+                        self
                     )
                     node.arrow_shape = arrow
                     node.append_arrow(self)
@@ -1386,6 +1387,25 @@ class Renderer:
         arcade.draw_polygon_outline(game.arrows_vertices[ind], arcade.color.BLACK,
                                     line_w if game.inter_types_arrows[ind] == InterType.NONE else line_w + 1)
 
+    # by default the arrow to be drawn is left sided:
+    def create_line_arrow(self, node: 'Node', deltas: tuple[int, int] = (-1, 0), game: Astar = None):  # left arrow by default
+        cx, cy = 5 + node.x * game.tile_size + game.tile_size / 2, 5 + node.y * game.tile_size + game.tile_size / 2
+        h = 2 * game.tile_size // 3
+        _h, h_, dh = h / 6, h / 3, h / 2  # for 90 degrees triangle
+        shape = arcade.create_triangles_filled_with_colors(
+            (
+                (cx + deltas[0] * h_, cy + deltas[1] * h_),
+                (cx - (deltas[0] * _h + deltas[1] * dh), cy - (deltas[0] * dh + deltas[1] * _h)),
+                (cx - (deltas[0] * _h - deltas[1] * dh), cy - (-deltas[0] * dh + deltas[1] * _h))
+            ),
+            (
+                arcade.color.BLACK,
+                arcade.color.BLACK,
+                arcade.color.BLACK
+            )
+        )
+        return shape
+
     # draws a spinning gear wheel:
     def draw_gear_wheel(self, cx, cy, rx=32, ry=32, cog_size=8, multiplier=1.5, line_w=2, shift=False, clockwise=True,
                         game: Astar = None):
@@ -1954,7 +1974,7 @@ if __name__ == "__main__":
 # v7.0 GLOBAL UPDATE: added choosing of directions priorities in .het_neighs() method, relative interface part implemented too, someUI reorganization
 # v7.1 serious reorganization of drawing methods, new class Renderer that now draws everything non-elementary, weighty refactoring
 # v7.2 method .on_mouse_press() has been refactored, now it a way more readable and comprehensible
-#
+# v7.3 fixed bug with method .create_line_arrow() absence
 #
 #
 #

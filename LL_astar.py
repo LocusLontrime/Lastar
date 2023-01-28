@@ -1070,38 +1070,34 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             # setting_up heuristic and tiebreaker:
             if not self.heuristic_lock:
                 for i in range(len(self.heuristic_names)):
-                    if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 100 - 120 - (
-                            18 + 2 * 2 + 18) * i - 9 <= y <= SCREEN_HEIGHT - 100 - 120 - (18 + 2 * 2 + 18) * i + 9:
+                    if self.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (
+                            18 + 2 * 2 + 18) * i, 18, x, y):
                         self.heuristic = i
                         break
             if not self.tiebreakers_lock:
                 for i in range(len(self.tiebreaker_names)):
-                    if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 100 - 120 - (
-                            18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 100 - 120 - (
-                            18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30 + 9:
+                    if self.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (
+                            18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30, 18, x, y):
                         self.tiebreaker = None if self.tiebreaker == i else i
                         break
             # setting up the greedy flag:
-            if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 130 - 120 - (
-                    18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 130 - 120 - (
-                    18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30 + 9:
+            if self.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 130 - 120 - (
+                    18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30, 18, x, y):
                 if not self.greedy_flag_lock:
                     if self.greedy_ind is None:
                         self.greedy_ind = 0
                     else:
                         self.greedy_ind = None
             # setting up the arrows:
-            if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 160 - 120 - (
-                    18 + 2 * 2 + 18) * 4 - 3 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 160 - 120 - (
-                    18 + 2 * 2 + 18) * 4 - 3 * 18 * 3 - 30 + 9:
+            if self.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 160 - 120 - (
+                    18 + 2 * 2 + 18) * 4 - 3 * 18 * 3 - 30, 18, x, y):
                 if self.guide_arrows_ind is None:
                     self.guide_arrows_ind = 0
                 else:
                     self.guide_arrows_ind = None
             # setting up the interactive a_star flag:
-            if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 190 - 120 - (
-                    18 + 2 * 2 + 18) * 4 - 4 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 190 - 120 - (
-                    18 + 2 * 2 + 18) * 4 - 4 * 18 * 3 - 30 + 9:
+            if self.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 190 - 120 - (
+                    18 + 2 * 2 + 18) * 4 - 4 * 18 * 3 - 30, 18, x, y):
                 if not self.in_interaction_mode_lock:
                     if self.interactive_ind is None:
                         self.interactive_ind = 0
@@ -1109,12 +1105,10 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                         self.interactive_ind = None
         # BFS/DFS BLOCK:
         elif self.inter_types[1] == InterType.PRESSED:
-            if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and \
-                    SCREEN_HEIGHT - 100 - 120 - 9 <= y <= SCREEN_HEIGHT - 100 - 120 + 9:
+            if self.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120, 18, x, y):
                 self.bfs_dfs_ind = 0
-            elif SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 100 - 120 - (
-                    18 + 2 * 2 + 18) - 9 <= y <= SCREEN_HEIGHT - 100 - 120 - (
-                    18 + 2 * 2 + 18) + 9:
+            elif self.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (
+                    18 + 2 * 2 + 18), 18, x, y):
                 self.bfs_dfs_ind = 1
         # WAVE LEE BLOCK:
         elif self.inter_types[3] == InterType.PRESSED:
@@ -1133,7 +1127,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                                 self.choosing_arrows = False
                                 Node.walk = [self.walk[self.arrows_indices[_]] for _ in range(4)]
             # arrows reset:
-            if 1755 - self.arrow_height / 2 <= x <= 1755 + self.arrow_height / 2 and 785 - self.arrow_height / 2 <= y <= 785 + self.arrow_height / 2:
+            if self.is_point_in_square(1755, 785, self.arrow_height / 2, x, y):
                 self.choosing_arrows = True
                 self.walk_index = 0
                 self.arrows_indices = []
@@ -1142,9 +1136,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             # choosing the scale factor:
             if not self.scale_lock:
                 for i in range(len(self.scale_names)):
-                    if SCREEN_WIDTH - 225 - 9 <= x <= SCREEN_WIDTH - 225 + 9 and SCREEN_HEIGHT - 70 - 120 - (
-                            18 + 2 * 2 + 18) * i - 3 * 18 * 3 - 30 - 9 <= y <= SCREEN_HEIGHT - 70 - 120 - (
-                            18 + 2 * 2 + 18) * i - 3 * 18 * 3 - 30 + 9:
+                    if self.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 70 - 120 - (
+                            18 + 2 * 2 + 18) * i - 3 * 18 * 3 - 30, 18, x, y):
                         self.scale = i
                         self.rebuild_map()
         # MODES OF DRAWING LOGIC:
@@ -1212,7 +1205,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             elif self.inter_types[2] == InterType.PRESSED:
                 self.inter_types[2] = InterType.HOVERED
         # WAVE_LEE:
-        if (x - (1750 + 50 + 48 + 10)) ** 2 + (y - (1020 - 73 - 25)) ** 2 <= 32 ** 2:
+        if self.is_point_in_circle(1750 + 50 + 48 + 10, 1020 - 73 - 25, 32, x, y):
             if self.inter_types[3] == InterType.HOVERED:
                 self.inter_types[3] = InterType.PRESSED
                 self.clear_inter_types(3)
@@ -1960,28 +1953,23 @@ if __name__ == "__main__":
 # v6.7 now the rare nodes that have been visited twice and more times are displayed by PURPLE colour and have type 'TWICE_VISITED'
 # v7.0 GLOBAL UPDATE: added choosing of directions priorities in .het_neighs() method, relative interface part implemented too, someUI reorganization
 # v7.1 serious reorganization of drawing methods, new class Renderer that now draws everything non-elementary, weighty refactoring
+# v7.2 method .on_mouse_press() has been refactored, now it a way more readable and comprehensible
+#
+#
+#
+#
 #
 # TODO: add some other tiebreakers (medium, easy) +-
-# TODO: upgrade the visual part (medium, medium) -+
-# TODO: add a core-algo switcher that can change the right interactive panel (Lee, Astar and so on) (high, medium)
 # TODO: create an info/help pages (high, hard)
-# TODO: extend the algo base with Lee wave pathfinding algorithm (medium, medium) Levi Gin +-
 # TODO: add a visualization for the most priority nodes in the heap (medium, medium)
-# TODO: add heuristic tiebreaker and combined tiebreakers (medium, high)
-# TODO: add a scroller on the right side of the window (high, medium)
+# TODO: add heuristic tiebreaker and combined tiebreakers (medium, high) -+
 # TODO: add an interaction-prohibition for a large grids (high, easy)
 # TODO: find and implement other core algorithms (like Lee and Astar/Dijkstra) (low, high)
 # TODO: change the way of drawing, rectangles and ellipses/circles should be switched by sprites for fast .batch rendering (high, high) --+
-# TODO: add a command of wall-pattern saving and further loading (low, high) -+
-# TODO: simplify the drawing (high, high)
 # TODO: add an info changing depending on a_star heuristic and greedy_flag (high, easy)
 # TODO: add correct UI system (high, high)
-# TODO: add bfs/dfs, a_star and wave_lee management menus (high, medium)
 # TODO: improve the icons interaction (high, high)
-# TODO: fix bug with red arrow during the path restoring phase (high, high)
-# TODO: wise class refactoring with SOLID principles (very high, very high)
-# TODO: add BFS/DFS interactive modes (high, high)
-# TODO: add arrows to a_star (high, medium))
+# TODO: wise class refactoring with SOLID principles (very high, very high) -+
 # TODO:
 # TODO:
 # TODO:

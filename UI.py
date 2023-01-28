@@ -76,7 +76,8 @@ class Menu(arcade.View):
 
         # self.draw_star(330, 365, 5, 32, 2, is_vortex=True)
 
-        self.draw_vortex(330, 365, 32, 1, 3)
+        # self.draw_vortex(330, 365, 32, 1, 3)
+
 
         # self.draw_gear_wheel(330, 365, 256, 64, 5, True, False)
         # self.draw_gear_wheel(330, 365, 128, 32, 4)
@@ -84,6 +85,12 @@ class Menu(arcade.View):
         # self.draw_gear_wheel(250, 365, 32, 32, 8, 2, True, False)
         # self.draw_gear_wheel(330, 365, 16, 4, 1, True, False)
         # self.draw_gear_wheel(50, 100, 28, 7, 2, True, False)
+
+
+    def draw_start(self):
+        # arcade.draw_circle_outline()
+        # arcade.draw_circle_outline()
+        ...
 
     def draw_star(self, cx, cy, vertices=5, r=32, line_w=2, is_vortex=False, clockwise=True, max_angle=123):
         delta_angle = 2 * math.pi / vertices

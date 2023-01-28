@@ -416,13 +416,15 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 self.end_node.val = self.iterations_wave_lee
                 self.path = self.recover_path()
                 break
-            for neigh in curr_node.get_neighs(self, [NodeType.START_NODE, NodeType.VISITED_NODE]):
+            for neigh in curr_node.get_neighs(self, [NodeType.START_NODE, NodeType.WALL, NodeType.VISITED_NODE]):
                 if neigh.val == 1:  # it is equivalent to if neigh.type == NodeType.EMPTY
                     if neigh not in self.next_wave_lee:
                         if neigh != self.end_node:
                             neigh.type = NodeType.NEIGH
                             neigh.update_sprite_colour()
-                            arrow = self.renderer.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y), self)
+                            arrow = self.renderer.create_line_arrow(neigh,
+                                                                    (neigh.x - curr_node.x, neigh.y - curr_node.y),
+                                                                    self)
                             neigh.arrow_shape = arrow
                             neigh.append_arrow(self)
                         self.next_wave_lee.append(neigh)
@@ -590,7 +592,6 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         if self.guide_arrows_ind is not None:
             if len(self.arrow_shape_list) > 0:
                 self.arrow_shape_list.draw()
-
         # HINTS:
         arcade.Text(
             f'A* iters: {self.iterations}, path length: {len(self.path) if self.path else "No path found"}, nodes visited: {len(self.nodes_visited)}, time elapsed: {self.time_elapsed_ms} ms',
@@ -602,7 +603,6 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     f"NODE'S INFO -->> pos: {self.node_chosen.y, self.node_chosen.x}, g: {self.node_chosen.g}, "
                     f"h: {self.node_chosen.h}, f=g+h: {self.node_chosen.g + self.node_chosen.h}, val: {self.node_chosen.val}, t: {self.node_chosen.tiebreaker}, times visited: {self.node_chosen.times_visited}, type: {self.node_chosen.type}",
                     1050, SCREEN_HEIGHT - 35, arcade.color.PURPLE, bold=True).draw()
-
         # SET-UPS FOR A_STAR:
         if self.inter_types[2] == InterType.PRESSED:
             bot_menu_x, bot_menu_y = SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120
@@ -627,14 +627,12 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             # a_star show mode:
             self.renderer.draw_area(bot_menu_x, bot_menu_y, f'Show mode', {0: f'IS_INTERACTIVE'}, self.interactive_ind,
                                     self.in_interaction_mode_lock)
-
         # BFS and DFS PARS:
         elif self.inter_types[1] == InterType.PRESSED:
             bot_menu_x, bot_menu_y = SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120
             # algo choosing (bfs or dfs):
             self.renderer.draw_area(bot_menu_x, bot_menu_y, f'Core', {0: f'BFS', 1: f'DFS'}, self.bfs_dfs_ind,
                                     self.bfs_dfs_lock)
-
         # SETTINGS:
         elif self.inter_types[0] == InterType.PRESSED:
             bot_menu_x, bot_menu_y = SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120
@@ -645,7 +643,6 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             self.renderer.draw_area(bot_menu_x, bot_menu_y, f'Sizes in tiles',
                                     {k: f'{v}x{self.get_hor_tiles(k)}' for k, v in self.scale_names.items()},
                                     self.scale, self.scale_lock)
-
         # NODE CHOSEN (should work for every algo) TODO: should be reworked!!!
         if self.node_chosen:
             arcade.draw_circle_filled(5 + self.node_chosen.x * self.tile_size + self.tile_size / 2,
@@ -654,20 +651,26 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # CURRENT PATH NODE ON START OR END NODE (should work for every algo), TODO: should be implemented in a separated method:
         if self.triangle_shape_list:
             self.triangle_shape_list.draw()
-
         # ICONS OF INTERACTION:
-
         # GEAR WHEEL:
         self.renderer.draw_gear_wheel(1785 + 6, 1000, 24, 24, 6, game=self)
-
         # BFS and DFS icons:
         self.renderer.draw_bfs_dfs(1750 - 30 + 6, 1020 - 73 - 25, 54, 2, game=self)
-
         # A STAR LABEL:
         self.renderer.draw_a_star(1750 + 15 + 6, 1020 - 100 - 25, 22, 53, game=self)  # 36 366 98 989
-
         # LEE WAVES:
         self.renderer.draw_waves(1750 + 50 + 48 + 10 + 6, 1020 - 73 - 25, 32, 5, game=self)
+
+        # TESTS:
+        self.renderer.draw_start(1785 + 6, 50, 32)
+
+        self.renderer.draw_next_step(1785 + 6 + 75, 50, 32, 24, 15)
+        self.renderer.draw_next_step(1785 + 6 - 75, 50, 32, 24, 15, False)
+
+        # arcade.draw_circle_outline(1785 + 6, 250, 1, arcade.color.BLACK, 2 + 1)
+        # arcade.draw_arc_outline(1785 + 6, 250, 100, 100, arcade.color.BLACK, 0, 90 + 90, 2 + 1)
+
+        self.renderer.draw_eraser(1785 + 6, 125, 16, 32, 8, 2)
 
     # triangle points getting:
     def get_triangle(self, node: 'Node', point: tuple[int, int]):
@@ -695,15 +698,6 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
     #
     # def draw_dfs(self):
     #     ...
-    # def draw_dashed_line_circle(self, cx, cy, r, q, line_w, shift=False, clockwise=True):
-    #     angular_size = math.pi / q
-    #     angle = (angular_size if shift else 0) + (self.twist_angle if clockwise else -self.twist_angle)  # in radians
-    #     for i in range(q):
-    #         _a, a_ = (angle - angular_size / 2), (angle + angular_size / 2)
-    #         _rx, _ry = r * math.cos(_a), r * math.sin(_a)
-    #         rx_, ry_ = r * math.cos(a_), r * math.sin(a_)
-    #         arcade.draw_line(cx + _rx, cy + _ry, cx + rx_, cy + ry_, arcade.color.BLACK, line_w)
-    #         angle += angular_size * 2
 
     # colour gradient:
     @staticmethod
@@ -1276,6 +1270,8 @@ class Renderer:
         self._sq_size = 18
         self._sq_line_w = 2
         self._delta = 2 * (self._sq_size + self._sq_line_w)
+        self.twist_angle = 0
+        self.h_increment = 0
 
     def get_delta(self):
         return self._delta
@@ -1388,7 +1384,8 @@ class Renderer:
                                     line_w if game.inter_types_arrows[ind] == InterType.NONE else line_w + 1)
 
     # by default the arrow to be drawn is left sided:
-    def create_line_arrow(self, node: 'Node', deltas: tuple[int, int] = (-1, 0), game: Astar = None):  # left arrow by default
+    def create_line_arrow(self, node: 'Node', deltas: tuple[int, int] = (-1, 0),
+                          game: Astar = None):  # left arrow by default
         cx, cy = 5 + node.x * game.tile_size + game.tile_size / 2, 5 + node.y * game.tile_size + game.tile_size / 2
         h = 2 * game.tile_size // 3
         _h, h_, dh = h / 6, h / 3, h / 2  # for 90 degrees triangle
@@ -1460,7 +1457,8 @@ class Renderer:
         # drawing A:
         self.draw_a(cx, cy, size_w, size_h, size_w / 3, line_w, game)
         # Star spinning around A:
-        self.draw_star(cx + size_h / 2 + size_h / 3, cy + size_h, r=size_h / 4, line_w=line_w, clockwise=clockwise, game=game)
+        self.draw_star(cx + size_h / 2 + size_h / 3, cy + size_h, r=size_h / 4, line_w=line_w, clockwise=clockwise,
+                       game=game)
 
     # draws a spinning star:
     def draw_star(self, cx, cy, vertices=5, r=32, line_w=2, clockwise=True, game: Astar = None):
@@ -1551,6 +1549,129 @@ class Renderer:
                     cy - text_size - text_size / 4 + magnitude * math.sin(math.pi + game.incrementers[1]),
                     arcade.color.BLACK, text_size,
                     bold=True).draw()
+
+    # for algo steps management, clearing and etc:
+    def draw_start(self, cx, cy, r):
+        self.twist_angle += 0.015
+        # if self.h_increment <= r / 2:
+        #     self.h_increment += 0.5
+        dh = r / math.sqrt(3)
+        arcade.draw_circle_outline(cx, cy, r, arcade.color.BLACK, 2 + 2)
+        # arcade.draw_circle_outline(cx, cy, r - r / 16, arcade.color.BLACK, 2)
+
+        polygon_vertices = [
+            (cx + dh, cy + self.h_increment),
+            (cx - dh / 2, cy + r / 2),
+            (cx - dh / 2, cy - r / 2),
+            (cx + dh, cy - self.h_increment)
+        ]
+
+        arcade.draw_polygon_filled(polygon_vertices, arcade.color.RED)
+
+        arcade.draw_polygon_outline(polygon_vertices, arcade.color.BLACK, 2 + 1)
+
+        # arcade.draw_triangle_filled(cx + dh, cy,
+        #                             cx - dh / 2, cy + r / 2,
+        #                             cx - dh / 2, cy - r / 2,
+        #                             arcade.color.RED)
+        #
+        # arcade.draw_triangle_outline(cx + dh, cy,
+        #                              cx - dh / 2, cy + r / 2,
+        #                              cx - dh / 2, cy - r / 2,
+        #                              arcade.color.BLACK, 2 + 1)
+
+        r -= r / 4
+        self.draw_dashed_line_circle(cx, cy, r, 12, 2 + 1)
+
+    def draw_dashed_line_circle(self, cx, cy, r, q, line_w, shift=False, clockwise=True):
+        angular_size = math.pi / q
+        angle = (angular_size if shift else 0) + (self.twist_angle if clockwise else -self.twist_angle)  # in radians
+        for i in range(q):
+            _a, a_ = (angle - angular_size / 2), (angle + angular_size / 2)
+            _rx, _ry = r * math.cos(_a), r * math.sin(_a)
+            rx_, ry_ = r * math.cos(a_), r * math.sin(a_)
+            arcade.draw_line(cx + _rx, cy + _ry, cx + rx_, cy + ry_, arcade.color.BLACK, line_w)
+            angle += angular_size * 2
+
+    def draw_full_clearing_icon(self):
+        # arcade.draw_arc_outline()
+        ...
+
+    def draw_next_step(self, cx, cy, r, a, dh, is_right=True):
+        # arcade.draw_circle_outline(cx, cy, r, arcade.color.BLACK, 2)
+
+        m = 1 if is_right else -1
+        h, length = m * a / 3, m * dh
+
+        polygon_vertices = [
+            (cx - h / 2, cy + a / 2),
+            (cx - h / 2, cy + a / 2 + dh),
+            (cx + h + length, cy),
+            (cx - h / 2, cy - a / 2 - dh),
+            (cx - h / 2, cy - a / 2),
+            (cx + h, cy)
+        ]
+
+        arcade.draw_polygon_filled(polygon_vertices, arcade.color.RED)
+        arcade.draw_polygon_outline(polygon_vertices, arcade.color.BLACK, 2 + 1)
+
+        cx -= length
+
+        polygon_vertices = [
+            (cx - h / 2, cy + a / 2),
+            (cx - h / 2, cy + a / 2 + dh),
+            (cx + h + length, cy),
+            (cx - h / 2, cy - a / 2 - dh),
+            (cx - h / 2, cy - a / 2),
+            (cx + h, cy)
+        ]
+
+        arcade.draw_polygon_filled(polygon_vertices, arcade.color.RED)
+        arcade.draw_polygon_outline(polygon_vertices, arcade.color.BLACK, 2 + 1)
+
+    def draw_eraser(self, cx, cy, h, w, r, line_w):
+
+        vertices = [
+            [cx - w / 2, cy + h / 2 + r],
+            [cx + w / 2, cy + h / 2 + r],
+            [cx + w / 2 + r, cy + h / 2],
+            [cx + w / 2 + r, cy - h / 2],
+            [cx + w / 2, cy - h / 2 - r],
+            [cx - w / 2, cy - h / 2 - r],
+            [cx - w / 2 - r, cy + h / 2],
+            [cx - w / 2 - r, cy - h / 2]
+        ]
+
+        centers = [
+            [cx + w / 2, cy + h / 2],
+            [cx - w / 2, cy + h / 2],
+            [cx - w / 2, cy - h / 2],
+            [cx + w / 2, cy - h / 2]
+        ]
+
+        arcade.draw_rectangle_filled(cx, cy, w, h + 2 * r, arcade.color.RED, line_w)
+        arcade.draw_line(vertices[0][0], vertices[0][1], vertices[5][0], vertices[5][1], arcade.color.BLACK, line_w)
+        arcade.draw_line(vertices[1][0], vertices[1][1], vertices[4][0], vertices[4][1], arcade.color.BLACK, line_w)
+
+        for i in range(len(vertices) // 2):
+            p1, p2 = vertices[2 * i: 2 * i + 2]
+            arcade.draw_line(p1[0], p1[1], p2[0], p2[1], arcade.color.BLACK, line_w)
+
+        for i, [x, y] in enumerate(centers):
+            arcade.draw_arc_outline(x, y, 2 * r, 2 * r, arcade.color.BLACK, 90 * i, 90 * (i + 1), 2 * line_w)
+
+
+    def draw_undo(self):
+        ...
+
+    def draw_redo(self):
+        ...
+
+    def draw_save(self):
+        ...
+
+    def draw_load(self):
+        ...
 
 
 # class for a node representation:

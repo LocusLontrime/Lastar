@@ -560,6 +560,12 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # grid lines:
         self.make_grid_lines()
 
+        # let us make the new mouse cursor:
+        self._create_cursor_from_image()
+
+        # let us change the app icon:
+        self.set_icon()
+
     # shaping shape element list of grid lines:
     def make_grid_lines(self):
         for j in range(self.tiles_q + 1):
@@ -671,6 +677,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # arcade.draw_arc_outline(1785 + 6, 250, 100, 100, arcade.color.BLACK, 0, 90 + 90, 2 + 1)
 
         self.renderer.draw_eraser(1785 + 6, 125, 16, 32, 8, 2)
+
+        self.renderer.draw_undo(1785 + 6 - 75, 125, 26, 10, 12, 2)
+        self.renderer.draw_undo(1785 + 6 + 75, 125, 26, 10, 12, 2, True)
 
     # triangle points getting:
     def get_triangle(self, node: 'Node', point: tuple[int, int]):
@@ -1660,9 +1669,20 @@ class Renderer:
         for i, [x, y] in enumerate(centers):
             arcade.draw_arc_outline(x, y, 2 * r, 2 * r, arcade.color.BLACK, 90 * i, 90 * (i + 1), 2 * line_w)
 
+    def draw_undo(self, cx, cy, a, dh, r, line_w, is_right=False):
+        m = -1 if is_right else 1
+        start_angle, end_angle = (90, 360) if is_right else (-180, 90)
+        arcade.draw_arc_outline(cx, cy, 2 * r, 2 * r, arcade.color.BLACK, start_angle, end_angle, 2 * (line_w + 1))
+        arcade.draw_arc_outline(cx, cy, 2 * (r + dh), 2 * (r + dh), arcade.color.BLACK, start_angle, end_angle, 2 * (line_w + 1))
+        arcade.draw_line(cx - m * r, cy, cx - m * (r + dh), cy, arcade.color.BLACK, line_w + 1)
+        vs = vertices = [
+            (cx - m * a * math.sqrt(3) / 2, cy + r + dh / 2),
+            (cx, cy + r + dh / 2 + a / 2),
+            (cx, cy + r + dh / 2 - a / 2)
+        ]
+        arcade.draw_triangle_filled(vs[0][0], vs[0][1], vs[1][0], vs[1][1], vs[2][0], vs[2][1], arcade.color.RED)
+        arcade.draw_triangle_outline(vs[0][0], vs[0][1], vs[1][0], vs[1][1], vs[2][0], vs[2][1], arcade.color.BLACK, line_w + 1)
 
-    def draw_undo(self):
-        ...
 
     def draw_redo(self):
         ...
@@ -2111,6 +2131,6 @@ if __name__ == "__main__":
 # TODO: add correct UI system (high, high)
 # TODO: improve the icons interaction (high, high)
 # TODO: wise class refactoring with SOLID principles (very high, very high) -+
-# TODO:
+# TODO: implement a training mode (Levi Gin further task) (very, high, high)
 # TODO:
 # TODO:

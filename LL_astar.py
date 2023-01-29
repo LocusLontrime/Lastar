@@ -11,6 +11,10 @@ import arcade.gui
 import shelve
 # queues:
 from collections import deque
+# abstract classes:
+from abc import ABC, abstractmethod
+
+import pyglet
 
 # screen sizes:
 SCREEN_WIDTH = 1920
@@ -119,6 +123,11 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # RIGHT MENU LOGIC:
         self.inter_types = [InterType.NONE for _ in range(4)]  # <<-- GEAR WHEEL, BFS/DFS, A_STAR and WAVE LEE <<--
         self.incrementers = [0 for _ in range(4)]  # <<-- GEAR WHEEL, BFS/DFS, A_STAR and WAVE LEE <<--
+        # START ICON:
+        self.start_menu_inter_type = InterType.NONE
+        self.twist_angle = 0
+        self.h_increment = 0
+        self.counter = 1  # ???
         # WAVE_LEE (LEVI GIN):
         self.front_wave_lee = []
         self.next_wave_lee = []
@@ -561,10 +570,11 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.make_grid_lines()
 
         # let us make the new mouse cursor:
-        self._create_cursor_from_image()
+        cursor = self.get_system_mouse_cursor(self.CURSOR_HAND)
+        self.set_mouse_cursor(cursor)
 
         # let us change the app icon:
-        self.set_icon()
+        self.set_icon(pyglet.image.load('C:\\Users\\langr\\PycharmProjects\\Lastar\\366.png'))
 
     # shaping shape element list of grid lines:
     def make_grid_lines(self):
@@ -668,18 +678,18 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.renderer.draw_waves(1750 + 50 + 48 + 10 + 6, 1020 - 73 - 25, 32, 5, game=self)
 
         # TESTS:
-        self.renderer.draw_start(1785 + 6, 50, 32)
+        self.renderer.draw_start(1785 + 6, 50, 32, self)
 
         self.renderer.draw_next_step(1785 + 6 + 75, 50, 32, 24, 15)
         self.renderer.draw_next_step(1785 + 6 - 75, 50, 32, 24, 15, False)
 
         # arcade.draw_circle_outline(1785 + 6, 250, 1, arcade.color.BLACK, 2 + 1)
-        # arcade.draw_arc_outline(1785 + 6, 250, 100, 100, arcade.color.BLACK, 0, 90 + 90, 2 + 1)
+        # arcade.draw_arc_outline(1785 + 6, 250, 100, 100, arcade.col  or.BLACK, 0, 90 + 90, 2 + 1)
 
         self.renderer.draw_eraser(1785 + 6, 125, 16, 32, 8, 2)
 
-        self.renderer.draw_undo(1785 + 6 - 75, 125, 26, 10, 12, 2)
-        self.renderer.draw_undo(1785 + 6 + 75, 125, 26, 10, 12, 2, True)
+        self.renderer.draw_undo(1785 + 6 - 75, 125, 24, 8, 12, 2)
+        self.renderer.draw_undo(1785 + 6 + 75, 125, 24, 8, 12, 2, True)
 
     # triangle points getting:
     def get_triangle(self, node: 'Node', point: tuple[int, int]):
@@ -800,6 +810,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         for i, _ in enumerate(self.incrementers):
             if self.inter_types[i] == InterType.HOVERED:
                 self.incrementers[i] += increments[i]
+        if self.start_menu_inter_type == InterType.PRESSED:
+            self.twist_angle += 0.015
         # consecutive calls during key pressing:
         ticks_threshold = 12
         if self.cycle_breaker_right:
@@ -1053,6 +1065,11 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 self.inter_types[3] = InterType.HOVERED
             else:
                 self.inter_types[3] = InterType.NONE
+        # MANAGEMENT MENU:
+        # start icon:
+        if self.start_menu_inter_type!= InterType.PRESSED:
+            ...
+            # if self.is_point_in_circle()
         # SETTINGS:
         # arrows:
         if self.arrows_vertices is not None:
@@ -1279,8 +1296,6 @@ class Renderer:
         self._sq_size = 18
         self._sq_line_w = 2
         self._delta = 2 * (self._sq_size + self._sq_line_w)
-        self.twist_angle = 0
-        self.h_increment = 0
 
     def get_delta(self):
         return self._delta
@@ -1336,7 +1351,7 @@ class Renderer:
         for dx, dy in Astar.walk:
             self.make_arrow(1755 + dx * arrow_length, 785 + dy * arrow_length, arrow_length,
                             arrow_height, 2,
-                            (dx, dy), arcade.color.LIGHT_BROWN, game)
+                            (dx, dy), arcade.color.SANDY_BROWN, game)
 
         # ARROWS RESET:
         arcade.draw_rectangle_outline(1755, 785, arrow_height, arrow_height, arcade.color.BLACK,
@@ -1560,24 +1575,27 @@ class Renderer:
                     bold=True).draw()
 
     # for algo steps management, clearing and etc:
-    def draw_start(self, cx, cy, r):
-        self.twist_angle += 0.015
-        # if self.h_increment <= r / 2:
+    def draw_start(self, cx, cy, r, game: Astar = None):
+        # if self.h_increment < r // 2:
         #     self.h_increment += 0.5
         dh = r / math.sqrt(3)
-        arcade.draw_circle_outline(cx, cy, r, arcade.color.BLACK, 2 + 2)
+        delta_line_w = 0 if game.start_menu_inter_type == InterType.NONE else 1
+        arcade.draw_circle_outline(cx, cy, r + 2 + 1, arcade.color.BLACK, 2 + 2 * delta_line_w)
         # arcade.draw_circle_outline(cx, cy, r - r / 16, arcade.color.BLACK, 2)
 
+        left_ratio, right_ratio = 1 - 1 / math.sqrt(3), 2 / math.sqrt(3) - 1
+
         polygon_vertices = [
-            (cx + dh, cy + self.h_increment),
-            (cx - dh / 2, cy + r / 2),
-            (cx - dh / 2, cy - r / 2),
-            (cx + dh, cy - self.h_increment)
+            (cx + dh - right_ratio * game.h_increment, cy + game.h_increment),
+            (cx - dh / 2 - left_ratio * game.h_increment, cy + r // 2),
+            (cx - dh / 2 - left_ratio * game.h_increment, cy - r // 2),
+            (cx + dh - right_ratio * game.h_increment, cy - game.h_increment)
         ]
 
-        arcade.draw_polygon_filled(polygon_vertices, arcade.color.RED)
+        if game.start_menu_inter_type == InterType.PRESSED:
+            arcade.draw_polygon_filled(polygon_vertices, arcade.color.RED)
 
-        arcade.draw_polygon_outline(polygon_vertices, arcade.color.BLACK, 2 + 1)
+        arcade.draw_polygon_outline(polygon_vertices, arcade.color.BLACK, 2 + delta_line_w)
 
         # arcade.draw_triangle_filled(cx + dh, cy,
         #                             cx - dh / 2, cy + r / 2,
@@ -1589,12 +1607,13 @@ class Renderer:
         #                              cx - dh / 2, cy - r / 2,
         #                              arcade.color.BLACK, 2 + 1)
 
-        r -= r / 4
-        self.draw_dashed_line_circle(cx, cy, r, 12, 2 + 1)
+        if game.start_menu_inter_type != InterType.NONE:
+            r -= r / 4
+            self.draw_dashed_line_circle(cx, cy, r + 2 + 1, 12, 2 + (1 if game.start_menu_inter_type == InterType.PRESSED else 0), game=game)
 
-    def draw_dashed_line_circle(self, cx, cy, r, q, line_w, shift=False, clockwise=True):
+    def draw_dashed_line_circle(self, cx, cy, r, q, line_w, shift=False, clockwise=True, game: Astar = None):
         angular_size = math.pi / q
-        angle = (angular_size if shift else 0) + (self.twist_angle if clockwise else -self.twist_angle)  # in radians
+        angle = (angular_size if shift else 0) + (game.twist_angle if clockwise else -game.twist_angle)  # in radians
         for i in range(q):
             _a, a_ = (angle - angular_size / 2), (angle + angular_size / 2)
             _rx, _ry = r * math.cos(_a), r * math.sin(_a)
@@ -1672,16 +1691,16 @@ class Renderer:
     def draw_undo(self, cx, cy, a, dh, r, line_w, is_right=False):
         m = -1 if is_right else 1
         start_angle, end_angle = (90, 360) if is_right else (-180, 90)
-        arcade.draw_arc_outline(cx, cy, 2 * r, 2 * r, arcade.color.BLACK, start_angle, end_angle, 2 * (line_w + 1))
-        arcade.draw_arc_outline(cx, cy, 2 * (r + dh), 2 * (r + dh), arcade.color.BLACK, start_angle, end_angle, 2 * (line_w + 1))
-        arcade.draw_line(cx - m * r, cy, cx - m * (r + dh), cy, arcade.color.BLACK, line_w + 1)
+        arcade.draw_arc_outline(cx, cy, 2 * r, 2 * r, arcade.color.BLACK, start_angle, end_angle, 2 * line_w)
+        arcade.draw_arc_outline(cx, cy, 2 * (r + dh), 2 * (r + dh), arcade.color.BLACK, start_angle, end_angle, 2 * line_w)
+        arcade.draw_line(cx - m * r, cy, cx - m * (r + dh), cy, arcade.color.BLACK, line_w)
         vs = vertices = [
             (cx - m * a * math.sqrt(3) / 2, cy + r + dh / 2),
             (cx, cy + r + dh / 2 + a / 2),
             (cx, cy + r + dh / 2 - a / 2)
         ]
         arcade.draw_triangle_filled(vs[0][0], vs[0][1], vs[1][0], vs[1][1], vs[2][0], vs[2][1], arcade.color.RED)
-        arcade.draw_triangle_outline(vs[0][0], vs[0][1], vs[1][0], vs[1][1], vs[2][0], vs[2][1], arcade.color.BLACK, line_w + 1)
+        arcade.draw_triangle_outline(vs[0][0], vs[0][1], vs[1][0], vs[1][1], vs[2][0], vs[2][1], arcade.color.BLACK, line_w)
 
 
     def draw_redo(self):
@@ -1976,6 +1995,115 @@ class Node:
         return shortest_path
 
 
+# class for design element:
+class Icon(ABC):
+
+    @property
+    @abstractmethod
+    def incrementer(self):  # abstract getter
+        ...
+
+    @property
+    @abstractmethod
+    def inter_type(self):  # abstract getter
+        ...
+
+    @property
+    @abstractmethod
+    def cx(self):  # abstract getter
+        ...
+
+    @property
+    @abstractmethod
+    def cy(self):  # abstract getter
+        ...
+
+    @property
+    @abstractmethod
+    def vertices(self):  # abstract getter
+        ...
+
+    @incrementer.setter
+    @abstractmethod
+    def incrementer(self, incrementer):  # abstract setter
+        ...
+
+    @inter_type.setter
+    @abstractmethod
+    def inter_type(self, inter_type):  # abstract setter
+        ...
+
+    @cx.setter
+    @abstractmethod
+    def cx(self, cx):  # abstract setter
+        ...
+
+    @cy.setter
+    @abstractmethod
+    def cy(self, cy):  # abstract setter
+        ...
+
+    @vertices.setter
+    @abstractmethod
+    def vertices(self, vertices):  # abstract setter
+        ...
+
+    # renders the icon:
+    @abstractmethod
+    def draw(self):
+        ...
+
+    # implements the icon's behaviour in Astar on_press/on_motion methods:
+    @abstractmethod
+    def hover(self):
+        ...
+
+    @abstractmethod
+    def press(self):
+        ...
+
+    # setup???
+
+
+class GearWheel(Icon):
+
+    def __init__(self, cx, cy):
+        self._cx = cx
+        self._cy = cy
+        self._incrementer = 0
+        self._inter_type = InterType.NONE
+        self._vertices = []
+
+    @property
+    def incrementer(self):
+        return self._incrementer
+
+    @property
+    def inter_type(self):
+        return self._inter_type
+
+    @property
+    def cx(self):
+        return self._cx
+
+    @property
+    def cy(self):
+        return self._cy
+
+    @property
+    def vertices(self):
+        return self._vertices
+
+    def draw(self):
+        ...
+
+    def hover(self):
+        ...
+
+    def press(self):
+        ...
+
+
 # enum for node type:
 class NodeType(Enum):
     EMPTY = arcade.color.WHITE
@@ -2132,5 +2260,5 @@ if __name__ == "__main__":
 # TODO: improve the icons interaction (high, high)
 # TODO: wise class refactoring with SOLID principles (very high, very high) -+
 # TODO: implement a training mode (Levi Gin further task) (very, high, high)
-# TODO:
+# TODO: proceed from the Renderer class to abstract class Icon and extended child classes like Gear Wheel and so on (very high, very high) --+
 # TODO:

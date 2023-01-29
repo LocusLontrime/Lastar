@@ -1,5 +1,4 @@
 import heapq as hq
-import sys
 import time
 import math
 from enum import Enum
@@ -13,13 +12,12 @@ import shelve
 from collections import deque
 # abstract classes:
 from abc import ABC, abstractmethod
-
+# windows:
 import pyglet
 
 # screen sizes:
 SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1050
-sys.setrecursionlimit(29000)
 
 
 class Astar(arcade.Window):  # 36 366 98 989 LL
@@ -124,10 +122,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.inter_types = [InterType.NONE for _ in range(4)]  # <<-- GEAR WHEEL, BFS/DFS, A_STAR and WAVE LEE <<--
         self.incrementers = [0 for _ in range(4)]  # <<-- GEAR WHEEL, BFS/DFS, A_STAR and WAVE LEE <<--
         # START ICON:
-        self.start_menu_inter_type = InterType.NONE
-        self.twist_angle = 0
-        self.h_increment = 0
-        self.counter = 1  # ???
+        ...
         # WAVE_LEE (LEVI GIN):
         self.front_wave_lee = []
         self.next_wave_lee = []
@@ -140,6 +135,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # imported classes' objects:
         # self.cleaner = Cleaner(self)
         self.renderer = Renderer()
+        # ICONS:
+        self.play_button = PlayButton(1785 + 6, 50, 32, 2)
 
     # INITIALIZATION AUX:
     # calculating grid visualization pars for vertical tiles number given:
@@ -678,7 +675,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.renderer.draw_waves(1750 + 50 + 48 + 10 + 6, 1020 - 73 - 25, 32, 5, game=self)
 
         # TESTS:
-        self.renderer.draw_start(1785 + 6, 50, 32, self)
+        # self.renderer.draw_start(1785 + 6, 50, 32, self)
+
+        self.play_button.draw()
 
         self.renderer.draw_next_step(1785 + 6 + 75, 50, 32, 24, 15)
         self.renderer.draw_next_step(1785 + 6 - 75, 50, 32, 24, 15, False)
@@ -810,8 +809,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         for i, _ in enumerate(self.incrementers):
             if self.inter_types[i] == InterType.HOVERED:
                 self.incrementers[i] += increments[i]
-        if self.start_menu_inter_type == InterType.PRESSED:
-            self.twist_angle += 0.015
+        self.play_button.update()
         # consecutive calls during key pressing:
         ticks_threshold = 12
         if self.cycle_breaker_right:
@@ -1013,6 +1011,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 self.ticks_before = 0
 
     # MOUSE:
+    def on_mouse_enter(self, x: int, y: int):
+        ...
+
     def on_mouse_motion(self, x, y, dx, dy):
         if self.building_walls_flag:
             if self.mode == 0:
@@ -1067,9 +1068,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 self.inter_types[3] = InterType.NONE
         # MANAGEMENT MENU:
         # start icon:
-        if self.start_menu_inter_type!= InterType.PRESSED:
-            ...
-            # if self.is_point_in_circle()
+        self.play_button.on_motion(x, y)
         # SETTINGS:
         # arrows:
         if self.arrows_vertices is not None:
@@ -1091,18 +1090,18 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             # setting_up heuristic and tiebreaker:
             if not self.heuristic_lock:
                 for i in range(len(self.heuristic_names)):
-                    if self.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (
+                    if Icon.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (
                             18 + 2 * 2 + 18) * i, 18, x, y):
                         self.heuristic = i
                         break
             if not self.tiebreakers_lock:
                 for i in range(len(self.tiebreaker_names)):
-                    if self.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (
+                    if Icon.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (
                             18 + 2 * 2 + 18) * (3 + i) - 18 * 3 - 30, 18, x, y):
                         self.tiebreaker = None if self.tiebreaker == i else i
                         break
             # setting up the greedy flag:
-            if self.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 130 - 120 - (
+            if Icon.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 130 - 120 - (
                     18 + 2 * 2 + 18) * 4 - 2 * 18 * 3 - 30, 18, x, y):
                 if not self.greedy_flag_lock:
                     if self.greedy_ind is None:
@@ -1110,14 +1109,14 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                     else:
                         self.greedy_ind = None
             # setting up the arrows:
-            if self.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 160 - 120 - (
+            if Icon.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 160 - 120 - (
                     18 + 2 * 2 + 18) * 4 - 3 * 18 * 3 - 30, 18, x, y):
                 if self.guide_arrows_ind is None:
                     self.guide_arrows_ind = 0
                 else:
                     self.guide_arrows_ind = None
             # setting up the interactive a_star flag:
-            if self.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 190 - 120 - (
+            if Icon.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 190 - 120 - (
                     18 + 2 * 2 + 18) * 4 - 4 * 18 * 3 - 30, 18, x, y):
                 if not self.in_interaction_mode_lock:
                     if self.interactive_ind is None:
@@ -1126,9 +1125,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                         self.interactive_ind = None
         # BFS/DFS BLOCK:
         elif self.inter_types[1] == InterType.PRESSED:
-            if self.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120, 18, x, y):
+            if Icon.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120, 18, x, y):
                 self.bfs_dfs_ind = 0
-            elif self.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (
+            elif Icon.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 100 - 120 - (
                     18 + 2 * 2 + 18), 18, x, y):
                 self.bfs_dfs_ind = 1
         # WAVE LEE BLOCK:
@@ -1148,7 +1147,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                                 self.choosing_arrows = False
                                 Node.walk = [self.walk[self.arrows_indices[_]] for _ in range(4)]
             # arrows reset:
-            if self.is_point_in_square(1755, 785, self.arrow_height / 2, x, y):
+            if Icon.is_point_in_square(1755, 785, self.arrow_height / 2, x, y):
                 self.choosing_arrows = True
                 self.walk_index = 0
                 self.arrows_indices = []
@@ -1157,7 +1156,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             # choosing the scale factor:
             if not self.scale_lock:
                 for i in range(len(self.scale_names)):
-                    if self.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 70 - 120 - (
+                    if Icon.is_point_in_square(SCREEN_WIDTH - 225, SCREEN_HEIGHT - 70 - 120 - (
                             18 + 2 * 2 + 18) * i - 3 * 18 * 3 - 30, 18, x, y):
                         self.scale = i
                         self.rebuild_map()
@@ -1226,21 +1225,15 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             elif self.inter_types[2] == InterType.PRESSED:
                 self.inter_types[2] = InterType.HOVERED
         # WAVE_LEE:
-        if self.is_point_in_circle(1750 + 50 + 48 + 10, 1020 - 73 - 25, 32, x, y):
+        if Icon.is_point_in_circle(1750 + 50 + 48 + 10, 1020 - 73 - 25, 32, x, y):
             if self.inter_types[3] == InterType.HOVERED:
                 self.inter_types[3] = InterType.PRESSED
                 self.clear_inter_types(3)
             elif self.inter_types[3] == InterType.PRESSED:
                 self.inter_types[3] = InterType.HOVERED
-
-    # helpful auxiliary methods:
-    @staticmethod
-    def is_point_in_square(cx, cy, size, x, y):
-        return cx - size / 2 <= x <= cx + size / 2 and cy - size / 2 <= y <= cy + size / 2
-
-    @staticmethod
-    def is_point_in_circle(cx, cy, r, x, y):
-        return (cx - x) ** 2 + (cy - y) ** 2 <= r ** 2
+        # ICONS:
+        # play button:
+        self.play_button.on_press(x, y)
 
     # game mode switching by scrolling the mouse wheel:
     def on_mouse_scroll(self, x: int, y: int, scroll_x: int, scroll_y: int):
@@ -1609,7 +1602,8 @@ class Renderer:
 
         if game.start_menu_inter_type != InterType.NONE:
             r -= r / 4
-            self.draw_dashed_line_circle(cx, cy, r + 2 + 1, 12, 2 + (1 if game.start_menu_inter_type == InterType.PRESSED else 0), game=game)
+            self.draw_dashed_line_circle(cx, cy, r + 2 + 1, 12,
+                                         2 + (1 if game.start_menu_inter_type == InterType.PRESSED else 0), game=game)
 
     def draw_dashed_line_circle(self, cx, cy, r, q, line_w, shift=False, clockwise=True, game: Astar = None):
         angular_size = math.pi / q
@@ -1692,7 +1686,8 @@ class Renderer:
         m = -1 if is_right else 1
         start_angle, end_angle = (90, 360) if is_right else (-180, 90)
         arcade.draw_arc_outline(cx, cy, 2 * r, 2 * r, arcade.color.BLACK, start_angle, end_angle, 2 * line_w)
-        arcade.draw_arc_outline(cx, cy, 2 * (r + dh), 2 * (r + dh), arcade.color.BLACK, start_angle, end_angle, 2 * line_w)
+        arcade.draw_arc_outline(cx, cy, 2 * (r + dh), 2 * (r + dh), arcade.color.BLACK, start_angle, end_angle,
+                                2 * line_w)
         arcade.draw_line(cx - m * r, cy, cx - m * (r + dh), cy, arcade.color.BLACK, line_w)
         vs = vertices = [
             (cx - m * a * math.sqrt(3) / 2, cy + r + dh / 2),
@@ -1700,8 +1695,8 @@ class Renderer:
             (cx, cy + r + dh / 2 - a / 2)
         ]
         arcade.draw_triangle_filled(vs[0][0], vs[0][1], vs[1][0], vs[1][1], vs[2][0], vs[2][1], arcade.color.RED)
-        arcade.draw_triangle_outline(vs[0][0], vs[0][1], vs[1][0], vs[1][1], vs[2][0], vs[2][1], arcade.color.BLACK, line_w)
-
+        arcade.draw_triangle_outline(vs[0][0], vs[0][1], vs[1][0], vs[1][1], vs[2][0], vs[2][1], arcade.color.BLACK,
+                                     line_w)
 
     def draw_redo(self):
         ...
@@ -2048,24 +2043,158 @@ class Icon(ABC):
     def vertices(self, vertices):  # abstract setter
         ...
 
-    # renders the icon:
+    # on initialization:
+    @abstractmethod
+    def setup(self):
+        ...
+
+    @abstractmethod
+    def update(self):
+        ...
+
+# renders the icon:
     @abstractmethod
     def draw(self):
         ...
 
     # implements the icon's behaviour in Astar on_press/on_motion methods:
     @abstractmethod
-    def hover(self):
+    def on_motion(self, x, y):
         ...
 
     @abstractmethod
-    def press(self):
+    def on_press(self, x, y):
         ...
 
-    # setup???
+    @abstractmethod
+    def on_drug(self, x, y):
+        ...
+
+    # helpful auxiliary methods:
+    @staticmethod
+    def is_point_in_square(cx, cy, size, x, y):
+        return cx - size / 2 <= x <= cx + size / 2 and cy - size / 2 <= y <= cy + size / 2
+
+    @staticmethod
+    def is_point_in_circle(cx, cy, r, x, y):
+        return (cx - x) ** 2 + (cy - y) ** 2 <= r ** 2
 
 
-class GearWheel(Icon):
+class PlayButton(Icon):
+    DELTAS = [0.5, 0.015]  # pixels/radians
+
+    def __init__(self, cx, cy, r, line_w):
+        self._cx = cx
+        self._cy = cy
+        self._incrementer = [0, 0]
+        self._inter_type = InterType.NONE
+        self._vertices = []
+        self._r = r
+        self._line_w = line_w
+        self._multiplier = 1
+        # self._counter = 1
+
+    @property
+    def incrementer(self):
+        return self._incrementer
+
+    @property
+    def inter_type(self):
+        return self._inter_type
+
+    @property
+    def cx(self):
+        return self._cx
+
+    @property
+    def cy(self):
+        return self._cy
+
+    @property
+    def vertices(self):
+        return self._vertices
+
+    def setup(self):
+        pass
+
+    def update(self):
+        if self._inter_type == InterType.PRESSED:
+            if self._multiplier == 1:
+                if self._incrementer[0] < self._r // 2:
+                    self._incrementer[0] += self.DELTAS[0]
+            else:
+                if 0 <= self._incrementer[0]:
+                    self._incrementer[0] -= self.DELTAS[0]
+        else:
+            if 0 <= self._incrementer[0]:
+                self._incrementer[0] -= self.DELTAS[0]
+
+        if self._inter_type != InterType.NONE:
+            self._incrementer[1] += 0.015
+
+    def draw(self):
+        #
+        #     self.h_increment +g= 0.5
+        dh = self._r / math.sqrt(3)
+        delta_line_w = 0 if self._inter_type == InterType.NONE else 1
+        arcade.draw_circle_outline(self._cx, self._cy, self._r + self._line_w + 1, arcade.color.BLACK, self._line_w + 2 * delta_line_w)
+
+        left_ratio, right_ratio = 1 - 1 / math.sqrt(3), 2 / math.sqrt(3) - 1
+
+        self._vertices = [
+            (self._cx + dh - right_ratio * self._incrementer[0], self._cy + self._incrementer[0]),
+            (self._cx - dh / 2 - left_ratio * self._incrementer[0], self._cy + self._r // 2),
+            (self._cx - dh / 2 - left_ratio * self._incrementer[0], self._cy - self._r // 2),
+            (self._cx + dh - right_ratio * self._incrementer[0], self._cy - self._incrementer[0])
+        ]
+
+        if self._inter_type == InterType.PRESSED:
+            arcade.draw_polygon_filled(self._vertices, arcade.color.RED)
+
+        arcade.draw_polygon_outline(self._vertices, arcade.color.BLACK, self._line_w + delta_line_w)
+
+        if self._inter_type != InterType.NONE:
+            self._draw_dashed_line_circle(12)
+
+    def _draw_dashed_line_circle(self, q, clockwise=True):
+        angular_size = math.pi / q
+        _r = self._r - self._r / 4 + 3
+        angle = self.incrementer[1] if clockwise else -self.incrementer[1]  # in radians
+        for i in range(q):
+            _a, a_ = (angle - angular_size / 2), (angle + angular_size / 2)
+            _rx, _ry = _r * math.cos(_a), _r * math.sin(_a)
+            rx_, ry_ = _r * math.cos(a_), _r * math.sin(a_)
+            arcade.draw_line(self.cx + _rx, self.cy + _ry, self.cx + rx_, self.cy + ry_, arcade.color.BLACK,
+                             self._line_w + (1 if self._inter_type == InterType.PRESSED else 0))
+            angle += angular_size * 2
+
+    def on_motion(self, x, y):
+        if self._inter_type != InterType.PRESSED:
+            if self.is_point_in_circle(self._cx, self._cy, self._r, x, y):
+                self._inter_type = InterType.HOVERED
+            else:
+                self._inter_type = InterType.NONE
+        else:
+            print(f'LALA')
+            if self.is_point_in_circle(self._cx, self._cy, self._r, x, y):
+                self._multiplier = 1
+            else:
+                print(f'FAFA')
+                self._multiplier = -1
+
+    def on_press(self, x, y):
+        # if self._inter_type != InterType.PRESSED:
+        if self.is_point_in_circle(self._cx, self._cy, self._r, x, y):
+            if self._inter_type == InterType.PRESSED:
+                self._inter_type = InterType.HOVERED
+            elif self._inter_type == InterType.HOVERED:
+                self._inter_type = InterType.PRESSED
+
+    def on_drug(self, x, y):
+        ...
+
+
+class GearWheelButton(Icon):
 
     def __init__(self, cx, cy):
         self._cx = cx
@@ -2094,13 +2223,22 @@ class GearWheel(Icon):
     def vertices(self):
         return self._vertices
 
+    def setup(self):
+        ...
+
+    def update(self):
+        ...
+
     def draw(self):
         ...
 
-    def hover(self):
+    def on_motion(self, x, y):
         ...
 
-    def press(self):
+    def on_press(self, x, y):
+        ...
+
+    def on_drug(self, x, y):
         ...
 
 

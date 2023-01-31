@@ -145,6 +145,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
 
         self.eraser = Eraser(1785 + 6, 125, 16, 32, 8, 2)
 
+        self.undo = Undo(1785 + 6 - 75, 125, 24, 8, 12, 2)
+        self.redo = Undo(1785 + 6 + 75, 125, 24, 8, 12, 2, True)
+
     # INITIALIZATION AUX:
     # calculating grid visualization pars for vertical tiles number given:
     def get_pars(self):
@@ -688,18 +691,13 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.play_button.draw()
 
         # TESTS:
-        # self.renderer.draw_next_step(1785 + 6 + 50, 50, 32, 24, 16)
-        # self.renderer.draw_next_step(1785 + 6 - 50, 50, 32, 24, 16, False)
-
-        # self.renderer.draw_eraser(1785 + 6, 125, 16, 32, 8, 2)
-
-        self.renderer.draw_undo(1785 + 6 - 75, 125, 24, 8, 12, 2)
-        self.renderer.draw_undo(1785 + 6 + 75, 125, 24, 8, 12, 2, True)
-
         self.step_button_right.draw()
         self.step_button_left.draw()
 
         self.eraser.draw()
+
+        self.undo.draw()
+        self.redo.draw()
 
     # triangle points getting:
     def get_triangle(self, node: 'Node', point: tuple[int, int]):
@@ -1088,6 +1086,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.step_button_left.on_motion(x, y)
         # eraser:
         self.eraser.on_motion(x, y)
+        # undo/redo:
+        self.undo.on_motion(x, y)
+        self.redo.on_motion(x, y)
         # SETTINGS:
         # arrows:
         if self.arrows_vertices is not None:
@@ -1256,8 +1257,11 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # step buttons:
         self.step_button_right.on_press(x, y)
         self.step_button_left.on_press(x, y)
-        # sraser:
+        # eraser:
         self.eraser.on_press(x, y)
+        # undo/redo:
+        self.undo.on_press(x, y)
+        self.redo.on_press(x, y)
 
     # game mode switching by scrolling the mouse wheel:
     def on_mouse_scroll(self, x: int, y: int, scroll_x: int, scroll_y: int):
@@ -1268,6 +1272,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.step_button_right.on_release(x, y)
         self.step_button_left.on_release(x, y)
         self.eraser.on_release(x, y)
+        self.undo.on_release(x, y)
+        self.redo.on_release(x, y)
 
     # SOME AUXILIARY METHODS:
     # changing the type of the node and then changes the node's sprite colour:
@@ -1593,22 +1599,6 @@ class Renderer:
                     cy - text_size - text_size / 4 + magnitude * math.sin(math.pi + game.incrementers[1]),
                     arcade.color.BLACK, text_size,
                     bold=True).draw()
-
-    def draw_undo(self, cx, cy, a, dh, r, line_w, is_right=False):
-        m = -1 if is_right else 1
-        start_angle, end_angle = (90, 360) if is_right else (-180, 90)
-        arcade.draw_arc_outline(cx, cy, 2 * r, 2 * r, arcade.color.BLACK, start_angle, end_angle, 2 * line_w)
-        arcade.draw_arc_outline(cx, cy, 2 * (r + dh), 2 * (r + dh), arcade.color.BLACK, start_angle, end_angle,
-                                2 * line_w)
-        arcade.draw_line(cx - m * r, cy, cx - m * (r + dh), cy, arcade.color.BLACK, line_w)
-        vs = vertices = [
-            (cx - m * a * math.sqrt(3) / 2, cy + r + dh / 2),
-            (cx, cy + r + dh / 2 + a / 2),
-            (cx, cy + r + dh / 2 - a / 2)
-        ]
-        arcade.draw_triangle_filled(vs[0][0], vs[0][1], vs[1][0], vs[1][1], vs[2][0], vs[2][1], arcade.color.RED)
-        arcade.draw_triangle_outline(vs[0][0], vs[0][1], vs[1][0], vs[1][1], vs[2][0], vs[2][1], arcade.color.BLACK,
-                                     line_w)
 
     def draw_save(self):
         ...
@@ -2106,9 +2096,9 @@ class StepButton(Icon):
         return self.multiplier * self._a / 3
 
     @property
-    def length(self): 
+    def length(self):
         return self.multiplier * self._dh
-   
+
     @property
     def vertices(self):
         vertices = [
@@ -2147,7 +2137,8 @@ class StepButton(Icon):
                     arcade.draw_polygon_filled(vertices, arcade.color.RED)
             elif self._inter_type == InterType.PRESSED:
                 arcade.draw_polygon_filled(vertices, arcade.color.RED)
-            arcade.draw_polygon_outline(vertices, arcade.color.BLACK, self._line_w + (0 if self._inter_type == InterType.NONE else 1))
+            arcade.draw_polygon_outline(vertices, arcade.color.BLACK,
+                                        self._line_w + (0 if self._inter_type == InterType.NONE else 1))
 
             if i < 2:
                 decrease_stats()
@@ -2230,15 +2221,18 @@ class Eraser(Icon):
 
         if self._inter_type == InterType.PRESSED:
             arcade.draw_rectangle_filled(self._cx, self._cy, self._w, self._h + 2 * self._r, arcade.color.RED)
-        arcade.draw_line(self._vertices[0][0], self._vertices[0][1], self._vertices[5][0], self._vertices[5][1], arcade.color.BLACK, line_w)
-        arcade.draw_line(self._vertices[1][0], self._vertices[1][1], self._vertices[4][0], self._vertices[4][1], arcade.color.BLACK, line_w)
+        arcade.draw_line(self._vertices[0][0], self._vertices[0][1], self._vertices[5][0], self._vertices[5][1],
+                         arcade.color.BLACK, line_w)
+        arcade.draw_line(self._vertices[1][0], self._vertices[1][1], self._vertices[4][0], self._vertices[4][1],
+                         arcade.color.BLACK, line_w)
 
         for i in range(len(self._vertices) // 2):
             p1, p2 = self._vertices[2 * i: 2 * i + 2]
             arcade.draw_line(p1[0], p1[1], p2[0], p2[1], arcade.color.BLACK, line_w)
 
         for i, [x, y] in enumerate(self._centers):
-            arcade.draw_arc_outline(x, y, 2 * self._r, 2 * self._r, arcade.color.BLACK, 90 * i, 90 * (i + 1), 2 * line_w)
+            arcade.draw_arc_outline(x, y, 2 * self._r, 2 * self._r, arcade.color.BLACK, 90 * i, 90 * (i + 1),
+                                    2 * line_w)
 
     def on_motion(self, x, y):
         if self._inter_type != InterType.PRESSED:
@@ -2249,6 +2243,74 @@ class Eraser(Icon):
 
     def on_press(self, x, y):
         if arcade.is_point_in_polygon(x, y, self._vertices):
+            self._inter_type = InterType.PRESSED
+
+    def on_release(self, x, y):
+        self._inter_type = InterType.NONE
+
+    def on_drug(self, x, y):
+        pass
+
+
+class Undo(Icon):
+    def __init__(self, cx, cy, a, dh, r, line_w, is_right=False):
+        super().__init__(cx, cy)
+        self._a = a
+        self._dh = dh
+        self._r = r
+        self._line_w = line_w
+        self._is_right = is_right
+
+    @property
+    def multiplier(self):
+        return -1 if self._is_right else 1
+
+    @property
+    def angles(self):
+        return (90, 360) if self._is_right else (-180, 90)
+
+    @property
+    def line_w(self):
+        return self._line_w + (0 if self._inter_type == InterType.NONE else 1)
+
+    def setup(self):
+        pass
+
+    def update(self):
+        pass
+
+    def draw(self):
+        start_angle, end_angle = self.angles
+
+        arcade.draw_arc_outline(self._cx, self._cy, 2 * self._r, 2 * self._r, arcade.color.BLACK, start_angle,
+                                end_angle, 2 * self.line_w)
+        arcade.draw_arc_outline(self._cx, self._cy, 2 * (self._r + self._dh), 2 * (self._r + self._dh),
+                                arcade.color.BLACK, start_angle, end_angle,
+                                2 * self.line_w)
+        arcade.draw_line(self._cx - self.multiplier * self._r, self._cy,
+                         self._cx - self.multiplier * (self._r + self._dh), self._cy, arcade.color.BLACK, self.line_w)
+        vs = self._vertices = [
+            (self._cx - self.multiplier * self._a * math.sqrt(3) / 2, self._cy + self._r + self._dh / 2),
+            (self._cx, self._cy + self._r + self._dh / 2 + self._a / 2),
+            (self._cx, self._cy + self._r + self._dh / 2 - self._a / 2)
+        ]
+
+        if self._inter_type == InterType.PRESSED:
+            arcade.draw_triangle_filled(vs[0][0], vs[0][1], vs[1][0], vs[1][1], vs[2][0], vs[2][1], arcade.color.RED)
+        arcade.draw_triangle_outline(vs[0][0], vs[0][1], vs[1][0], vs[1][1], vs[2][0], vs[2][1], arcade.color.BLACK,
+                                     self.line_w)
+
+    def on_motion(self, x, y):
+        if self._inter_type != InterType.PRESSED:
+            if self.is_point_in_circle(self._cx, self._cy, self._r + self._dh, x, y) or arcade.is_point_in_polygon(x, y,
+                                                                                                                   self._vertices):
+                self._inter_type = InterType.HOVERED
+            else:
+                self._inter_type = InterType.NONE
+
+    def on_press(self, x, y):
+        if self.is_point_in_circle(self._cx, self._cy, self._r + self._dh, x, y) or arcade.is_point_in_polygon(x, y,
+                                                                                                               self._vertices):
             self._inter_type = InterType.PRESSED
 
     def on_release(self, x, y):

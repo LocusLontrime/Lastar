@@ -2,6 +2,8 @@ import heapq as hq
 import time
 import math
 from enum import Enum
+from functools import reduce
+
 import numpy as np
 # graphics:
 import arcade
@@ -137,6 +139,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.renderer = Renderer()
         # ICONS:
         self.play_button = PlayButton(1785 + 6, 50, 32, 2)
+
+        self.step_button_right = StepButton(1785 + 6 + 50, 50, 24, 16, 2)
+        self.step_button_left = StepButton(1785 + 6 - 50, 50, 24, 16, 2, False)
 
     # INITIALIZATION AUX:
     # calculating grid visualization pars for vertical tiles number given:
@@ -674,21 +679,20 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # LEE WAVES:
         self.renderer.draw_waves(1750 + 50 + 48 + 10 + 6, 1020 - 73 - 25, 32, 5, game=self)
 
-        # TESTS:
-        # self.renderer.draw_start(1785 + 6, 50, 32, self)
-
+        # ICONS:
         self.play_button.draw()
 
-        self.renderer.draw_next_step(1785 + 6 + 75, 50, 32, 24, 15)
-        self.renderer.draw_next_step(1785 + 6 - 75, 50, 32, 24, 15, False)
-
-        # arcade.draw_circle_outline(1785 + 6, 250, 1, arcade.color.BLACK, 2 + 1)
-        # arcade.draw_arc_outline(1785 + 6, 250, 100, 100, arcade.col  or.BLACK, 0, 90 + 90, 2 + 1)
+        # TESTS:
+        # self.renderer.draw_next_step(1785 + 6 + 50, 50, 32, 24, 16)
+        # self.renderer.draw_next_step(1785 + 6 - 50, 50, 32, 24, 16, False)
 
         self.renderer.draw_eraser(1785 + 6, 125, 16, 32, 8, 2)
 
         self.renderer.draw_undo(1785 + 6 - 75, 125, 24, 8, 12, 2)
         self.renderer.draw_undo(1785 + 6 + 75, 125, 24, 8, 12, 2, True)
+
+        self.step_button_right.draw()
+        self.step_button_left.draw()
 
     # triangle points getting:
     def get_triangle(self, node: 'Node', point: tuple[int, int]):
@@ -810,6 +814,10 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
             if self.inter_types[i] == InterType.HOVERED:
                 self.incrementers[i] += increments[i]
         self.play_button.update()
+
+        self.step_button_right.update()
+        self.step_button_left.update()
+
         # consecutive calls during key pressing:
         ticks_threshold = 12
         if self.cycle_breaker_right:
@@ -1011,9 +1019,6 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
                 self.ticks_before = 0
 
     # MOUSE:
-    def on_mouse_enter(self, x: int, y: int):
-        ...
-
     def on_mouse_motion(self, x, y, dx, dy):
         if self.building_walls_flag:
             if self.mode == 0:
@@ -1069,6 +1074,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # MANAGEMENT MENU:
         # start icon:
         self.play_button.on_motion(x, y)
+        # step buttons:
+        self.step_button_right.on_motion(x, y)
+        self.step_button_left.on_motion(x, y)
         # SETTINGS:
         # arrows:
         if self.arrows_vertices is not None:
@@ -1234,6 +1242,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # ICONS:
         # play button:
         self.play_button.on_press(x, y)
+        # step buttons:
+        self.step_button_right.on_press(x, y)
+        self.step_button_left.on_press(x, y)
 
     # game mode switching by scrolling the mouse wheel:
     def on_mouse_scroll(self, x: int, y: int, scroll_x: int, scroll_y: int):
@@ -1241,6 +1252,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
 
     def on_mouse_release(self, x: int, y: int, button: int, modifiers: int):
         self.building_walls_flag = False
+        self.step_button_right.on_release(x, y)
+        self.step_button_left.on_release(x, y)
 
     # SOME AUXILIARY METHODS:
     # changing the type of the node and then changes the node's sprite colour:
@@ -1634,10 +1647,15 @@ class Renderer:
             (cx + h, cy)
         ]
 
-        arcade.draw_polygon_filled(polygon_vertices, arcade.color.RED)
-        arcade.draw_polygon_outline(polygon_vertices, arcade.color.BLACK, 2 + 1)
+        arcade.draw_polygon_filled(polygon_vertices, arcade.color.DUTCH_WHITE)
+        arcade.draw_polygon_outline(polygon_vertices, arcade.color.BLACK, 2)
 
-        cx -= length
+        cx += h
+        h -= h / 4
+        a -= a / 4
+        dh -= dh / 4
+        length -= length / 4
+        cx -= h - length
 
         polygon_vertices = [
             (cx - h / 2, cy + a / 2),
@@ -1648,8 +1666,27 @@ class Renderer:
             (cx + h, cy)
         ]
 
-        arcade.draw_polygon_filled(polygon_vertices, arcade.color.RED)
-        arcade.draw_polygon_outline(polygon_vertices, arcade.color.BLACK, 2 + 1)
+        arcade.draw_polygon_filled(polygon_vertices, arcade.color.DUTCH_WHITE)
+        arcade.draw_polygon_outline(polygon_vertices, arcade.color.BLACK, 2)
+
+        cx += h
+        h -= h / 4
+        a -= a / 4
+        dh -= dh / 4
+        length -= length / 4
+        cx -= h - length
+
+        polygon_vertices = [
+            (cx - h / 2, cy + a / 2),
+            (cx - h / 2, cy + a / 2 + dh),
+            (cx + h + length, cy),
+            (cx - h / 2, cy - a / 2 - dh),
+            (cx - h / 2, cy - a / 2),
+            (cx + h, cy)
+        ]
+
+        arcade.draw_polygon_filled(polygon_vertices, arcade.color.DUTCH_WHITE)
+        arcade.draw_polygon_outline(polygon_vertices, arcade.color.BLACK, 2)
 
     def draw_eraser(self, cx, cy, h, w, r, line_w):
 
@@ -1990,58 +2027,41 @@ class Node:
         return shortest_path
 
 
+# class representing an algo:
+class Algorithm(ABC):
+    def __init__(self, name):
+        self._name = name
+        self._menu = None  # ??? Class Menu or aggregated Icon ???
+
+    @abstractmethod
+    def path_up(self):
+        ...
+
+    @abstractmethod
+    def path_down(self):
+        ...
+
+    @abstractmethod
+    def algo_up(self):
+        ...
+
+    @abstractmethod
+    def algo_down(self):
+        ...
+
+    @abstractmethod
+    def full_algo(self):
+        ...
+
+
 # class for design element:
 class Icon(ABC):
-
-    @property
-    @abstractmethod
-    def incrementer(self):  # abstract getter
-        ...
-
-    @property
-    @abstractmethod
-    def inter_type(self):  # abstract getter
-        ...
-
-    @property
-    @abstractmethod
-    def cx(self):  # abstract getter
-        ...
-
-    @property
-    @abstractmethod
-    def cy(self):  # abstract getter
-        ...
-
-    @property
-    @abstractmethod
-    def vertices(self):  # abstract getter
-        ...
-
-    @incrementer.setter
-    @abstractmethod
-    def incrementer(self, incrementer):  # abstract setter
-        ...
-
-    @inter_type.setter
-    @abstractmethod
-    def inter_type(self, inter_type):  # abstract setter
-        ...
-
-    @cx.setter
-    @abstractmethod
-    def cx(self, cx):  # abstract setter
-        ...
-
-    @cy.setter
-    @abstractmethod
-    def cy(self, cy):  # abstract setter
-        ...
-
-    @vertices.setter
-    @abstractmethod
-    def vertices(self, vertices):  # abstract setter
-        ...
+    def __init__(self, cx, cy):
+        self._cx = cx
+        self._cy = cy
+        self._incrementer = 0
+        self._inter_type = InterType.NONE
+        self._vertices = []
 
     # on initialization:
     @abstractmethod
@@ -2052,7 +2072,7 @@ class Icon(ABC):
     def update(self):
         ...
 
-# renders the icon:
+    # renders the icon:
     @abstractmethod
     def draw(self):
         ...
@@ -2084,35 +2104,12 @@ class PlayButton(Icon):
     DELTAS = [0.5, 0.015]  # pixels/radians
 
     def __init__(self, cx, cy, r, line_w):
-        self._cx = cx
-        self._cy = cy
+        super().__init__(cx, cy)
         self._incrementer = [0, 0]
-        self._inter_type = InterType.NONE
-        self._vertices = []
         self._r = r
         self._line_w = line_w
         self._multiplier = 1
         # self._counter = 1
-
-    @property
-    def incrementer(self):
-        return self._incrementer
-
-    @property
-    def inter_type(self):
-        return self._inter_type
-
-    @property
-    def cx(self):
-        return self._cx
-
-    @property
-    def cy(self):
-        return self._cy
-
-    @property
-    def vertices(self):
-        return self._vertices
 
     def setup(self):
         pass
@@ -2137,7 +2134,8 @@ class PlayButton(Icon):
         #     self.h_increment +g= 0.5
         dh = self._r / math.sqrt(3)
         delta_line_w = 0 if self._inter_type == InterType.NONE else 1
-        arcade.draw_circle_outline(self._cx, self._cy, self._r + self._line_w + 1, arcade.color.BLACK, self._line_w + 2 * delta_line_w)
+        arcade.draw_circle_outline(self._cx, self._cy, self._r + self._line_w + 1, arcade.color.BLACK,
+                                   self._line_w + 2 * delta_line_w)
 
         left_ratio, right_ratio = 1 - 1 / math.sqrt(3), 2 / math.sqrt(3) - 1
 
@@ -2159,12 +2157,12 @@ class PlayButton(Icon):
     def _draw_dashed_line_circle(self, q, clockwise=True):
         angular_size = math.pi / q
         _r = self._r - self._r / 4 + 3
-        angle = self.incrementer[1] if clockwise else -self.incrementer[1]  # in radians
+        angle = self._incrementer[1] if clockwise else -self._incrementer[1]  # in radians
         for i in range(q):
             _a, a_ = (angle - angular_size / 2), (angle + angular_size / 2)
             _rx, _ry = _r * math.cos(_a), _r * math.sin(_a)
             rx_, ry_ = _r * math.cos(a_), _r * math.sin(a_)
-            arcade.draw_line(self.cx + _rx, self.cy + _ry, self.cx + rx_, self.cy + ry_, arcade.color.BLACK,
+            arcade.draw_line(self._cx + _rx, self._cy + _ry, self._cx + rx_, self._cy + ry_, arcade.color.BLACK,
                              self._line_w + (1 if self._inter_type == InterType.PRESSED else 0))
             angle += angular_size * 2
 
@@ -2175,11 +2173,9 @@ class PlayButton(Icon):
             else:
                 self._inter_type = InterType.NONE
         else:
-            print(f'LALA')
             if self.is_point_in_circle(self._cx, self._cy, self._r, x, y):
                 self._multiplier = 1
             else:
-                print(f'FAFA')
                 self._multiplier = -1
 
     def on_press(self, x, y):
@@ -2194,34 +2190,145 @@ class PlayButton(Icon):
         ...
 
 
+class StepButton(Icon):
+    DELTAS = [0.15, 0.1, 0.05]
+    THRESHOLD = 8
+    TICKS_THRESHOLD = 12
+    MAGNITUDE = 3
+
+    def __init__(self, cx, cy, a, dh, line_w, is_right=True):
+        super().__init__(cx, cy)
+        self._incrementer = [0, 0, 0, 0]  # horizontal movement, sin oscillating, blinking and ticks
+        self._a = a
+        self._dh = dh
+        self._line_w = line_w
+        self._is_right = is_right
+        self._cycle_breaker = False
+
+    def setup(self):
+        pass
+
+    def update(self):
+        # long press logic:
+        if self._cycle_breaker:
+            self._incrementer[3] += 1
+            if self._incrementer[3] >= self.TICKS_THRESHOLD:
+                if self._incrementer[0] <= self.THRESHOLD:
+                    self._incrementer[0] += self.DELTAS[0]
+                self._incrementer[1] = (self._incrementer[1] + self.DELTAS[1]) % 3
+                self._incrementer[2] += self.DELTAS[2]
+        else:
+            if self._incrementer[0] > 0:
+                self._incrementer[0] -= self.DELTAS[0]
+            else:
+                self._incrementer[0] = 0
+            self._incrementer[1] = 0
+            self._incrementer[2] = 0
+
+    @property
+    def multiplier(self):
+        return 1 if self._is_right else -1
+
+    @property
+    def h(self):
+        return self.multiplier * self._a / 3
+
+    @property
+    def length(self): 
+        return self.multiplier * self._dh
+   
+    @property
+    def vertices(self):
+        vertices = [
+            (self._cx - self.h / 2, self._cy + self._a / 2),
+            (self._cx - self.h / 2, self._cy + self._a / 2 + self._dh),
+            (self._cx + self.h + self.length, self._cy),
+            (self._cx - self.h / 2, self._cy - self._a / 2 - self._dh),
+            (self._cx - self.h / 2, self._cy - self._a / 2),
+            (self._cx + self.h, self._cy)
+        ]
+        self._vertices.append(vertices)
+        return vertices
+
+    def draw(self):
+        # aux method that changes the figure sizes saving its shape by decreasing some pars:
+        def decrease_stats():
+            self._cx += self.multiplier * self._incrementer[0]
+            self._a -= self._a / 4
+            self._dh -= self._dh / 4
+            self._cx += self.length + self.length - self.h
+
+        self._vertices = []
+        cx = self._cx
+        cy = self._cy
+        a = self._a
+        dh = self._dh
+
+        print(f'inter type: {self._inter_type}')
+
+        for i in range(3):
+            if self._cycle_breaker:
+                self._cy += self.MAGNITUDE * math.sin(i * math.pi / 2 + self._incrementer[2])
+
+            vertices = self.vertices
+
+            if self._incrementer[3] >= self.TICKS_THRESHOLD:
+                if int(self._incrementer[1]) == i:
+                    arcade.draw_polygon_filled(vertices, arcade.color.RED)
+            elif self._inter_type == InterType.PRESSED:
+                arcade.draw_polygon_filled(vertices, arcade.color.RED)
+            arcade.draw_polygon_outline(vertices, arcade.color.BLACK, self._line_w + (0 if self._inter_type == InterType.NONE else 1))
+
+            if i < 2:
+                decrease_stats()
+
+        self._cx = cx
+        self._cy = cy
+        self._a = a
+        self._dh = dh
+
+    # mouse:
+    def on_motion(self, x, y):
+        if self._inter_type != InterType.PRESSED:
+            # print(f'length: {len(self._vertices)}')
+            if len(self._vertices) == 3:
+                # print(f'self._vertices: {self._vertices}')
+                if reduce(lambda a, b: a or arcade.is_point_in_polygon(x, y, self._vertices[b]), list(range(3)), False):
+                    self._inter_type = InterType.HOVERED
+                else:
+                    self._inter_type = InterType.NONE
+            else:
+                print(f'FAFA')
+
+    def on_press(self, x, y):
+        if len(self._vertices) == 3:
+            if reduce(lambda a, b: a or arcade.is_point_in_polygon(x, y, self._vertices[b]), list(range(3)), False):
+                self._inter_type = InterType.PRESSED
+                self._cycle_breaker = True
+
+    def on_drug(self, x, y):
+        pass
+
+    def on_release(self, x, y):
+        self._inter_type = InterType.NONE
+        self._cycle_breaker = False
+        self._incrementer[3] = 0
+
+    # keys:
+    def on_key_press(self):
+        self._inter_type = InterType.PRESSED
+        self._cycle_breaker = True
+
+    def on_key_release(self):
+        self._inter_type = InterType.NONE
+        self._cycle_breaker = False
+        self._incrementer[3] = 0
+
+
 class GearWheelButton(Icon):
 
     def __init__(self, cx, cy):
-        self._cx = cx
-        self._cy = cy
-        self._incrementer = 0
-        self._inter_type = InterType.NONE
-        self._vertices = []
-
-    @property
-    def incrementer(self):
-        return self._incrementer
-
-    @property
-    def inter_type(self):
-        return self._inter_type
-
-    @property
-    def cx(self):
-        return self._cx
-
-    @property
-    def cy(self):
-        return self._cy
-
-    @property
-    def vertices(self):
-        return self._vertices
+        super().__init__(cx, cy)
 
     def setup(self):
         ...

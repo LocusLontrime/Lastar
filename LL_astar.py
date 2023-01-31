@@ -16,13 +16,14 @@ from collections import deque
 from abc import ABC, abstractmethod
 # windows:
 import pyglet
+from typing_extensions import override
 
 # screen sizes:
 SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1050
 
 
-class Astar(arcade.Window):  # 36 366 98 989 LL
+class Lastar(arcade.Window):  # 36 366 98 989 LL
     # initial directions prority for all algorithms:
     walk = [(1, 0), (0, -1), (-1, 0), (0, 1)]
 
@@ -68,8 +69,9 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         self.tiebreaker_names = {0: 'VECTOR_CROSS', 1: 'COORDINATES'}
         self.greedy_ind = None  # is algorithm greedy?
         self.nodes_to_be_visited = []
-        self.iterations = 0
+
         self.nodes_visited = {}
+        self.iterations = 0
         self.time_elapsed_ms = 0
         # interactive a_star pars:
         self.curr_node_dict = {}
@@ -366,8 +368,8 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         heap.pop()
         if ind < len(heap):
             # as far as it is known, possible to copy the source code from the heapq module... but how to do that?..
-            Astar.siftup(heap, ind)
-            Astar.siftdown(heap, 0, ind)
+            Lastar.siftup(heap, ind)
+            Lastar.siftdown(heap, 0, ind)
 
     # source code from: https://github.com/python/cpython/blob/main/Lib/heapq.py
     @staticmethod
@@ -405,7 +407,7 @@ class Astar(arcade.Window):  # 36 366 98 989 LL
         # The leaf at pos is empty now. Put new item there, and bubble it up
         # to its final resting place (by sifting its parents down).
         heap[pos] = new_item
-        Astar.siftdown(heap, start_pos, pos)
+        Lastar.siftdown(heap, start_pos, pos)
 
     # WAVE LEE LEVI GIN WORK (APPROVED):
     def wave_lee_preparation(self):
@@ -1370,11 +1372,11 @@ class Renderer:
                          center_y - 9, arcade.color.BLACK, line_width=2)
 
     # draws directions priority choosing menu:
-    def draw_arrows_menu(self, x, y, arrow_length, arrow_height, game: Astar):
+    def draw_arrows_menu(self, x, y, arrow_length, arrow_height, game: Lastar):
         arcade.draw_text(f'Directions priority: ', x, y, arcade.color.BLACK,
                          bold=True)
 
-        for dx, dy in Astar.walk:
+        for dx, dy in Lastar.walk:
             self.make_arrow(1755 + dx * arrow_length, 785 + dy * arrow_length, arrow_length,
                             arrow_height, 2,
                             (dx, dy), arcade.color.SANDY_BROWN, game)
@@ -1385,9 +1387,9 @@ class Renderer:
 
     # draws left, right, up or down arrow:
     def make_arrow(self, cx, cy, arrow_length, arrow_height, line_w, point: tuple[int, int],
-                   colour: tuple[int, int, int], game: Astar):
+                   colour: tuple[int, int, int], game: Lastar):
         # index:
-        ind = Astar.walk.index(point)
+        ind = Lastar.walk.index(point)
         # center coords:
         cx_ = cx - point[0] * arrow_height / 2
         cy_ = cy - point[1] * arrow_height / 2
@@ -1418,7 +1420,7 @@ class Renderer:
             game.arrows_vertices = {}
 
         if len(game.arrows_vertices) < 4:
-            game.arrows_vertices[Astar.walk.index(point)] = [
+            game.arrows_vertices[Lastar.walk.index(point)] = [
                 [cx + point[0] * arrow_length / 2, cy + point[1] * arrow_length / 2],
                 [cx + point[0] * _dx + point[1] * arrow_height,
                  cy + point[1] * _dx + point[0] * arrow_height],
@@ -1435,7 +1437,7 @@ class Renderer:
 
     # by default the arrow to be drawn is left sided:
     def create_line_arrow(self, node: 'Node', deltas: tuple[int, int] = (-1, 0),
-                          game: Astar = None):  # left arrow by default
+                          game: Lastar = None):  # left arrow by default
         cx, cy = 5 + node.x * game.tile_size + game.tile_size / 2, 5 + node.y * game.tile_size + game.tile_size / 2
         h = 2 * game.tile_size // 3
         _h, h_, dh = h / 6, h / 3, h / 2  # for 90 degrees triangle
@@ -1455,7 +1457,7 @@ class Renderer:
 
     # draws a spinning gear wheel:
     def draw_gear_wheel(self, cx, cy, rx=32, ry=32, cog_size=8, multiplier=1.5, line_w=2, shift=False, clockwise=True,
-                        game: Astar = None):
+                        game: Lastar = None):
         game.cx, game.cy = cx, cy
         game.hole_rx, game.hole_ry = rx - multiplier * cog_size, ry - multiplier * cog_size
         circumference = math.pi * (rx + ry)  # approximately if cog_size << radius
@@ -1493,7 +1495,7 @@ class Renderer:
                                     line_w + (0 if game.inter_types[0] == InterType.NONE else 1))
 
     # draws round expending waves:
-    def draw_waves(self, cx, cy, size=32, waves_q=5, line_w=2, game: Astar = None):
+    def draw_waves(self, cx, cy, size=32, waves_q=5, line_w=2, game: Lastar = None):
         ds = size / waves_q
         s_list = sorted([(i * ds + game.incrementers[3]) % size for i in range(waves_q)], reverse=True)
         for i, curr_s in enumerate(s_list):
@@ -1503,7 +1505,7 @@ class Renderer:
                                        line_w + (0 if game.inter_types[3] == InterType.NONE else 1))
 
     # draws an a_star label:
-    def draw_a_star(self, cx, cy, size_w, size_h, line_w=2, clockwise=True, game: Astar = None):
+    def draw_a_star(self, cx, cy, size_w, size_h, line_w=2, clockwise=True, game: Lastar = None):
         # drawing A:
         self.draw_a(cx, cy, size_w, size_h, size_w / 3, line_w, game)
         # Star spinning around A:
@@ -1511,7 +1513,7 @@ class Renderer:
                        game=game)
 
     # draws a spinning star:
-    def draw_star(self, cx, cy, vertices=5, r=32, line_w=2, clockwise=True, game: Astar = None):
+    def draw_star(self, cx, cy, vertices=5, r=32, line_w=2, clockwise=True, game: Lastar = None):
         delta_angle = 2 * math.pi / vertices
         d = vertices // 2
         angle = game.incrementers[2] if clockwise else -game.incrementers[2]  # in radians
@@ -1525,7 +1527,7 @@ class Renderer:
             angle += da
 
     # draws 'A' letter:
-    def draw_a(self, cx, cy, length, height, a_w, line_w, game: Astar = None):
+    def draw_a(self, cx, cy, length, height, a_w, line_w, game: Lastar = None):
         upper_hypot = math.sqrt(length ** 2 + height ** 2)
         cos, sin = height / upper_hypot, length / upper_hypot
         line_w_hour_projection = a_w / cos
@@ -1562,7 +1564,7 @@ class Renderer:
             arcade.draw_polygon_outline(a_inner_points, arcade.color.BLACK, line_w + 1)
 
     # simplified version, draws a living BFS/DFS label:
-    def draw_bfs_dfs(self, cx, cy, size, line_w, game: Astar = None):
+    def draw_bfs_dfs(self, cx, cy, size, line_w, game: Lastar = None):
         game.bfs_dfs_cx, game.bfs_dfs_cy = cx, cy
         game.bfs_dfs_size = size
         # filling:
@@ -1674,14 +1676,14 @@ class Node:
 
     # TYPE/SPRITE CHANGE/INIT:
     # makes a solid colour sprite for a node:
-    def get_solid_colour_sprite(self, game: Astar):
+    def get_solid_colour_sprite(self, game: Lastar):
         cx, cy, size, colour = self.get_center_n_sizes(game)
         self.sprite = arcade.SpriteSolidColor(size, size, colour)
         self.sprite.center_x, self.sprite.center_y = cx, cy
         game.node_sprite_list.append(self.sprite)
 
     # aux calculations:
-    def get_center_n_sizes(self, game: Astar):
+    def get_center_n_sizes(self, game: Lastar):
         return (5 + game.tile_size * self.x + game.tile_size / 2,
                 5 + game.tile_size * self.y + game.tile_size / 2,
                 game.tile_size - 2 * game.line_width - (1 if game.line_width % 2 != 0 else 0),
@@ -1692,15 +1694,15 @@ class Node:
         self.sprite.color = self.type.value
 
     # appends the arrow shape of the node to the arrow_shape_list in Astar class
-    def append_arrow(self, game: Astar):
+    def append_arrow(self, game: Lastar):
         game.arrow_shape_list.append(self.arrow_shape)
 
     # removes the arrow shape of the node from the arrow_shape_list in Astar class
-    def remove_arrow(self, game: Astar):
+    def remove_arrow(self, game: Lastar):
         game.arrow_shape_list.remove(self.arrow_shape)
         self.arrow_shape = None
 
-    def remove_arrow_from_shape_list(self, game: 'Astar'):
+    def remove_arrow_from_shape_list(self, game: 'Lastar'):
         game.arrow_shape_list.remove(self.arrow_shape)
 
     def __str__(self):
@@ -1776,7 +1778,7 @@ class Node:
 
     # NEIGHS:
     # gets neighs of the node, now can be set up:
-    def get_neighs(self, game: 'Astar', forbidden_node_types: list['NodeType']):  # has become smarter
+    def get_neighs(self, game: 'Lastar', forbidden_node_types: list['NodeType']):  # has become smarter
         for dy, dx in self.walk:
             ny, nx = self.y + dy, self.x + dx
             if 0 <= ny < game.tiles_q and 0 <= nx < game.hor_tiles_q:
@@ -1785,7 +1787,7 @@ class Node:
                     yield game.grid[ny][nx]
 
     # gets extended neighs (with diagonal ones) of the node, generator:
-    def get_extended_neighs(self, game: 'Astar') -> list['Node']:
+    def get_extended_neighs(self, game: 'Lastar') -> list['Node']:
         for dy, dx in self.extended_walk:
             ny, nx = self.y + dy, self.x + dx
             if 0 <= ny < game.tiles_q and 0 <= nx < game.hor_tiles_q:
@@ -1793,7 +1795,7 @@ class Node:
 
     # PATHFINDING:
     # Witchdoctor's algos:
-    def bfs(self, other: 'Node', game: 'Astar'):  # iterative one:
+    def bfs(self, other: 'Node', game: 'Lastar'):  # iterative one:
         queue = deque()
         queue.append(self)
         while queue:
@@ -1819,7 +1821,7 @@ class Node:
                     queue.append(neigh)
 
     # finished, tested and approved by Levi Gin:
-    def wave_lee(self, other: 'Node', game: 'Astar'):  # TODO: make it MORE INFORMATIVE:::
+    def wave_lee(self, other: 'Node', game: 'Lastar'):  # TODO: make it MORE INFORMATIVE:::
         # other.get_neighs(game)  # Why is it necessary???
         front_wave = {self}
         iteration = 0
@@ -1843,7 +1845,7 @@ class Node:
         return []
 
     # a common a_star:
-    def a_star(self, other: 'Node', game: 'Astar'):
+    def a_star(self, other: 'Node', game: 'Lastar'):
         Node.IS_GREEDY = False if game.greedy_ind is None else True
         # game.get_all_neighs()
         nodes_to_be_visited = [self]
@@ -1891,12 +1893,21 @@ class Node:
 
 # class representing an algo:
 class Algorithm(ABC):
-    def __init__(self, name):
+    def __init__(self, name: str, start: Node, end: Node, game: Lastar):
         self._name = name
         self._menu = None  # ??? Class Menu or aggregated Icon ???
+        self.start_node = start
+        self.end_node = end
+        self.game = game
 
     @abstractmethod
+    def prepare(self):
+        ...
+
     def path_up(self):
+        ...
+
+    def recover_path(self):
         ...
 
     @abstractmethod
@@ -1914,6 +1925,309 @@ class Algorithm(ABC):
     @abstractmethod
     def full_algo(self):
         ...
+
+
+class Astar(Algorithm):
+
+    def __init__(self, start, end, game):
+        super().__init__('Astar', start, end, game)
+        # path:
+        self.path = None
+        self.path_index = 0
+        # visualization:
+        self.triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
+        self.arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
+        # a_star important pars:
+        # 1. important nodes:
+        self.start_node = None
+        self.end_node = None
+        # 2. a_star_settings:
+        self.heuristic = 0
+        self.heuristic_names = {0: 'MANHATTAN', 1: 'EUCLIDIAN', 2: 'MAX_DELTA', 3: 'DIJKSTRA'}
+        self.tiebreaker = None
+        self.tiebreaker_names = {0: 'VECTOR_CROSS', 1: 'COORDINATES'}
+        self.greedy_ind = None  # is algorithm greedy?
+        # 3. visiting:
+        self.nodes_to_be_visited = []
+        self.nodes_visited = {}
+        # 4. iterations and time:
+        self.iterations = 0
+        self.time_elapsed_ms = 0
+        # 5. interactive a_star pars:
+        self.curr_node_dict = {}
+        self.max_times_visited_dict = {0: 0}
+        self.neighs_added_to_heap_dict = {}
+
+    def prepare(self):
+        # heap:
+        self.nodes_to_be_visited = [self.start_node]
+        hq.heapify(self.nodes_to_be_visited)
+        # heur/cost:
+        self.start_node.g = 0
+        # transmitting the greedy flag to the Node class: TODO: fix this strange doing <<--
+        Node.IS_GREEDY = False if self.greedy_ind is None else True
+        # important pars and dicts:
+        self.iterations = 0
+        self.neighs_added_to_heap_dict = {0: [self.start_node]}
+        self.curr_node_dict = {0: None}
+        self.max_times_visited_dict = {0: 0}
+        # path nullifying:
+        self.path = None
+        # lockers locating:
+        self.game.in_interaction_mode_lock = True
+        self.game.greedy_flag_lock = True
+        self.game.heuristic_lock = True
+        self.game.tiebreakers_lock = True
+        self.game.scale_lock = True
+        self.game.bfs_dfs_lock = True
+        # arrows list renewal:
+        self.arrow_shape_list = arcade.ShapeElementList()
+
+    @override
+    def recover_path(self):
+        # start point of path restoration (here we begin from the end node of the shortest path found):
+        node = self.end_node
+        shortest_path = []
+        # path restoring (here we get the reversed path):
+        while node.previously_visited_node:
+            shortest_path.append(node)
+            node = node.previously_visited_node
+        shortest_path.append(self.start_node)
+        # returns the result:
+        return shortest_path
+
+    @override
+    def path_up(self):
+        if (path_node := self.path[self.path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
+            path_node.type = NodeType.PATH_NODE
+            path_node.update_sprite_colour()
+        # arrows:
+        p = -self.path[self.path_index + 1].x + self.path[self.path_index].x, \
+            -self.path[self.path_index + 1].y + self.path[self.path_index].y
+        p1, p2, p3 = self.game.get_triangle(self.path[self.path_index + 1], p)
+        triangle_shape = arcade.create_triangles_filled_with_colors(
+            [p1, p2, p3],
+            [arcade.color.WHITE, arcade.color.RED, arcade.color.RED])
+        self.triangle_shape_list.append(triangle_shape)
+        # line arrows removing:
+        node = self.path[self.path_index + 1]
+        # if self.inter_types[2] == InterType.PRESSED:
+        if node not in [self.start_node, self.end_node]:
+            node.remove_arrow_from_shape_list(self.game)
+
+    def path_down(self):
+        if (path_node := self.path[self.path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
+            path_node.type = NodeType.VISITED_NODE
+            path_node.update_sprite_colour()
+        # arrows:
+        self.triangle_shape_list.remove(self.triangle_shape_list[self.path_index - 1])
+        # line arrows restoring:
+        # if self.inter_types[2] == InterType.PRESSED:
+        if path_node not in [self.start_node, self.end_node]:
+            path_node.append_arrow(self.game)
+
+    def algo_up(self):
+        if self.iterations == 0:
+            self.nodes_to_be_visited = [self.start_node]
+        self.neighs_added_to_heap_dict[self.iterations + 1] = []  # memoization
+        # popping out the most priority node for a_star from the heap:
+        self.curr_node_dict[self.iterations + 1] = hq.heappop(self.nodes_to_be_visited)  # + memoization
+        curr_node = self.curr_node_dict[self.iterations + 1]
+        if self.iterations > 0 and curr_node != self.end_node:
+            curr_node.type = NodeType.CURRENT_NODE
+            curr_node.update_sprite_colour()
+        curr_node.times_visited += 1
+        if self.iterations > 1:
+            if (prev_node := self.curr_node_dict[self.iterations]).type not in [NodeType.END_NODE,
+                                                                                NodeType.TWICE_VISITED]:
+                prev_node.type = NodeType.VISITED_NODE
+                prev_node.update_sprite_colour()
+        self.max_times_visited_dict[self.iterations + 1] = max(self.max_times_visited_dict[self.iterations],
+                                                               # memoization
+                                                               curr_node.times_visited)
+        # memoization for correct movement back:
+        if curr_node in self.nodes_visited.keys():
+            self.nodes_visited[curr_node] += 1
+            curr_node.type = NodeType.TWICE_VISITED
+            curr_node.update_sprite_colour()
+        else:
+            self.nodes_visited[curr_node] = 1
+        # base case of finding the shortest path:
+        if curr_node == self.end_node:
+            self.path = self.recover_path()
+        # next step:
+        # we can search for neighs on the fly or use precalculated sets (outdated):
+        for neigh in curr_node.get_neighs(self.game, [NodeType.WALL]):  # getting all the neighs 'on the fly;
+            if neigh.g > curr_node.g + neigh.val:
+                # memoization for further 'undoing':
+                self.neighs_added_to_heap_dict[self.iterations + 1].append(
+                    neigh.smart_copy(
+                        [
+                            'g',
+                            'h',
+                            'tiebreaker',
+                            'type',
+                            'previously_visited_node'
+                        ]
+                    )
+                )
+                # cost and heuristic computing:
+                neigh.g = curr_node.g + neigh.val
+                neigh.h = neigh.heuristics[self.heuristic](neigh, self.end_node)
+                # tie-breaking:
+                if self.tiebreaker is not None:
+                    neigh.tiebreaker = self.start_node.tiebreakers[self.tiebreaker](
+                        self.start_node, self.end_node, neigh)
+                # previous visited node memoization for further path-recovering process:
+                neigh.previously_visited_node = curr_node
+                if neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:  # neigh not in self.nodes_visited and
+                    neigh.type = NodeType.NEIGH
+                    neigh.update_sprite_colour()
+                    arrow = self.game.renderer.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y),
+                                                                 self.game)
+                    # here the arrow rotates (re-estimating of neigh g-cost):
+                    if neigh.arrow_shape is not None:
+                        neigh.remove_arrow(self.game)
+                    neigh.arrow_shape = arrow
+                    neigh.append_arrow(self.game)
+                # adding all the valid neighs to the priority heap:
+                hq.heappush(self.nodes_to_be_visited, neigh)
+        # incrementation:
+        self.iterations += 1
+
+    def algo_down(self):
+        # getting the previous current node from memo table:
+        curr_node = self.curr_node_dict[self.iterations]
+        if self.iterations > 1:  # stop condition for preventing the border case errors
+            # times visited counter and colour 'backtracking':
+            curr_node.times_visited -= 1
+            if curr_node.times_visited == 0:
+                if curr_node.type != NodeType.END_NODE:
+                    curr_node.type = NodeType.NEIGH
+                    curr_node.update_sprite_colour()
+            elif curr_node.times_visited == 1:
+                curr_node.type = NodeType.VISITED_NODE
+                curr_node.update_sprite_colour()
+            else:
+                curr_node.type = NodeType.TWICE_VISITED
+                curr_node.update_sprite_colour()
+            if self.iterations > 2:
+                self.curr_node_dict[self.iterations - 1].type = NodeType.CURRENT_NODE
+                self.curr_node_dict[self.iterations - 1].update_sprite_colour()
+        if self.iterations > 0:
+            # removing the current node from nodes visited:
+            if self.nodes_visited[curr_node] > 1:
+                self.nodes_visited[curr_node] -= 1
+            else:
+                self.nodes_visited.pop(curr_node)
+            # removing the neighs added from the heap:
+            for neigh in self.neighs_added_to_heap_dict[self.iterations]:
+                y, x = neigh.y, neigh.x
+                node = self.game.grid[y][x]
+                Node.aux_equal_flag = True
+                self.remove_from_heapq(self.nodes_to_be_visited, self.nodes_to_be_visited.index(node))
+                Node.aux_equal_flag = False
+                node.smart_restore(
+                    neigh,
+                    [
+                        'g',
+                        'h',
+                        'tiebreaker',
+                        'type',
+                        'previously_visited_node'
+                    ]
+                )
+                if node.type not in [NodeType.START_NODE, NodeType.END_NODE]:
+                    if node.arrow_shape is not None:
+                        node.remove_arrow(self.game)
+                if node.type == NodeType.NEIGH:
+                    # here the arrow rotates backwards:
+                    arrow = self.game.renderer.create_line_arrow(node, (
+                        node.x - node.previously_visited_node.x, node.y - node.previously_visited_node.y), self.game)
+                    node.arrow_shape = arrow
+                    node.append_arrow(self.game)
+            # adding current node (popped out at the current iteration) to the heap:
+            hq.heappush(self.nodes_to_be_visited, curr_node)
+            # iteration steps back:
+            self.iterations -= 1
+
+    @staticmethod
+    def remove_from_heapq(heap, ind: int):
+        heap[ind] = heap[-1]
+        heap.pop()
+        if ind < len(heap):
+            # as far as it is known, possible to copy the source code from the heapq module... but how to do that?..
+            Lastar.siftup(heap, ind)
+            Lastar.siftdown(heap, 0, ind)
+
+    # source code from: https://github.com/python/cpython/blob/main/Lib/heapq.py
+    @staticmethod
+    def siftdown(heap, start_pos, pos):
+        new_item = heap[pos]
+        # Follow the path to the root, moving parents down until finding a place
+        # new item fits.
+        while pos > start_pos:
+            parent_pos = (pos - 1) >> 1
+            parent = heap[parent_pos]
+            if new_item < parent:
+                heap[pos] = parent
+                pos = parent_pos
+                continue
+            break
+        heap[pos] = new_item
+
+    # source code from: https://github.com/python/cpython/blob/main/Lib/heapq.py
+    @staticmethod
+    def siftup(heap, pos):
+        end_pos = len(heap)
+        start_pos = pos
+        new_item = heap[pos]
+        # Bubble up the smaller child until hitting a leaf.
+        child_pos = 2 * pos + 1  # leftmost child position
+        while child_pos < end_pos:
+            # Set child pos to index of smaller child.
+            right_pos = child_pos + 1
+            if right_pos < end_pos and not heap[child_pos] < heap[right_pos]:
+                child_pos = right_pos
+            # Move the smaller child up.
+            heap[pos] = heap[child_pos]
+            pos = child_pos
+            child_pos = 2 * pos + 1
+        # The leaf at pos is empty now. Put new item there, and bubble it up
+        # to its final resting place (by sifting its parents down).
+        heap[pos] = new_item
+        Lastar.siftdown(heap, start_pos, pos)
+
+    def full_algo(self):
+        # False if game.greedy_ind is None else True
+        self.nodes_to_be_visited = [self.start_node]
+        self.start_node.g = 0
+        hq.heapify(self.nodes_to_be_visited)
+        max_times_visited = 0
+        # the main cycle:
+        while self.nodes_to_be_visited:
+            self.game.iterations += 1
+            curr_node = hq.heappop(self.nodes_to_be_visited)
+            if curr_node not in [self.start_node, self.end_node]:
+                curr_node.type = NodeType.VISITED_NODE
+                curr_node.update_sprite_colour()
+            curr_node.times_visited += 1
+            max_times_visited = max(max_times_visited, curr_node.times_visited)
+            self.game.nodes_visited[curr_node] = 1
+            # base case of finding the shortest path:
+            if curr_node == self.end_node:
+                break
+            # next step:
+            for neigh in curr_node.get_neighs(self.game, [NodeType.WALL]):
+                if neigh.g > curr_node.g + neigh.val:
+                    neigh.g = curr_node.g + neigh.val
+                    neigh.h = neigh.heuristics[self.game.heuristic](neigh, self.end_node)
+                    if self.game.tiebreaker is not None:
+                        neigh.tiebreaker = self.start_node.tiebreakers[self.game.tiebreaker](self, self.end_node,
+                                                                                             neigh)
+                    neigh.previously_visited_node = curr_node
+                    hq.heappush(self.nodes_to_be_visited, neigh)
+        self.game.max_times_visited = max_times_visited
 
 
 # class for design element:
@@ -2373,7 +2687,7 @@ class MenuType(Enum):
 # the main method for a game run:
 def main():
     # line_width par should be even number for correct grid&nodes representation:
-    game = Astar(SCREEN_WIDTH, SCREEN_HEIGHT)
+    game = Lastar(SCREEN_WIDTH, SCREEN_HEIGHT)
     game.setup()
     arcade.run()
 

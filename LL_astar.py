@@ -132,13 +132,12 @@ class Lastar(arcade.Window):  # 36 366 98 989 LL
         self.next_wave_lee = []
         self.iterations_wave_lee = 0  # TODO: to be deleted!!!
         self.fronts_dict = {}
-        self.curr_node_wave_lee = None
         # BFS/DFS:
         self.bfs_dfs_ind = 0
         self.queue = deque()
         # imported classes' objects:
         # self.cleaner = Cleaner(self)
-        self.renderer = Renderer()
+        self.renderer = DrawLib()
         # ICONS:
         self.play_button = PlayButton(1785 + 6, 50, 32, 2)
 
@@ -149,6 +148,8 @@ class Lastar(arcade.Window):  # 36 366 98 989 LL
 
         self.undo = Undo(1785 + 6 - 75, 125, 24, 8, 12, 2)
         self.redo = Undo(1785 + 6 + 75, 125, 24, 8, 12, 2, True)
+        # ALGOS:
+        self.astar = Astar
 
     # INITIALIZATION AUX:
     # calculating grid visualization pars for vertical tiles number given:
@@ -415,7 +416,6 @@ class Lastar(arcade.Window):  # 36 366 98 989 LL
         self.front_wave_lee = []
         self.next_wave_lee = [self.start_node]
         self.start_node.val = 1  # ??? what about clearing?
-        self.curr_node_wave_lee = self.end_node
         # variable ones:
         self.iterations_wave_lee = 0
         self.fronts_dict = {}
@@ -1314,11 +1314,7 @@ class Lastar(arcade.Window):  # 36 366 98 989 LL
         return (finish - start) // 10 ** 6
 
 
-class Processor:
-    ...
-
-
-class Renderer:
+class DrawLib:
 
     def __init__(self):
         self._sq_size = 18
@@ -1609,6 +1605,25 @@ class Renderer:
         ...
 
 
+class Grid:
+    def __init__(self):
+        ...
+
+    def clear_empty_nodes(self):
+        ...
+
+    def clear_grid(self):
+        ...
+
+    def aux_clear(self):
+        ...
+
+
+class Builder:
+    def __init__(self):
+        ...
+
+
 # class for a node representation:
 class Node:
     # horizontal and vertical up and down moves:
@@ -1893,26 +1908,81 @@ class Node:
 
 # class representing an algo:
 class Algorithm(ABC):
-    def __init__(self, name: str, start: Node, end: Node, game: Lastar):
+    def __init__(self, name: str, game: Lastar):
+        # info:
         self._name = name
-        self._menu = None  # ??? Class Menu or aggregated Icon ???
-        self.start_node = start
-        self.end_node = end
-        self.game = game
+        # visual:
+        self._icon = None
+        self._menu = None
+        # visualization:
+        self._triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
+        self._arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
+        # important nodes:
+        self._start_node = None
+        self._end_node = None
+        # path:
+        self._path = None
+        self._path_index = 0
+        # iterations and time:
+        self._iterations = 0
+        self._time_elapsed_ms = 0
+        # game-link:
+        self._game = game
+
+    def set_icon(self, icon):
+        self._icon = icon
+
+    def set_menu(self, menu):
+        self._menu = menu
+
+    def refresh_important_nodes(self, start: Node, end: Node):
+        self._start_node = start
+        self._end_node = end
 
     @abstractmethod
     def prepare(self):
         ...
 
     def path_up(self):
-        ...
+        if (path_node := self._path[self._path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
+            path_node.type = NodeType.PATH_NODE
+            path_node.update_sprite_colour()
+        # arrows:
+        p = -self._path[self._path_index + 1].x + self._path[self._path_index].x, \
+            -self._path[self._path_index + 1].y + self._path[self._path_index].y
+        p1, p2, p3 = self.get_triangle(self._path[self._path_index + 1], p)
+        triangle_shape = arcade.create_triangles_filled_with_colors(
+            [p1, p2, p3],
+            [arcade.color.WHITE, arcade.color.RED, arcade.color.RED])
+        self._triangle_shape_list.append(triangle_shape)
+        # line arrows removing:
+        node = self._path[self._path_index + 1]
+        # if self.inter_types[2] == InterType.PRESSED:
+        if node not in [self._start_node, self._end_node]:
+            node.remove_arrow_from_shape_list(self)
 
+    # path-recovering process for interactive a_star:
     def recover_path(self):
-        ...
+        # start point of path restoration (here we begin from the end node of the shortest path found):
+        node = self._end_node
+        shortest_path = []
+        # path restoring (here we get the reversed path):
+        while node.previously_visited_node:
+            shortest_path.append(node)
+            node = node.previously_visited_node
+        shortest_path.append(self._start_node)
+        # returns the result:
+        return shortest_path
 
-    @abstractmethod
     def path_down(self):
-        ...
+        if (path_node := self._path[self._path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
+            path_node.type = NodeType.VISITED_NODE
+            path_node.update_sprite_colour()
+            # arrows:
+        self._triangle_shape_list.remove(self._triangle_shape_list[self._path_index - 1])
+        # line arrows restoring:
+        if path_node not in [self._start_node, self._end_node]:
+            path_node.append_arrow(self._game)
 
     @abstractmethod
     def algo_up(self):
@@ -1926,141 +1996,113 @@ class Algorithm(ABC):
     def full_algo(self):
         ...
 
+    # triangle points getting:
+    def get_triangle(self, node: 'Node', point: tuple[int, int]):
+        scaled_point = point[0] * (self._game.tile_size // 2 - 2), point[1] * (self._game.tile_size // 2 - 2)
+        deltas = (
+            (
+                scaled_point[0] - scaled_point[1],
+                scaled_point[0] + scaled_point[1]
+            ),
+            (
+                scaled_point[0] + scaled_point[1],
+                -scaled_point[0] + scaled_point[1]
+            )
+        )
+        cx, cy = 5 + node.x * self._game.tile_size + self._game.tile_size / 2, \
+                 5 + node.y * self._game.tile_size + self._game.tile_size / 2
+        return (cx, cy), (cx + deltas[0][0], cy + deltas[0][1]), (cx + deltas[1][0], cy + deltas[1][1])
+
 
 class Astar(Algorithm):
 
-    def __init__(self, start, end, game):
-        super().__init__('Astar', start, end, game)
-        # path:
-        self.path = None
-        self.path_index = 0
-        # visualization:
-        self.triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
-        self.arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
+    def __init__(self, game):
+        super().__init__('Astar', game)
+        # visualization (made in super __init__()):
+        # self._triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
+        # self._arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
+        # path (made in super __init__()):
+        # self._path = None
+        # self._path_index = 0
         # a_star important pars:
-        # 1. important nodes:
-        self.start_node = None
-        self.end_node = None
+        # 1. important nodes (made in super __init__()):
+        # self._start_node = None
+        # self._end_node = None
         # 2. a_star_settings:
-        self.heuristic = 0
-        self.heuristic_names = {0: 'MANHATTAN', 1: 'EUCLIDIAN', 2: 'MAX_DELTA', 3: 'DIJKSTRA'}
-        self.tiebreaker = None
-        self.tiebreaker_names = {0: 'VECTOR_CROSS', 1: 'COORDINATES'}
-        self.greedy_ind = None  # is algorithm greedy?
+        self._heuristic = 0
+        self._heuristic_names = {0: 'MANHATTAN', 1: 'EUCLIDIAN', 2: 'MAX_DELTA', 3: 'DIJKSTRA'}
+        self._tiebreaker = None
+        self._tiebreaker_names = {0: 'VECTOR_CROSS', 1: 'COORDINATES'}
+        self._greedy_ind = None  # is algorithm greedy?
+        self._greedy_names = {0: 'IS_GREEDY'}
         # 3. visiting:
-        self.nodes_to_be_visited = []
-        self.nodes_visited = {}
-        # 4. iterations and time:
-        self.iterations = 0
-        self.time_elapsed_ms = 0
+        self._nodes_to_be_visited = []
+        self._nodes_visited = {}
+        # 4. iterations and time (made in super __init__()):
+        # self._iterations = 0
+        # self._time_elapsed_ms = 0
         # 5. interactive a_star pars:
-        self.curr_node_dict = {}
-        self.max_times_visited_dict = {0: 0}
-        self.neighs_added_to_heap_dict = {}
+        self._curr_node_dict = {}
+        self._max_times_visited_dict = {0: 0}
+        self._neighs_added_to_heap_dict = {}
 
     def prepare(self):
         # heap:
-        self.nodes_to_be_visited = [self.start_node]
-        hq.heapify(self.nodes_to_be_visited)
+        self._nodes_to_be_visited = [self._start_node]
+        hq.heapify(self._nodes_to_be_visited)
         # heur/cost:
-        self.start_node.g = 0
+        self._start_node.g = 0
         # transmitting the greedy flag to the Node class: TODO: fix this strange doing <<--
-        Node.IS_GREEDY = False if self.greedy_ind is None else True
+        Node.IS_GREEDY = False if self._greedy_ind is None else True
         # important pars and dicts:
-        self.iterations = 0
-        self.neighs_added_to_heap_dict = {0: [self.start_node]}
-        self.curr_node_dict = {0: None}
-        self.max_times_visited_dict = {0: 0}
+        self._iterations = 0
+        self._neighs_added_to_heap_dict = {0: [self._start_node]}
+        self._curr_node_dict = {0: None}
+        self._max_times_visited_dict = {0: 0}
         # path nullifying:
-        self.path = None
-        # lockers locating:
-        self.game.in_interaction_mode_lock = True
-        self.game.greedy_flag_lock = True
-        self.game.heuristic_lock = True
-        self.game.tiebreakers_lock = True
-        self.game.scale_lock = True
-        self.game.bfs_dfs_lock = True
+        self._path = None
+        # lockers locating: TODO: should be relocated to Menu __init__() logic:
+        for area in self._menu.areas:
+            area.unlock()
+        # SETTINGS menu should be closed during the algo's interactive phase!!!
         # arrows list renewal:
-        self.arrow_shape_list = arcade.ShapeElementList()
-
-    @override
-    def recover_path(self):
-        # start point of path restoration (here we begin from the end node of the shortest path found):
-        node = self.end_node
-        shortest_path = []
-        # path restoring (here we get the reversed path):
-        while node.previously_visited_node:
-            shortest_path.append(node)
-            node = node.previously_visited_node
-        shortest_path.append(self.start_node)
-        # returns the result:
-        return shortest_path
-
-    @override
-    def path_up(self):
-        if (path_node := self.path[self.path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
-            path_node.type = NodeType.PATH_NODE
-            path_node.update_sprite_colour()
-        # arrows:
-        p = -self.path[self.path_index + 1].x + self.path[self.path_index].x, \
-            -self.path[self.path_index + 1].y + self.path[self.path_index].y
-        p1, p2, p3 = self.game.get_triangle(self.path[self.path_index + 1], p)
-        triangle_shape = arcade.create_triangles_filled_with_colors(
-            [p1, p2, p3],
-            [arcade.color.WHITE, arcade.color.RED, arcade.color.RED])
-        self.triangle_shape_list.append(triangle_shape)
-        # line arrows removing:
-        node = self.path[self.path_index + 1]
-        # if self.inter_types[2] == InterType.PRESSED:
-        if node not in [self.start_node, self.end_node]:
-            node.remove_arrow_from_shape_list(self.game)
-
-    def path_down(self):
-        if (path_node := self.path[self.path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
-            path_node.type = NodeType.VISITED_NODE
-            path_node.update_sprite_colour()
-        # arrows:
-        self.triangle_shape_list.remove(self.triangle_shape_list[self.path_index - 1])
-        # line arrows restoring:
-        # if self.inter_types[2] == InterType.PRESSED:
-        if path_node not in [self.start_node, self.end_node]:
-            path_node.append_arrow(self.game)
+        self._arrow_shape_list = arcade.ShapeElementList()
 
     def algo_up(self):
-        if self.iterations == 0:
-            self.nodes_to_be_visited = [self.start_node]
-        self.neighs_added_to_heap_dict[self.iterations + 1] = []  # memoization
+        if self._iterations == 0:
+            self._nodes_to_be_visited = [self._start_node]
+        self._neighs_added_to_heap_dict[self._iterations + 1] = []  # memoization
         # popping out the most priority node for a_star from the heap:
-        self.curr_node_dict[self.iterations + 1] = hq.heappop(self.nodes_to_be_visited)  # + memoization
-        curr_node = self.curr_node_dict[self.iterations + 1]
-        if self.iterations > 0 and curr_node != self.end_node:
+        self._curr_node_dict[self._iterations + 1] = hq.heappop(self._nodes_to_be_visited)  # + memoization
+        curr_node = self._curr_node_dict[self._iterations + 1]
+        if self._iterations > 0 and curr_node != self._end_node:
             curr_node.type = NodeType.CURRENT_NODE
             curr_node.update_sprite_colour()
         curr_node.times_visited += 1
-        if self.iterations > 1:
-            if (prev_node := self.curr_node_dict[self.iterations]).type not in [NodeType.END_NODE,
-                                                                                NodeType.TWICE_VISITED]:
+        if self._iterations > 1:
+            if (prev_node := self._curr_node_dict[self._iterations]).type not in [NodeType.END_NODE,
+                                                                                  NodeType.TWICE_VISITED]:
                 prev_node.type = NodeType.VISITED_NODE
                 prev_node.update_sprite_colour()
-        self.max_times_visited_dict[self.iterations + 1] = max(self.max_times_visited_dict[self.iterations],
-                                                               # memoization
-                                                               curr_node.times_visited)
+        self._max_times_visited_dict[self._iterations + 1] = max(self._max_times_visited_dict[self._iterations],
+                                                                 # memoization
+                                                                 curr_node.times_visited)
         # memoization for correct movement back:
-        if curr_node in self.nodes_visited.keys():
-            self.nodes_visited[curr_node] += 1
+        if curr_node in self._nodes_visited.keys():
+            self._nodes_visited[curr_node] += 1
             curr_node.type = NodeType.TWICE_VISITED
             curr_node.update_sprite_colour()
         else:
-            self.nodes_visited[curr_node] = 1
+            self._nodes_visited[curr_node] = 1
         # base case of finding the shortest path:
-        if curr_node == self.end_node:
-            self.path = self.recover_path()
+        if curr_node == self._end_node:
+            self._path = self.recover_path()
         # next step:
         # we can search for neighs on the fly or use precalculated sets (outdated):
-        for neigh in curr_node.get_neighs(self.game, [NodeType.WALL]):  # getting all the neighs 'on the fly;
+        for neigh in curr_node.get_neighs(self._game, [NodeType.WALL]):  # getting all the neighs 'on the fly;
             if neigh.g > curr_node.g + neigh.val:
                 # memoization for further 'undoing':
-                self.neighs_added_to_heap_dict[self.iterations + 1].append(
+                self._neighs_added_to_heap_dict[self._iterations + 1].append(
                     neigh.smart_copy(
                         [
                             'g',
@@ -2073,32 +2115,32 @@ class Astar(Algorithm):
                 )
                 # cost and heuristic computing:
                 neigh.g = curr_node.g + neigh.val
-                neigh.h = neigh.heuristics[self.heuristic](neigh, self.end_node)
+                neigh.h = neigh.heuristics[self._heuristic](neigh, self._end_node)
                 # tie-breaking:
-                if self.tiebreaker is not None:
-                    neigh.tiebreaker = self.start_node.tiebreakers[self.tiebreaker](
-                        self.start_node, self.end_node, neigh)
+                if self._tiebreaker is not None:
+                    neigh.tiebreaker = self._start_node.tiebreakers[self._tiebreaker](
+                        self._start_node, self._end_node, neigh)
                 # previous visited node memoization for further path-recovering process:
                 neigh.previously_visited_node = curr_node
                 if neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:  # neigh not in self.nodes_visited and
                     neigh.type = NodeType.NEIGH
                     neigh.update_sprite_colour()
-                    arrow = self.game.renderer.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y),
-                                                                 self.game)
+                    arrow = self._game.renderer.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y),
+                                                                  self._game)
                     # here the arrow rotates (re-estimating of neigh g-cost):
                     if neigh.arrow_shape is not None:
-                        neigh.remove_arrow(self.game)
+                        neigh.remove_arrow(self._game)
                     neigh.arrow_shape = arrow
-                    neigh.append_arrow(self.game)
+                    neigh.append_arrow(self._game)
                 # adding all the valid neighs to the priority heap:
-                hq.heappush(self.nodes_to_be_visited, neigh)
+                hq.heappush(self._nodes_to_be_visited, neigh)
         # incrementation:
-        self.iterations += 1
+        self._iterations += 1
 
     def algo_down(self):
         # getting the previous current node from memo table:
-        curr_node = self.curr_node_dict[self.iterations]
-        if self.iterations > 1:  # stop condition for preventing the border case errors
+        curr_node = self._curr_node_dict[self._iterations]
+        if self._iterations > 1:  # stop condition for preventing the border case errors
             # times visited counter and colour 'backtracking':
             curr_node.times_visited -= 1
             if curr_node.times_visited == 0:
@@ -2111,21 +2153,21 @@ class Astar(Algorithm):
             else:
                 curr_node.type = NodeType.TWICE_VISITED
                 curr_node.update_sprite_colour()
-            if self.iterations > 2:
-                self.curr_node_dict[self.iterations - 1].type = NodeType.CURRENT_NODE
-                self.curr_node_dict[self.iterations - 1].update_sprite_colour()
-        if self.iterations > 0:
+            if self._iterations > 2:
+                self._curr_node_dict[self._iterations - 1].type = NodeType.CURRENT_NODE
+                self._curr_node_dict[self._iterations - 1].update_sprite_colour()
+        if self._iterations > 0:
             # removing the current node from nodes visited:
-            if self.nodes_visited[curr_node] > 1:
-                self.nodes_visited[curr_node] -= 1
+            if self._nodes_visited[curr_node] > 1:
+                self._nodes_visited[curr_node] -= 1
             else:
-                self.nodes_visited.pop(curr_node)
+                self._nodes_visited.pop(curr_node)
             # removing the neighs added from the heap:
-            for neigh in self.neighs_added_to_heap_dict[self.iterations]:
+            for neigh in self._neighs_added_to_heap_dict[self._iterations]:
                 y, x = neigh.y, neigh.x
-                node = self.game.grid[y][x]
+                node = self._game.grid[y][x]
                 Node.aux_equal_flag = True
-                self.remove_from_heapq(self.nodes_to_be_visited, self.nodes_to_be_visited.index(node))
+                self.remove_from_heapq(self._nodes_to_be_visited, self._nodes_to_be_visited.index(node))
                 Node.aux_equal_flag = False
                 node.smart_restore(
                     neigh,
@@ -2139,17 +2181,17 @@ class Astar(Algorithm):
                 )
                 if node.type not in [NodeType.START_NODE, NodeType.END_NODE]:
                     if node.arrow_shape is not None:
-                        node.remove_arrow(self.game)
+                        node.remove_arrow(self._game)
                 if node.type == NodeType.NEIGH:
                     # here the arrow rotates backwards:
-                    arrow = self.game.renderer.create_line_arrow(node, (
+                    arrow = self._game.renderer.create_line_arrow(node, (
                         node.x - node.previously_visited_node.x, node.y - node.previously_visited_node.y), self.game)
                     node.arrow_shape = arrow
-                    node.append_arrow(self.game)
+                    node.append_arrow(self._game)
             # adding current node (popped out at the current iteration) to the heap:
-            hq.heappush(self.nodes_to_be_visited, curr_node)
+            hq.heappush(self._nodes_to_be_visited, curr_node)
             # iteration steps back:
-            self.iterations -= 1
+            self._iterations -= 1
 
     @staticmethod
     def remove_from_heapq(heap, ind: int):
@@ -2200,34 +2242,374 @@ class Astar(Algorithm):
 
     def full_algo(self):
         # False if game.greedy_ind is None else True
-        self.nodes_to_be_visited = [self.start_node]
-        self.start_node.g = 0
-        hq.heapify(self.nodes_to_be_visited)
+        self._nodes_to_be_visited = [self._start_node]
+        self._start_node.g = 0
+        hq.heapify(self._nodes_to_be_visited)
         max_times_visited = 0
         # the main cycle:
-        while self.nodes_to_be_visited:
-            self.game.iterations += 1
-            curr_node = hq.heappop(self.nodes_to_be_visited)
-            if curr_node not in [self.start_node, self.end_node]:
+        while self._nodes_to_be_visited:
+            self._game.iterations += 1
+            curr_node = hq.heappop(self._nodes_to_be_visited)
+            if curr_node not in [self._start_node, self._end_node]:
                 curr_node.type = NodeType.VISITED_NODE
                 curr_node.update_sprite_colour()
             curr_node.times_visited += 1
             max_times_visited = max(max_times_visited, curr_node.times_visited)
-            self.game.nodes_visited[curr_node] = 1
+            self._game.nodes_visited[curr_node] = 1
             # base case of finding the shortest path:
-            if curr_node == self.end_node:
+            if curr_node == self._end_node:
                 break
             # next step:
-            for neigh in curr_node.get_neighs(self.game, [NodeType.WALL]):
+            for neigh in curr_node.get_neighs(self._game, [NodeType.WALL]):
                 if neigh.g > curr_node.g + neigh.val:
                     neigh.g = curr_node.g + neigh.val
-                    neigh.h = neigh.heuristics[self.game.heuristic](neigh, self.end_node)
-                    if self.game.tiebreaker is not None:
-                        neigh.tiebreaker = self.start_node.tiebreakers[self.game.tiebreaker](self, self.end_node,
-                                                                                             neigh)
+                    neigh.h = neigh.heuristics[self._game.heuristic](neigh, self._end_node)
+                    if self._game.tiebreaker is not None:
+                        neigh.tiebreaker = self._start_node.tiebreakers[self._game.tiebreaker](self, self._end_node,
+                                                                                               neigh)
                     neigh.previously_visited_node = curr_node
-                    hq.heappush(self.nodes_to_be_visited, neigh)
-        self.game.max_times_visited = max_times_visited
+                    hq.heappush(self._nodes_to_be_visited, neigh)
+        self._game.max_times_visited = max_times_visited
+
+
+class WaveLee(Algorithm):
+    def __init__(self, game: Lastar):
+        super().__init__('WaveLee', game)
+        # wave lee algo's important pars:
+        self._front_wave_lee = None
+        self._next_wave_lee = None
+        self._fronts_dict = None
+        self._iterations = 0
+
+    def prepare(self):
+        # starting attributes' values:
+        self._front_wave_lee = []
+        self._next_wave_lee = [self._start_node]
+        # self._start_node.val = 1  # node.val must not be changed during the algo's interactive phase!!!
+        self._iterations = 0
+        self._fronts_dict = {}
+
+    def algo_up(self):
+        self._iterations += 1
+        self._front_wave_lee = self._next_wave_lee[:]
+        self._fronts_dict[self._iterations] = self._front_wave_lee
+        self._next_wave_lee = []
+        for curr_node in self._front_wave_lee:
+            # curr_node.val = self._iterations
+            if curr_node not in [self._end_node, self._start_node]:
+                curr_node.type = NodeType.VISITED_NODE
+                curr_node.update_sprite_colour()
+            if curr_node == self._end_node:
+                # self._end_node.val = self._iterations
+                self._path = self.recover_path()
+                break
+            for neigh in curr_node.get_neighs(self, [NodeType.START_NODE, NodeType.WALL, NodeType.VISITED_NODE]):
+                if neigh.type == NodeType.EMPTY:  # it is equivalent to if neigh.val == 1, TODO: decide if is it needed???
+                    if neigh not in self._next_wave_lee:
+                        if neigh != self._end_node:
+                            neigh.type = NodeType.NEIGH
+                            neigh.update_sprite_colour()
+                            arrow = self._game.renderer.create_line_arrow(
+                                neigh,
+                                (neigh.x - curr_node.x, neigh.y - curr_node.y),
+                                self._game
+                            )
+                            neigh.arrow_shape = arrow
+                            neigh.append_arrow(self)
+                        self._next_wave_lee.append(neigh)
+                        neigh.previously_visited_node = curr_node
+
+    def algo_down(self):
+        # possibility check of wave_lee's stepping back:
+        if self._iterations > 0:
+            # decrementation:
+            self._iterations -= 1
+            # neighs have become EMPTY ones:
+            for neigh in self._next_wave_lee:
+                if neigh not in [self._start_node, self._end_node]:
+                    neigh.type = NodeType.EMPTY
+                    neigh.update_sprite_colour()
+                    neigh.remove_arrow(self)
+            if self._iterations != 0:
+                # the front nodes have become NEIGHS:
+                for node in self._front_wave_lee:
+                    if node not in [self._start_node, self._end_node]:
+                        node.type = NodeType.NEIGH
+                        node.update_sprite_colour()
+                # current and next fronts stepping back:
+                self._next_wave_lee = self._front_wave_lee[:]
+                self._front_wave_lee = self._fronts_dict[self._iterations]
+            else:
+                # the starting point:
+                self._next_wave_lee = [self._start_node]
+                self._front_wave_lee = []
+
+    def full_algo(self):
+        # other.get_neighs(game)  # Why is it necessary???
+        front_wave = {self._start_node}
+        iteration = 0
+        # wave-spreading:
+        while front_wave:
+            iteration += 1
+            new_front_wave = set()
+            for front_node in front_wave:
+                # front_node.val = iteration
+                if front_node not in [self._start_node, self._end_node]:
+                    front_node.type = NodeType.VISITED_NODE
+                    front_node.update_sprite_colour()
+                if front_node == self._end_node:
+                    return self.recover_path()
+                for front_neigh in front_node.get_neighs(
+                        self._game,
+                        [NodeType.START_NODE, NodeType.VISITED_NODE, NodeType.WALL]):
+                    if front_neigh not in new_front_wave:
+                        front_neigh.previously_visited_node = front_node
+                        new_front_wave.add(front_neigh)
+            front_wave = set() | new_front_wave
+        return []
+
+
+class BfsDfs(Algorithm):
+    def __init__(self, game: Lastar, is_bfs=True):
+        super().__init__('Bfs/Dfs', game)
+        # important algo's attributes:
+        self._queue = None
+        self._is_bfs = is_bfs
+        # dicts:
+        self._curr_node_dict = {}
+        self._neighs_added_to_heap_dict = {}
+
+    @property
+    def bfs_dfs_ind(self):
+        return 0 if self._is_bfs else 1
+
+    def prepare(self):
+        self._queue = deque()
+        self._queue.append(self._start_node)
+        self._iterations = 0
+        # dicts:
+        self._curr_node_dict = {0: None}
+
+    def algo_up(self):
+        # one bfs step up:
+        self._iterations += 0
+        curr_node = self._queue.pop()
+        self._curr_node_dict[self._iterations + 1] = curr_node
+        if self._iterations > 0:
+            if curr_node.type != NodeType.END_NODE:
+                curr_node.type = NodeType.CURRENT_NODE
+                curr_node.update_sprite_colour()
+        if self._iterations > 1:
+            self._curr_node_dict[self._iterations].type = NodeType.VISITED_NODE
+            self._curr_node_dict[self._iterations].update_sprite_colour()
+        curr_node.times_visited += 1
+        if curr_node == self._end_node:
+            self._path = self.recover_path()
+        self._neighs_added_to_heap_dict[self._iterations + 1] = set()
+        for neigh in curr_node.get_neighs(self, [NodeType.START_NODE, NodeType.VISITED_NODE, NodeType.WALL] + (
+                [NodeType.NEIGH] if self.bfs_dfs_ind == 0 else [])):
+            if neigh.type != NodeType.END_NODE:
+                # at first memoization for further 'undoing':
+                self._neighs_added_to_heap_dict[self._iterations + 1].add(neigh.aux_copy())
+                # then changing neigh's pars:
+                neigh.type = NodeType.NEIGH
+                neigh.update_sprite_colour()
+                arrow = self._game.renderer.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y),
+                                                              self)
+                if neigh.arrow_shape is not None:
+                    neigh.remove_arrow(self)
+                neigh.arrow_shape = arrow
+                neigh.append_arrow(self)
+            neigh.previously_visited_node = curr_node
+            # BFS:
+            if self.bfs_dfs_ind == 0:
+                self._queue.appendleft(neigh)
+            # DFS:
+            else:
+                self._queue.append(neigh)
+        self._iterations += 1
+
+    def algo_down(self):
+        if self._iterations > 0:
+            # now the neighs of current node should become EMPTY ones:
+            for neigh in self._neighs_added_to_heap_dict[self._iterations]:
+                # TODO: neigh type restoring needed!!!
+                y, x = neigh.y, neigh.x
+                node = self._game.grid[y][x]
+                node.restore(neigh)
+                if node not in [self._start_node, self._end_node]:
+                    node.remove_arrow(self._game)
+                if node.type == NodeType.NEIGH:
+                    # here the arrow rotates backwards:
+                    arrow = self._game.renderer.create_line_arrow(
+                        node,
+                        (
+                            node.x - self._curr_node_dict[self._iterations].x,
+                            node.y - self._curr_node_dict[self._iterations].y
+                        ),
+                        self._game
+                    )
+                    node.arrow_shape = arrow
+                    node.append_arrow(self._game)
+                    # deque changing:
+                    # BFS:
+                    if self.bfs_dfs_ind == 0:
+                        self._queue.popleft()
+                    # DFS:
+                    else:
+                        self._queue.pop()
+            # current node has become the NEIGH:
+            curr_node = self._curr_node_dict[self._iterations]
+            if curr_node not in [self._start_node, self._end_node]:
+                curr_node.type = NodeType.NEIGH
+                curr_node.update_sprite_colour()
+            # adding back to the deque:
+            # BFS & DFS:
+            self._queue.append(curr_node)
+            if self._iterations > 1:
+                # previous step current node has become the current step current node:
+                prev_node = self._curr_node_dict[self._iterations - 1]
+                if prev_node not in [self._start_node, self._end_node]:
+                    prev_node.type = NodeType.CURRENT_NODE
+                    prev_node.update_sprite_colour()
+            # step back:
+            self._iterations -= 1
+
+    def full_algo(self):
+        queue = deque()
+        queue.append(self._start_node)
+        while queue:
+            self._iterations += 1
+            current_node = queue.pop()
+            if current_node.type not in [NodeType.START_NODE, NodeType.END_NODE]:
+                current_node.type = NodeType.VISITED_NODE
+                current_node.update_sprite_colour()
+                current_node.times_visited += 1
+            if current_node == self._end_node:
+                return self.recover_path()
+            for neigh in current_node.get_neighs(self._game,
+                                                 [NodeType.START_NODE, NodeType.VISITED_NODE, NodeType.WALL] + (
+                                                         [NodeType.NEIGH] if self._game.bfs_dfs_ind == 0 else [])):
+                if neigh.type != NodeType.END_NODE:
+                    neigh.type = NodeType.NEIGH
+                    neigh.update_sprite_colour()
+                neigh.previously_visited_node = current_node
+                # BFS:
+                if self.bfs_dfs_ind == 0:
+                    queue.appendleft(neigh)
+                # DFS:
+                else:
+                    queue.append(neigh)
+
+
+class Menu(ABC):
+    def __init__(self, icon_linked: 'Icon'):
+        self._icon_linked = icon_linked
+        self._areas = []
+
+    @property
+    def areas(self):
+        return self._areas
+
+    def append_area(self, area: 'Area'):
+        self._areas.append(area)
+
+    def setup(self):
+        for area in self._areas:
+            area.setup()
+
+    def on_press(self, x, y):
+        for area in self._areas:
+            area.on_press(x, y)
+
+    def draw(self):
+        if self._icon_linked.inter_type == InterType.PRESSED:
+            for area in self._areas:
+                area.draw()
+
+
+class Area(ABC):
+    def __init__(self, cx, cy, delta, sq_size, sq_line_w, header: str, fields: dict[int, str]):
+        # options, that need to be added: 1. multiple_choice: bool, 2. no_choice: bool
+        self._cx = cx
+        self._cy = cy
+        self._delta = delta
+        self._sq_size = sq_size
+        self._sq_line_w = sq_line_w
+        self._header = header
+        self._fields = fields
+        # choosing:
+        self._field_chosen = None  # can be None in some cases or keep several values simultaneously
+        # locking:
+        self._is_locked = False
+        # presets:
+        self._header_text = None
+        self._field_texts = []
+        self._rectangle_shapes = arcade.ShapeElementList()
+
+    def lock(self):
+        self._is_locked = True
+
+    def unlock(self):
+        self._is_locked = False
+
+    # presets:
+    @abstractmethod
+    def setup(self):
+        self._header_text = arcade.Text(f'{self._header}: ', self._cx, self._cy, arcade.color.BLACK, bold=True)
+        for i in range(len(self._fields)):
+            self._rectangle_shapes.append(
+                arcade.create_rectangle_outline(
+                    self._cx + 10,
+                    self._cy - 30 - self._delta * i,
+                    self._sq_size, self._sq_size,
+                    arcade.color.BLACK, self._sq_line_w
+                )
+            )
+            self._field_texts.append(
+                arcade.Text(
+                    f'{self._fields[i]}',
+                    self._cx + 10 + self._sq_size + 2 * self._sq_line_w,
+                    self._cy - 30 - self._delta * i - 6,
+                    arcade.color.BLACK, bold=True
+                )
+            )
+
+    def on_press(self):
+        ...
+
+    @abstractmethod
+    # on every frame:
+    def draw(self):
+        self._header_text.draw()
+        self._rectangle_shapes.draw()
+
+        for text in self._field_texts:
+            text.draw()
+
+        if self._field_chosen is not None:
+            arcade.draw_rectangle_filled(self._cx + 10, self._cy - 30 - self._delta * self._field_chosen,
+                                         14, 14, arcade.color.BLACK)
+        # heuristics lock:
+        if self._is_locked:
+            if self._field_chosen is not None:
+                self.draw_lock(self._cx + 10, self._cy - 30 - self._delta * self._field_chosen)
+            for i in range(len(self._fields)):
+                if self._field_chosen is None or i != self._field_chosen:
+                    self.draw_cross(self._cx + 10, self._cy - 30 - self._delta * i)
+
+    # draws a lock for right window part: 36 366 98 989
+    @staticmethod
+    def draw_lock(center_x: int, center_y: int):
+        arcade.draw_rectangle_filled(center_x, center_y, 14, 14, arcade.color.RED)
+        arcade.draw_rectangle_outline(center_x, center_y + 7, 8.4, 16.8, arcade.color.RED, border_width=2)
+
+    # draws the cross of forbiddance:
+    @staticmethod
+    def draw_cross(center_x: int, center_y: int):
+        arcade.draw_line(center_x - 9, center_y + 9, center_x + 9, center_y - 9, arcade.color.BLACK, line_width=2)
+        arcade.draw_line(center_x + 9, center_y + 9, center_x - 9,
+                         center_y - 9, arcade.color.BLACK, line_width=2)
 
 
 # class for design element:
@@ -2274,6 +2656,10 @@ class Icon(ABC):
     @staticmethod
     def is_point_in_circle(cx, cy, r, x, y):
         return (cx - x) ** 2 + (cy - y) ** 2 <= r ** 2
+
+    @property
+    def inter_type(self):
+        return self._inter_type
 
 
 class PlayButton(Icon):
@@ -2377,9 +2763,9 @@ class StepButton(Icon):
         self._incrementer = [0, 0, 0, 0]  # horizontal movement, sin oscillating, blinking and ticks
         self._a = a
         self._dh = dh
-        self._line_w = line_w
+        self._line_w = line_w  # TODO: MAY BE SHOULD BE INITIALIZED ONCE FOR THE ENTIRE GAME???
         self._is_right = is_right
-        self._cycle_breaker = False
+        self._cycle_breaker = False  # TODO: SHOULD BE REWORKED!!! HOW SHOULD THE ALGO KNOW IF IT IS CHANGED???
 
     def setup(self):
         pass
@@ -2635,27 +3021,281 @@ class Undo(Icon):
 
 
 class GearWheelButton(Icon):
+    DELTA = 0.02
 
-    def __init__(self, cx, cy):
+    def __init__(self, cx, cy, r, cog_size=8, multiplier=1.5, line_w=2, clockwise=True):
         super().__init__(cx, cy)
+        self._r = r
+        self._cog_size = cog_size
+        self._multiplier = multiplier
+        self._line_w = line_w
+        self._clockwise = clockwise
 
     def setup(self):
         ...
 
     def update(self):
-        ...
+        self._incrementer += self.DELTA
 
     def draw(self):
-        ...
+        circumference = 2 * math.pi * self._r  # approximately if cog_size << radius
+        angular_size = (2 * math.pi) * self._cog_size / circumference
+        max_cogs_fit_in_the_gear_wheel = int(circumference / self._cog_size)
+        cogs_q = max_cogs_fit_in_the_gear_wheel // 2
+        fit_angular_size = (2 * math.pi - cogs_q * angular_size) / cogs_q
+        angle = self._incrementer if self._clockwise else -self._incrementer  # in radians
+
+        for i in range(cogs_q):
+            # aux pars:
+            _a, a_ = (angle - angular_size / 2), (angle + angular_size / 2)
+            _rx, _ry, rx_, ry_ = self._r * math.cos(_a), self._r * math.sin(_a), self._r * math.cos(
+                a_), self._r * math.sin(a_)
+            _dx, _dy = self._cog_size * math.cos(_a), self._cog_size * math.sin(_a)
+            dx_, dy_ = self._cog_size * math.cos(a_), self._cog_size * math.sin(a_)
+            # polygon's points:
+            self._vertices.append([self._cx + _rx, self._cy + _ry])
+            self._vertices.append([self._cx + _rx + _dx, self._cy + _ry + _dy])
+            self._vertices.append([self._cx + rx_ + dx_, self._cy + ry_ + dy_])
+            self._vertices.append([self._cx + rx_, self._cy + ry_])
+            # angle incrementation:
+            angle += angular_size + fit_angular_size
+        # upper gear wheel:
+        # arcade.draw_polygon_filled(upper_vertices_list, arcade.color.PASTEL_GRAY)
+        if self._inter_type == InterType.PRESSED:
+            arcade.draw_polygon_filled(self._vertices, arcade.color.RED)
+        arcade.draw_polygon_outline(self._vertices, arcade.color.BLACK,
+                                    self._line_w + (0 if self._inter_type == InterType.NONE else 1))
+        # hole:
+        arcade.draw_circle_filled(self._cx, self._cy, 2 * (self._r - self._multiplier * self._cog_size),
+                                  arcade.color.DUTCH_WHITE)
+        arcade.draw_circle_outline(self._cx, self._cy, 2 * (self._r - self._multiplier * self._cog_size),
+                                   arcade.color.BLACK,
+                                   self._line_w + (0 if self._inter_type == InterType.NONE else 1))
 
     def on_motion(self, x, y):
-        ...
+        if self._inter_type != InterType.PRESSED:
+            if arcade.is_point_in_polygon(x, y, self._vertices):
+                self._inter_type = InterType.HOVERED
+            else:
+                self._inter_type = InterType.NONE
 
     def on_press(self, x, y):
-        ...
+        if arcade.is_point_in_polygon(x, y, self._vertices):
+            if self._inter_type == InterType.PRESSED:
+                self._inter_type = InterType.HOVERED
+            else:
+                self._inter_type = InterType.PRESSED
 
     def on_drug(self, x, y):
         ...
+
+
+class AstarIcon(Icon):
+    DELTA = 0.05
+
+    def __init__(self, cx, cy, size_w, size_h, line_w=2, clockwise=True):
+        super().__init__(cx, cy)
+        self._size_w = size_w
+        self._size_h = size_h
+        self._line_w = line_w
+        self._clockwise = clockwise
+
+    def setup(self):
+        pass
+
+    def update(self):
+        if self._inter_type == InterType.HOVERED:
+            self._incrementer += self.DELTA
+
+    def draw(self):
+        # drawing A:
+        self.draw_a(self._cx, self._cy, self._size_w, self._size_h, self._size_w / 3, self._line_w)
+        # Star spinning around A:
+        self.draw_star(self._cx + self._size_h / 2 + self._size_h / 3, self._cy + self._size_h, r=self._size_h / 4,
+                       line_w=self._line_w, clockwise=self._clockwise)
+
+    # draws a spinning star:
+    def draw_star(self, cx, cy, vertices=5, r=32, line_w=2, clockwise=True):
+        delta_angle = 2 * math.pi / vertices
+        d = vertices // 2
+        angle = self._incrementer if clockwise else -self._incrementer  # in radians
+        for i in range(vertices):
+            da = d * delta_angle
+            arcade.draw_line(cx + r * math.cos(angle),
+                             cy + r * math.sin(angle),
+                             cx + r * math.cos(angle + da),
+                             cy + r * math.sin(angle + da),
+                             arcade.color.BLACK, line_w)
+            angle += da
+
+    # draws 'A' letter:
+    def draw_a(self, cx, cy, length, height, a_w, line_w):
+        upper_hypot = math.sqrt(length ** 2 + height ** 2)
+        cos, sin = height / upper_hypot, length / upper_hypot
+        line_w_hour_projection = a_w / cos
+        dh = a_w / sin
+        delta = (height - a_w - dh) / 2
+        k, upper_k = (delta - a_w / 2) * length / height, (delta + a_w / 2) * length / height
+
+        # a_outer_points -> self._vertices[0], a_inner_points -> self._vertices[1]
+        self._vertices.append(
+            [
+                [cx, cy],
+                [cx + length, cy + height],
+                [cx + 2 * length, cy],
+                [cx + 2 * length - line_w_hour_projection, cy],
+                [cx + 2 * length - line_w_hour_projection - k, cy + delta - a_w / 2],
+                [cx + k + line_w_hour_projection, cy + delta - a_w / 2],
+                [cx + line_w_hour_projection, cy]
+            ]
+        )
+
+        self._vertices.append(
+            [
+                [cx + length, cy + height - dh],
+                [cx + 2 * length - line_w_hour_projection - upper_k, cy + delta + a_w / 2],
+                [cx + line_w_hour_projection + upper_k, cy + delta + a_w / 2]
+            ]
+        )
+
+        if self._inter_type == InterType.NONE:
+            arcade.draw_polygon_outline(self._vertices[0], arcade.color.BLACK, line_w)
+            arcade.draw_polygon_outline(self._vertices[1], arcade.color.BLACK, line_w)
+        elif self._inter_type == InterType.HOVERED:
+            arcade.draw_polygon_outline(self._vertices[0], arcade.color.BLACK, line_w + 1)
+            arcade.draw_polygon_outline(self._vertices[1], arcade.color.BLACK, line_w + 1)
+        else:
+            arcade.draw_polygon_filled(self._vertices[0], arcade.color.RED)
+            arcade.draw_polygon_outline(self._vertices[0], arcade.color.BLACK, line_w + 1)
+            arcade.draw_polygon_filled(self._vertices[1], arcade.color.DUTCH_WHITE)
+            arcade.draw_polygon_outline(self._vertices[1], arcade.color.BLACK, line_w + 1)
+
+    def on_motion(self, x, y):
+        if self._inter_type != InterType.PRESSED:
+            if arcade.is_point_in_polygon(x, y, self._vertices[0]):
+                self._inter_type = InterType.HOVERED
+            else:
+                self._inter_type = InterType.NONE
+
+    def on_press(self, x, y):
+        if arcade.is_point_in_polygon(x, y, self._vertices[0]):
+            if self._inter_type == InterType.PRESSED:
+                self._inter_type = InterType.HOVERED
+            else:
+                self._inter_type = InterType.PRESSED
+
+    def on_drug(self, x, y):
+        pass
+
+
+class Waves(Icon):
+    DELTA = 0.25
+
+    def __init__(self, cx, cy, size=32, waves_q=5, line_w=2):
+        super().__init__(cx, cy)
+        self._size = size
+        self._waves_q = waves_q
+        self._line_w = line_w
+
+    def setup(self):
+        pass
+
+    def update(self):
+        self._incrementer += self.DELTA
+
+    def draw(self):
+        ds = self._size / self._waves_q
+        s_list = sorted([(i * ds + self._incrementer) % self._size for i in range(self._waves_q)], reverse=True)
+        for i, curr_s in enumerate(s_list):
+            if self._inter_type == InterType.PRESSED:
+                arcade.draw_circle_filled(self._cx, self._cy, curr_s, arcade.color.RED if i % 2 == 0 else arcade.color.DUTCH_WHITE)
+            arcade.draw_circle_outline(self._cx, self._cy, curr_s, arcade.color.BLACK,
+                                       self._line_w + (0 if self._inter_type == InterType.NONE else 1))
+
+    def on_motion(self, x, y):
+        if self._inter_type != InterType.PRESSED:
+            if self.is_point_in_circle(self._cx, self._cy, self._size, x, y):
+                self._inter_type = InterType.HOVERED
+            else:
+                self._inter_type = InterType.NONE
+
+    def on_press(self, x, y):
+        if self.is_point_in_circle(self._cx, self._cy, self._size, x, y):
+            if self._inter_type == InterType.PRESSED:
+                self._inter_type = InterType.HOVERED
+            else:
+                self._inter_type = InterType.PRESSED
+
+    def on_drug(self, x, y):
+        pass
+
+
+class BfsDfsIcon(Icon):
+    DELTA = 0.15
+
+    def __init__(self, cx, cy, size, line_w):
+        super().__init__(cx, cy)
+        self._size = size
+        self._line_w = line_w
+
+    def setup(self):
+        pass
+
+    def update(self):
+        self._incrementer += self.DELTA
+
+    def draw(self):
+        # filling:
+        if self._inter_type == InterType.PRESSED:
+            arcade.draw_rectangle_filled(self._cx, self._cy, self._size, self._size, arcade.color.RED)
+        # border:
+        arcade.draw_rectangle_outline(self._cx, self._cy, self._size, self._size, arcade.color.BLACK,
+                                      self._line_w + (0 if self._inter_type == InterType.NONE else 1))
+        # text:
+        text_size = self._size / 4
+        magnitude = self._size / 12
+        arcade.Text('B', self._cx - self._size / 3, self._cy + text_size / 4 + magnitude * math.sin(self._incrementer),
+                    arcade.color.BLACK, text_size,
+                    bold=True).draw()
+        arcade.Text('D', self._cx - self._size / 3, self._cy - text_size - text_size / 4 + magnitude * math.sin(self._incrementer),
+                    arcade.color.BLACK,
+                    text_size, bold=True).draw()
+
+        arcade.Text('F', self._cx - self._size / 3 + self._size / 4,
+                    self._cy + text_size / 4 + magnitude * math.sin(math.pi / 2 + self._incrementer),
+                    arcade.color.BLACK,
+                    text_size,
+                    bold=True).draw()
+        arcade.Text('F', self._cx - self._size / 3 + self._size / 4,
+                    self._cy - text_size - text_size / 4 + magnitude * math.sin(math.pi / 2 + self._incrementer),
+                    arcade.color.BLACK, text_size,
+                    bold=True).draw()
+
+        arcade.Text('S', self._cx - self._size / 3 + self._size / 4 + self._size / 4 - self._size / 32,
+                    self._cy + text_size / 4 + magnitude * math.sin(math.pi + self._incrementer),
+                    arcade.color.BLACK, text_size,
+                    bold=True).draw()
+        arcade.Text('S', self._cx - self._size / 3 + self._size / 4 + self._size / 4 - self._size / 32,
+                    self._cy - text_size - text_size / 4 + magnitude * math.sin(math.pi + self._incrementer),
+                    arcade.color.BLACK, text_size,
+                    bold=True).draw()
+
+    def on_motion(self, x, y):
+        if self._inter_type != InterType.PRESSED:
+            if self.is_point_in_square(self._cx, self._cy, self._size, x, y):
+                self._inter_type = InterType.HOVERED
+            else:
+                self._inter_type = InterType.NONE
+
+    def on_press(self, x, y):
+        if self.is_point_in_square(self._cx, self._cy, self._size, x, y):
+            if self._inter_type == InterType.PRESSED:
+                self._inter_type = InterType.HOVERED
+            else:
+                self._inter_type = InterType.PRESSED
+
+    def on_drug(self, x, y):
+        pass
 
 
 # enum for node type:

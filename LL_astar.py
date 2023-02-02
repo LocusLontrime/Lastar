@@ -120,13 +120,9 @@ class Lastar(arcade.Window):  # 36 366 98 989 LL
         self.bfs_dfs_size = 0
         # A STAR LABEL:
         self.a_outer_points = []
-        # LEE WAVES:
-        ...
         # RIGHT MENU LOGIC:
         self.inter_types = [InterType.NONE for _ in range(4)]  # <<-- GEAR WHEEL, BFS/DFS, A_STAR and WAVE LEE <<--
         self.incrementers = [0 for _ in range(4)]  # <<-- GEAR WHEEL, BFS/DFS, A_STAR and WAVE LEE <<--
-        # START ICON:
-        ...
         # WAVE_LEE (LEVI GIN):
         self.front_wave_lee = []
         self.next_wave_lee = []
@@ -1606,7 +1602,19 @@ class DrawLib:
 
 
 class Grid:
-    def __init__(self):
+    def __init__(self, hor_tiles_q, tiles_q):
+        self._hor_tiles_q = hor_tiles_q
+        self._tiles_q = tiles_q
+        self._grid = None
+
+    @property
+    def grid(self):
+        return self._grid
+
+    def initialize(self):
+        self._grid = [[Node(j, i, 1, NodeType.EMPTY) for i in range(self._hor_tiles_q)] for j in range(self._tiles_q)]
+
+    def rebuild_map(self):
         ...
 
     def clear_empty_nodes(self):
@@ -1618,9 +1626,39 @@ class Grid:
     def aux_clear(self):
         ...
 
+    def get_sprites(self):
+        ...
 
-class Builder:
+    def make_grid_lines(self):
+        ...
+
+
+class WallsManager:
     def __init__(self):
+        ...
+
+    def change_nodes_type(self, node_type: 'NodeType', walls_set: set or list):
+        ...
+
+    def erase_all_linked_nodes(self):
+        ...
+
+    def build_wall(self):
+        ...
+
+    def erase_wall(self):
+        ...
+
+    def undo(self):
+        ...
+
+    def redo(self):
+        ...
+
+    def save(self):
+        ...
+
+    def load(self):
         ...
 
 

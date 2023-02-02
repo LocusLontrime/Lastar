@@ -145,7 +145,9 @@ class Lastar(arcade.Window):  # 36 366 98 989 LL
         self.undo = Undo(1785 + 6 - 75, 125, 24, 8, 12, 2)
         self.redo = Undo(1785 + 6 + 75, 125, 24, 8, 12, 2, True)
         # ALGOS:
-        self.astar = Astar
+        self.astar = Astar(self)
+        self.wave_lee = WaveLee(self)
+        self.bfs_dfs = BfsDfs(self)
 
     # INITIALIZATION AUX:
     # calculating grid visualization pars for vertical tiles number given:

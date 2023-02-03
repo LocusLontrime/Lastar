@@ -2954,7 +2954,6 @@ class Icon(ABC):
 
 
 class PlayButton(Icon, Element, Manager):
-
     DELTAS = [0.5, 0.015]  # pixels/radians
 
     def __init__(self, cx, cy, r, line_w):
@@ -3053,7 +3052,6 @@ class PlayButton(Icon, Element, Manager):
 
 
 class StepButton(Icon, Element, Manager):
-
     DELTAS = [0.15, 0.1, 0.05]
     THRESHOLD = 8
     TICKS_THRESHOLD = 12
@@ -3335,7 +3333,6 @@ class Undo(Icon, Element, Manager):
 
 
 class GearWheelButton(Icon, Element, Manager):
-
     DELTA = 0.02
 
     def __init__(self, cx, cy, r, cog_size=8, multiplier=1.5, line_w=2, clockwise=True):
@@ -3404,12 +3401,204 @@ class GearWheelButton(Icon, Element, Manager):
             else:
                 self._inter_type = InterType.PRESSED
 
-    def on_drug(self, x, y):
-        ...
+    def on_release(self, x, y):
+        pass
+
+    def on_key_press(self, x, y):
+        pass
+
+    def on_key_release(self, x, y):
+        pass
+
+
+class ArrowsMenu(Icon, Element, Manager):
+    def __init__(self, cx, cy):
+        super().__init__(cx, cy)
+        self._arrows_indices = []
+        self._walk_index = 0
+        self._choosing_arrows = True
+        self._arrows_vertices = None
+        self._inter_types_arrows = [InterType.NONE for _ in range(4)]
+        self._inter_type_reset_square = InterType.NONE
+
+    @property
+    def inter_types_arrows(self):
+        return self._inter_types_arrows
+
+    @property
+    def arrows_indices(self):
+        return self._arrows_indices
+
+    @property
+    def arrows_vertices(self):
+        return self._arrows_vertices
+
+    @arrows_vertices.setter
+    def arrows_vertices(self, arrows_vertices):
+        self._arrows_vertices = arrows_vertices
+
+
+class Arrow(Icon, Element, Manager):  # part of an arrow menu
+    # initial directions priority for all algorithms:
+    walk = [(1, 0), (0, -1), (-1, 0), (0, 1)]
+
+    def __init__(self, cx, cy, arrow_length, arrow_height, line_w, point: tuple[int, int],
+                 colour: tuple[int, int, int]):
+        super().__init__(cx, cy)
+        self._arrow_length = arrow_length
+        self._arrow_height = arrow_height
+        self._line_w = line_w
+        self._point = point
+        self._colour = colour
+
+    def connect(self, obj: ArrowsMenu):
+        self._obj = obj
+
+    @property
+    def _dx(self):
+        return self._arrow_length / 2 - self._arrow_height
+
+    @property
+    def dx_(self):
+        return self._arrow_length / 2
+
+    @property
+    def h_(self):
+        return self._arrow_height / 2
+
+    def setup(self):
+        self._vertices = [
+            [
+                self._cx + self._point[0] * self._arrow_length / 2,
+                self._cy + self._point[1] * self._arrow_length / 2
+            ],
+            [
+                self._cx + self._point[0] * self._dx + self._point[1] * self._arrow_height,
+                self._cy + self._point[1] * self._dx + self._point[0] * self._arrow_height
+            ],
+            [
+                self._cx + self._point[0] * self._dx + self._point[1] * self.h_,
+                self._cy + self._point[1] * self._dx + self._point[0] * self.h_
+            ],
+            [
+                self._cx - self._point[0] * self.dx_ + self._point[1] * self.h_,
+                self._cy - self._point[1] * self.dx_ + self._point[0] * self.h_
+            ],
+            [
+                self._cx - self._point[0] * self.dx_ - self._point[1] * self.h_,
+                self._cy - self._point[1] * self.dx_ - self._point[0] * self.h_
+            ],
+            [
+                self._cx + self._point[0] * self._dx - self._point[1] * self.h_,
+                self._cy + self._point[1] * self._dx - self._point[0] * self.h_
+            ],
+            [
+                self._cx + self._point[0] * self._dx - self._point[1] * self._arrow_height,
+                self._cy + self._point[1] * self._dx - self._point[0] * self._arrow_height
+            ]
+        ]
+
+    def update(self):
+        pass
+
+    def draw(self):
+        # index:
+        ind = self.walk.index(self._point)
+        # center coords:
+        cx_ = self._cx - self._point[0] * self._arrow_height / 2
+        cy_ = self._cy - self._point[1] * self._arrow_height / 2
+
+        w, h = abs(self._point[0]) * (self._arrow_length - self._arrow_height) + abs(
+            self._point[1]) * self._arrow_height, abs(
+            self._point[0]) * self._arrow_height + abs(self._point[1]) * (self._arrow_length - self._arrow_height)
+
+        if self._obj.inter_types_arrows[ind] == InterType.PRESSED:
+            arcade.draw_rectangle_filled(cx_, cy_, w, h, self._colour)
+
+            arcade.draw_triangle_filled(
+                self._cx + self._point[0] * self._dx + self._point[1] * self._arrow_height,
+                self._cy + self._point[1] * self._dx + self._point[0] * self._arrow_height,
+                self._cx + self._point[0] * self._dx - self._point[1] * self._arrow_height,
+                self._cy + self._point[1] * self._dx - self._point[0] * self._arrow_height,
+                self._cx + self._point[0] * self._arrow_length / 2,
+                self._cy + self._point[1] * self._arrow_length / 2,
+                self._colour
+            )
+
+            # numbers-hints:
+            signed_delta = self._arrow_height / 2 - self._arrow_height / 12
+            arcade.Text(
+                f'{self._obj.arrows_indices.index(ind) + 1}',
+                self._cx - self._arrow_height / 3 + self._arrow_height / 12 - self._point[0] * signed_delta,
+                self._cy - self._arrow_height / 3 - self._point[1] * signed_delta, arcade.color.BLACK,
+                2 * self._arrow_height / 3,
+                bold=True).draw()
+
+        if self._obj.arrows_vertices is None:
+            self._obj._arrows_vertices = {}
+
+        arcade.draw_polygon_outline(
+            self._obj.arrows_vertices[ind],
+            arcade.color.BLACK,
+            self._line_w if self._obj.inter_types_arrows[ind] == InterType.NONE else self._line_w + 1
+        )
+
+    def on_motion(self, x, y):
+        pass
+
+    def on_press(self, x, y):
+        pass
+
+    def on_release(self, x, y):
+        pass
+
+    def on_key_press(self, x, y):
+        pass
+
+    def on_key_release(self, x, y):
+        pass
+
+
+class ArrowReset(Icon, Element, Manager):
+
+    def __init__(self, cx, cy, arrow_height):
+        super().__init__(cx, cy)
+        self._arrow_height = arrow_height
+
+    def connect(self, obj: ArrowsMenu):
+        self._obj = obj
+
+    def setup(self):
+        pass
+
+    def update(self):
+        pass
+
+    def draw(self):
+        arcade.draw_rectangle_outline(
+            1755, 785, self._arrow_height,
+            self._arrow_height,
+            arcade.color.BLACK,
+            2 + (0 if self._inter_type == InterType.NONE else 1)
+        )
+
+    def on_motion(self, x, y):
+        pass
+
+    def on_press(self, x, y):
+        pass
+
+    def on_release(self, x, y):
+        pass
+
+    def on_key_press(self, x, y):
+        pass
+
+    def on_key_release(self, x, y):
+        pass
 
 
 class AstarIcon(Icon, Element, Manager):
-
     DELTA = 0.05
 
     def __init__(self, cx, cy, size_w, size_h, line_w=2, clockwise=True):
@@ -3506,12 +3695,17 @@ class AstarIcon(Icon, Element, Manager):
             else:
                 self._inter_type = InterType.PRESSED
 
-    def on_drug(self, x, y):
+    def on_release(self, x, y):
+        pass
+
+    def on_key_press(self, x, y):
+        pass
+
+    def on_key_release(self, x, y):
         pass
 
 
 class Waves(Icon, Element, Manager):
-
     DELTA = 0.25
 
     def __init__(self, cx, cy, size=32, waves_q=5, line_w=2):
@@ -3534,7 +3728,8 @@ class Waves(Icon, Element, Manager):
         s_list = sorted([(i * ds + self._incrementer) % self._size for i in range(self._waves_q)], reverse=True)
         for i, curr_s in enumerate(s_list):
             if self._inter_type == InterType.PRESSED:
-                arcade.draw_circle_filled(self._cx, self._cy, curr_s, arcade.color.RED if i % 2 == 0 else arcade.color.DUTCH_WHITE)
+                arcade.draw_circle_filled(self._cx, self._cy, curr_s,
+                                          arcade.color.RED if i % 2 == 0 else arcade.color.DUTCH_WHITE)
             arcade.draw_circle_outline(self._cx, self._cy, curr_s, arcade.color.BLACK,
                                        self._line_w + (0 if self._inter_type == InterType.NONE else 1))
 
@@ -3552,12 +3747,17 @@ class Waves(Icon, Element, Manager):
             else:
                 self._inter_type = InterType.PRESSED
 
-    def on_drug(self, x, y):
+    def on_release(self, x, y):
+        pass
+
+    def on_key_press(self, x, y):
+        pass
+
+    def on_key_release(self, x, y):
         pass
 
 
 class BfsDfsIcon(Icon, Element, Manager):
-
     DELTA = 0.15
 
     def __init__(self, cx, cy, size, line_w):
@@ -3587,7 +3787,8 @@ class BfsDfsIcon(Icon, Element, Manager):
         arcade.Text('B', self._cx - self._size / 3, self._cy + text_size / 4 + magnitude * math.sin(self._incrementer),
                     arcade.color.BLACK, text_size,
                     bold=True).draw()
-        arcade.Text('D', self._cx - self._size / 3, self._cy - text_size - text_size / 4 + magnitude * math.sin(self._incrementer),
+        arcade.Text('D', self._cx - self._size / 3,
+                    self._cy - text_size - text_size / 4 + magnitude * math.sin(self._incrementer),
                     arcade.color.BLACK,
                     text_size, bold=True).draw()
 
@@ -3624,7 +3825,13 @@ class BfsDfsIcon(Icon, Element, Manager):
             else:
                 self._inter_type = InterType.PRESSED
 
-    def on_drug(self, x, y):
+    def on_release(self, x, y):
+        pass
+
+    def on_key_press(self, x, y):
+        pass
+
+    def on_key_release(self, x, y):
         pass
 
 

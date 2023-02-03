@@ -106,10 +106,6 @@ class Lastar(arcade.Window):  # 36 366 98 989 LL
         self.node_sprite_list = arcade.SpriteList()
         # grid_lines:
         self.grid_line_shapes = arcade.ShapeElementList()
-        # UI ???:
-        self.a_star_view = arcade.View()
-        self.wave_lee_view = arcade.View()
-        self.game_choosing_view = arcade.View()
         # GEAR WHEEL:
         self.cx, self.cy = 0, 0
         self.hole_rx, self.hole_ry = 0, 0
@@ -1668,6 +1664,7 @@ class Grid(Element):
         self._grid = None
         self._node_sprite_list = None
         self._grid_line_shapes = None
+        self._node_chosen = None
 
     @property
     def grid(self):
@@ -1743,6 +1740,13 @@ class WallsManager(Manager):
     def __init__(self):
         super().__init__()
         self._grid_obj = None
+        self.building_walls_flag = False
+        self.build_or_erase = True  # True for building and False for erasing
+        self.loading = False
+        self.loading_ind = 0
+        self.walls_built_erased = [([], True)]  # TODO: swap to DICT!!!
+        self.walls_index = 0
+        self.walls = set()  # all walls located on the map at the time being
 
     def connect(self, grid: Grid):
         self._grid_obj = grid
@@ -2777,34 +2781,57 @@ class BfsDfs(Algorithm):
     def on_key_release(self, x, y):
         pass
 
-class Menu(ABC):
-    def __init__(self, icon_linked: 'Icon'):
-        self._icon_linked = icon_linked
+
+class Menu(Element, Manager):
+
+    def __init__(self):
+        super().__init__()
+        self._icon_linked = None
         self._areas = []
 
     @property
     def areas(self):
         return self._areas
 
+    def connect(self, icon: 'Icon'):
+        self._icon_linked = icon
+
     def append_area(self, area: 'Area'):
         self._areas.append(area)
+
+    def update(self):
+        pass
 
     def setup(self):
         for area in self._areas:
             area.setup()
-
-    def on_press(self, x, y):
-        for area in self._areas:
-            area.on_press(x, y)
 
     def draw(self):
         if self._icon_linked.inter_type == InterType.PRESSED:
             for area in self._areas:
                 area.draw()
 
+    def on_motion(self, x, y):
+        pass
 
-class Area(ABC):
+    def on_press(self, x, y):
+        for area in self._areas:
+            area.on_press(x, y)
+
+    def on_release(self, x, y):
+        pass
+
+    def on_key_press(self, x, y):
+        pass
+
+    def on_key_release(self, x, y):
+        pass
+
+
+class Area(Element, Manager):
+
     def __init__(self, cx, cy, delta, sq_size, sq_line_w, header: str, fields: dict[int, str]):
+        super().__init__()
         # options, that need to be added: 1. multiple_choice: bool, 2. no_choice: bool
         self._cx = cx
         self._cy = cy
@@ -2822,6 +2849,9 @@ class Area(ABC):
         self._field_texts = []
         self._rectangle_shapes = arcade.ShapeElementList()
 
+    def connect(self, obj):
+        pass
+
     def lock(self):
         self._is_locked = True
 
@@ -2829,7 +2859,6 @@ class Area(ABC):
         self._is_locked = False
 
     # presets:
-    @abstractmethod
     def setup(self):
         self._header_text = arcade.Text(f'{self._header}: ', self._cx, self._cy, arcade.color.BLACK, bold=True)
         for i in range(len(self._fields)):
@@ -2850,10 +2879,9 @@ class Area(ABC):
                 )
             )
 
-    def on_press(self):
-        ...
+    def update(self):
+        pass
 
-    @abstractmethod
     # on every frame:
     def draw(self):
         self._header_text.draw()
@@ -2872,6 +2900,21 @@ class Area(ABC):
             for i in range(len(self._fields)):
                 if self._field_chosen is None or i != self._field_chosen:
                     self.draw_cross(self._cx + 10, self._cy - 30 - self._delta * i)
+
+    def on_motion(self, x, y):
+        pass
+
+    def on_press(self, x, y):
+        ...
+
+    def on_release(self, x, y):
+        pass
+
+    def on_key_press(self, x, y):
+        pass
+
+    def on_key_release(self, x, y):
+        pass
 
     # draws a lock for right window part: 36 366 98 989
     @staticmethod

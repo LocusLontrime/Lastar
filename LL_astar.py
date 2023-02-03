@@ -3412,6 +3412,7 @@ class GearWheelButton(Icon, Element, Manager):
 
 
 class ArrowsMenu(Icon, Element, Manager):
+
     def __init__(self, cx, cy):
         super().__init__(cx, cy)
         self._arrows_indices = []
@@ -3421,13 +3422,35 @@ class ArrowsMenu(Icon, Element, Manager):
         self._inter_types_arrows = [InterType.NONE for _ in range(4)]
         self._inter_type_reset_square = InterType.NONE
 
+        self._arrows = None
+        self._arrows_reset = None
+
+    def connect(self, obj):
+        pass
+
     @property
-    def inter_types_arrows(self):
-        return self._inter_types_arrows
+    def walk_index(self):
+        return self._walk_index
+
+    @walk_index.setter
+    def walk_index(self, walk_index):
+        self._walk_index = walk_index
 
     @property
     def arrows_indices(self):
         return self._arrows_indices
+
+    @arrows_indices.setter
+    def arrows_indices(self, arrows_indices):
+        self._arrows_indices = arrows_indices
+
+    @property
+    def inter_types_arrows(self):
+        return self._inter_types_arrows
+
+    @inter_types_arrows.setter
+    def inter_types_arrows(self, inter_types_arrows):
+        self._inter_types_arrows = inter_types_arrows
 
     @property
     def arrows_vertices(self):
@@ -3437,14 +3460,39 @@ class ArrowsMenu(Icon, Element, Manager):
     def arrows_vertices(self, arrows_vertices):
         self._arrows_vertices = arrows_vertices
 
+    def setup(self):
+        pass
+
+    def update(self):
+        pass
+
+    def draw(self):
+        pass
+
+    def on_motion(self, x, y):
+        mhe
+
+    def on_press(self, x, y):
+        pass
+
+    def on_release(self, x, y):
+        pass
+
+    def on_key_press(self, x, y):
+        pass
+
+    def on_key_release(self, x, y):
+        pass
+
 
 class Arrow(Icon, Element, Manager):  # part of an arrow menu
     # initial directions priority for all algorithms:
     walk = [(1, 0), (0, -1), (-1, 0), (0, 1)]
 
-    def __init__(self, cx, cy, arrow_length, arrow_height, line_w, point: tuple[int, int],
+    def __init__(self, cx, cy, index, arrow_length, arrow_height, line_w, point: tuple[int, int],
                  colour: tuple[int, int, int]):
         super().__init__(cx, cy)
+        self._index = index
         self._arrow_length = arrow_length
         self._arrow_height = arrow_height
         self._line_w = line_w
@@ -3455,7 +3503,7 @@ class Arrow(Icon, Element, Manager):  # part of an arrow menu
         self._obj = obj
 
     @property
-    def _dx(self):
+    def _dx(self):  # TODO: this one should not be a protected property!!!
         return self._arrow_length / 2 - self._arrow_height
 
     @property
@@ -3544,10 +3592,22 @@ class Arrow(Icon, Element, Manager):  # part of an arrow menu
         )
 
     def on_motion(self, x, y):
-        pass
+        if self._inter_type != InterType.PRESSED:
+            if arcade.is_point_in_polygon(x, y, self._vertices):
+                self._inter_type = InterType.HOVERED
+            else:
+                self._inter_type = InterType.NONE
 
     def on_press(self, x, y):
-        pass
+        if arcade.is_point_in_polygon(x, y, self._vertices):
+            if self._inter_type == InterType.HOVERED:
+                self._inter_type = InterType.PRESSED
+                self._obj.arrows_indices.append(self._index)
+                self._obj.walk_index += 1
+                if self._obj.walk_index == 4:
+                    self._obj.choosing_arrows = False
+                    # Node's directions choosing priority change (in .get_neighs() method):
+                    Node.walk = [self.walk[self._obj.arrows_indices[_]] for _ in range(4)]
 
     def on_release(self, x, y):
         pass
@@ -3576,17 +3636,25 @@ class ArrowReset(Icon, Element, Manager):
 
     def draw(self):
         arcade.draw_rectangle_outline(
-            1755, 785, self._arrow_height,
+            self._cx, self._cy,
+            self._arrow_height,
             self._arrow_height,
             arcade.color.BLACK,
             2 + (0 if self._inter_type == InterType.NONE else 1)
         )
 
     def on_motion(self, x, y):
-        pass
+        if self.is_point_in_square(self._cx, self._cy, self._arrow_height, x, y):
+            self._inter_type = InterType.HOVERED
+        else:
+            self._inter_type = InterType.NONE
 
     def on_press(self, x, y):
-        pass
+        if self.is_point_in_square(self._cx, self._cy, self._arrow_height, x, y):
+            self._obj.choosing_arrows = True
+            self._obj.walk_index = 0
+            self._obj.arrows_indices = []
+            self._obj.inter_types_arrows = [InterType.NONE for _ in range(4)]
 
     def on_release(self, x, y):
         pass

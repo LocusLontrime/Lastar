@@ -148,6 +148,8 @@ class Lastar(arcade.Window):  # 36 366 98 989 LL
         self.astar = Astar(self)
         self.wave_lee = WaveLee(self)
         self.bfs_dfs = BfsDfs(self)
+        # current one:
+        self.current_algo = None
 
     # INITIALIZATION AUX:
     # calculating grid visualization pars for vertical tiles number given:
@@ -778,13 +780,17 @@ class Lastar(arcade.Window):  # 36 366 98 989 LL
         self.iterations = 0
         self.path = None
         self.path_index = 0
+
         self.curr_node_dict = {0: None}
         self.max_times_visited_dict = {0: 0}
         self.neighs_added_to_heap_dict = {}
+
         self.walls_built_erased = [([], True)]
         self.walls_index = 0
+
         self.in_interaction = False
         self.in_interaction_mode_lock = False
+
         self.greedy_flag_lock = False
         self.heuristic_lock = False
         self.tiebreakers_lock = False
@@ -1603,21 +1609,119 @@ class DrawLib:
         ...
 
 
-class Grid:
-    def __init__(self, hor_tiles_q, tiles_q):
-        self._hor_tiles_q = hor_tiles_q
+class Element(ABC):
+    def __init__(self):
+        ...
+
+    # on initialization (loads presets):
+    @abstractmethod
+    def setup(self):
+        ...
+
+    # on every frame:
+    @abstractmethod
+    def update(self):
+        ...
+
+    # renders the element:
+    @abstractmethod
+    def draw(self):
+        ...
+
+    # implements the element's behaviour in on_press/on_motion methods:
+    @abstractmethod
+    def on_motion(self, x, y):
+        ...
+
+    @abstractmethod
+    def on_press(self, x, y):
+        ...
+
+    @abstractmethod
+    def on_release(self, x, y):
+        ...
+
+    @abstractmethod
+    def on_key_press(self, x, y):
+        ...
+
+    @abstractmethod
+    def on_key_release(self, x, y):
+        ...
+
+
+class Manager(ABC):
+    def __init__(self):
+        self._obj = None
+
+    @abstractmethod
+    def connect(self, obj):
+        self._obj = obj
+
+
+class Grid(Element):
+
+    def __init__(self, tiles_q):
+        super().__init__()
+        self._tile_size, self._hor_tiles_q = self.get_pars()
         self._tiles_q = tiles_q
         self._grid = None
+        self._node_sprite_list = None
+        self._grid_line_shapes = None
 
     @property
     def grid(self):
         return self._grid
 
+    @property
+    def tiles_q(self):
+        return self._tiles_q
+
+    @tiles_q.setter
+    def tiles_q(self, tiles_q):
+        self._tiles_q = tiles_q
+
     def initialize(self):
         self._grid = [[Node(j, i, 1, NodeType.EMPTY) for i in range(self._hor_tiles_q)] for j in range(self._tiles_q)]
 
+    def setup(self):
+        pass
+
+    def update(self):
+        pass
+
+    def draw(self):
+        pass
+
+    def on_motion(self, x, y):
+        pass
+
+    def on_press(self, x, y):
+        pass
+
+    def on_release(self, x, y):
+        pass
+
+    def on_key_press(self, x, y):
+        pass
+
+    def on_key_release(self, x, y):
+        pass
+
     def rebuild_map(self):
-        ...
+        self._tile_size, self._hor_tiles_q = self.get_pars()
+        # grid's renewing:
+        self.initialize()
+        # pars resetting:
+        self.aux_clear()
+        self.start_node = None
+        self.end_node = None
+        self.node_chosen = None
+        self._node_sprite_list = arcade.SpriteList()
+        self._grid_line_shapes = arcade.ShapeElementList()
+        self.walls = set()
+        self.get_sprites()
+        self.make_grid_lines()
 
     def clear_empty_nodes(self):
         ...
@@ -1635,9 +1739,13 @@ class Grid:
         ...
 
 
-class WallsManager:
+class WallsManager(Manager):
     def __init__(self):
-        ...
+        super().__init__()
+        self._grid_obj = None
+
+    def connect(self, grid: Grid):
+        self._grid_obj = grid
 
     def change_nodes_type(self, node_type: 'NodeType', walls_set: set or list):
         ...
@@ -1947,8 +2055,9 @@ class Node:
 
 
 # class representing an algo:
-class Algorithm(ABC):
+class Algorithm(Element):
     def __init__(self, name: str, game: Lastar):
+        super().__init__()
         # info:
         self._name = name
         # visual:
@@ -1978,6 +2087,21 @@ class Algorithm(ABC):
     def refresh_important_nodes(self, start: Node, end: Node):
         self._start_node = start
         self._end_node = end
+
+    def base_clear(self):
+        # visualization:
+        self._triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
+        self._arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
+        # path:
+        self._path = None
+        self._path_index = 0
+        # iterations and time:
+        self._iterations = 0
+        self._time_elapsed_ms = 0
+
+    @abstractmethod
+    def clear(self):
+        ...
 
     @abstractmethod
     def prepare(self):
@@ -2036,6 +2160,22 @@ class Algorithm(ABC):
     def full_algo(self):
         ...
 
+    @abstractmethod
+    def setup(self):
+        ...
+
+    @abstractmethod
+    def update(self):
+        ...
+
+    @abstractmethod
+    def on_motion(self, x, y):
+        ...
+
+    @abstractmethod
+    def on_press(self, x, y):
+        ...
+
     # triangle points getting:
     def get_triangle(self, node: 'Node', point: tuple[int, int]):
         scaled_point = point[0] * (self._game.tile_size // 2 - 2), point[1] * (self._game.tile_size // 2 - 2)
@@ -2081,6 +2221,15 @@ class Astar(Algorithm):
         # 4. iterations and time (made in super __init__()):
         # self._iterations = 0
         # self._time_elapsed_ms = 0
+        # 5. interactive a_star pars:
+        self._curr_node_dict = {}
+        self._max_times_visited_dict = {0: 0}
+        self._neighs_added_to_heap_dict = {}
+
+    def clear(self):
+        self.base_clear()
+        # 3. visiting:
+        self._nodes_visited = {}
         # 5. interactive a_star pars:
         self._curr_node_dict = {}
         self._max_times_visited_dict = {0: 0}
@@ -2311,6 +2460,30 @@ class Astar(Algorithm):
                     hq.heappush(self._nodes_to_be_visited, neigh)
         self._game.max_times_visited = max_times_visited
 
+    def setup(self):
+        pass
+
+    def update(self):
+        pass
+
+    def draw(self):
+        pass
+
+    def on_motion(self, x, y):
+        pass
+
+    def on_press(self, x, y):
+        pass
+
+    def on_release(self, x, y):
+        pass
+
+    def on_key_press(self, x, y):
+        pass
+
+    def on_key_release(self, x, y):
+        pass
+
 
 class WaveLee(Algorithm):
     def __init__(self, game: Lastar):
@@ -2319,7 +2492,13 @@ class WaveLee(Algorithm):
         self._front_wave_lee = None
         self._next_wave_lee = None
         self._fronts_dict = None
-        self._iterations = 0
+
+    def clear(self):
+        self.base_clear()
+        # wave lee algo's important pars:
+        self._front_wave_lee = None
+        self._next_wave_lee = None
+        self._fronts_dict = None
 
     def prepare(self):
         # starting attributes' values:
@@ -2408,13 +2587,37 @@ class WaveLee(Algorithm):
             front_wave = set() | new_front_wave
         return []
 
+    def setup(self):
+        pass
+
+    def update(self):
+        pass
+
+    def draw(self):
+        pass
+
+    def on_motion(self, x, y):
+        pass
+
+    def on_press(self, x, y):
+        pass
+
+    def on_release(self, x, y):
+        pass
+
+    def on_key_press(self, x, y):
+        pass
+
+    def on_key_release(self, x, y):
+        pass
+
 
 class BfsDfs(Algorithm):
-    def __init__(self, game: Lastar, is_bfs=True):
+    def __init__(self, game: Lastar):
         super().__init__('Bfs/Dfs', game)
         # important algo's attributes:
         self._queue = None
-        self._is_bfs = is_bfs
+        self._is_bfs = True
         # dicts:
         self._curr_node_dict = {}
         self._neighs_added_to_heap_dict = {}
@@ -2422,6 +2625,15 @@ class BfsDfs(Algorithm):
     @property
     def bfs_dfs_ind(self):
         return 0 if self._is_bfs else 1
+
+    def clear(self):
+        self.base_clear()
+        # important algo's attributes:
+        self._queue = None
+        self._is_bfs = True
+        # dicts:
+        self._curr_node_dict = {}
+        self._neighs_added_to_heap_dict = {}
 
     def prepare(self):
         self._queue = deque()
@@ -2541,6 +2753,29 @@ class BfsDfs(Algorithm):
                 else:
                     queue.append(neigh)
 
+    def setup(self):
+        pass
+
+    def update(self):
+        pass
+
+    def draw(self):
+        pass
+
+    def on_motion(self, x, y):
+        pass
+
+    def on_press(self, x, y):
+        pass
+
+    def on_release(self, x, y):
+        pass
+
+    def on_key_press(self, x, y):
+        pass
+
+    def on_key_release(self, x, y):
+        pass
 
 class Menu(ABC):
     def __init__(self, icon_linked: 'Icon'):
@@ -2661,33 +2896,6 @@ class Icon(ABC):
         self._inter_type = InterType.NONE
         self._vertices = []
 
-    # on initialization:
-    @abstractmethod
-    def setup(self):
-        ...
-
-    @abstractmethod
-    def update(self):
-        ...
-
-    # renders the icon:
-    @abstractmethod
-    def draw(self):
-        ...
-
-    # implements the icon's behaviour in Astar on_press/on_motion methods:
-    @abstractmethod
-    def on_motion(self, x, y):
-        ...
-
-    @abstractmethod
-    def on_press(self, x, y):
-        ...
-
-    @abstractmethod
-    def on_drug(self, x, y):
-        ...
-
     # helpful auxiliary methods:
     @staticmethod
     def is_point_in_square(cx, cy, size, x, y):
@@ -2702,7 +2910,8 @@ class Icon(ABC):
         return self._inter_type
 
 
-class PlayButton(Icon):
+class PlayButton(Icon, Element, Manager):
+
     DELTAS = [0.5, 0.015]  # pixels/radians
 
     def __init__(self, cx, cy, r, line_w):
@@ -2711,7 +2920,9 @@ class PlayButton(Icon):
         self._r = r
         self._line_w = line_w
         self._multiplier = 1
-        # self._counter = 1
+
+    def connect(self, obj):
+        pass
 
     def setup(self):
         pass
@@ -2788,11 +2999,18 @@ class PlayButton(Icon):
             elif self._inter_type == InterType.HOVERED:
                 self._inter_type = InterType.PRESSED
 
-    def on_drug(self, x, y):
-        ...
+    def on_release(self, x, y):
+        pass
+
+    def on_key_press(self, x, y):
+        pass
+
+    def on_key_release(self, x, y):
+        pass
 
 
-class StepButton(Icon):
+class StepButton(Icon, Element, Manager):
+
     DELTAS = [0.15, 0.1, 0.05]
     THRESHOLD = 8
     TICKS_THRESHOLD = 12
@@ -2806,6 +3024,9 @@ class StepButton(Icon):
         self._line_w = line_w  # TODO: MAY BE SHOULD BE INITIALIZED ONCE FOR THE ENTIRE GAME???
         self._is_right = is_right
         self._cycle_breaker = False  # TODO: SHOULD BE REWORKED!!! HOW SHOULD THE ALGO KNOW IF IT IS CHANGED???
+
+    def connect(self, obj):
+        pass
 
     def setup(self):
         pass
@@ -2905,26 +3126,23 @@ class StepButton(Icon):
                 self._inter_type = InterType.PRESSED
                 self._cycle_breaker = True
 
-    def on_drug(self, x, y):
-        pass
-
     def on_release(self, x, y):
         self._inter_type = InterType.NONE
         self._cycle_breaker = False
         self._incrementer[3] = 0
 
     # keys:
-    def on_key_press(self):
+    def on_key_press(self, x, y):
         self._inter_type = InterType.PRESSED
         self._cycle_breaker = True
 
-    def on_key_release(self):
+    def on_key_release(self, x, y):
         self._inter_type = InterType.NONE
         self._cycle_breaker = False
         self._incrementer[3] = 0
 
 
-class Eraser(Icon):
+class Eraser(Icon, Element, Manager):
 
     def __init__(self, cx, cy, h, w, r, line_w):
         super().__init__(cx, cy)
@@ -2933,6 +3151,9 @@ class Eraser(Icon):
         self._r = r
         self._line_w = line_w
         self._centers = []
+
+    def connect(self, obj):
+        pass
 
     def setup(self):
         self._vertices = [
@@ -2988,11 +3209,15 @@ class Eraser(Icon):
     def on_release(self, x, y):
         self._inter_type = InterType.NONE
 
-    def on_drug(self, x, y):
+    def on_key_press(self, x, y):
+        pass
+
+    def on_key_release(self, x, y):
         pass
 
 
-class Undo(Icon):
+class Undo(Icon, Element, Manager):
+
     def __init__(self, cx, cy, a, dh, r, line_w, is_right=False):
         super().__init__(cx, cy)
         self._a = a
@@ -3012,6 +3237,9 @@ class Undo(Icon):
     @property
     def line_w(self):
         return self._line_w + (0 if self._inter_type == InterType.NONE else 1)
+
+    def connect(self, obj):
+        pass
 
     def setup(self):
         pass
@@ -3056,11 +3284,15 @@ class Undo(Icon):
     def on_release(self, x, y):
         self._inter_type = InterType.NONE
 
-    def on_drug(self, x, y):
+    def on_key_press(self, x, y):
+        pass
+
+    def on_key_release(self, x, y):
         pass
 
 
-class GearWheelButton(Icon):
+class GearWheelButton(Icon, Element, Manager):
+
     DELTA = 0.02
 
     def __init__(self, cx, cy, r, cog_size=8, multiplier=1.5, line_w=2, clockwise=True):
@@ -3070,6 +3302,9 @@ class GearWheelButton(Icon):
         self._multiplier = multiplier
         self._line_w = line_w
         self._clockwise = clockwise
+
+    def connect(self, obj):
+        pass
 
     def setup(self):
         ...
@@ -3130,7 +3365,8 @@ class GearWheelButton(Icon):
         ...
 
 
-class AstarIcon(Icon):
+class AstarIcon(Icon, Element, Manager):
+
     DELTA = 0.05
 
     def __init__(self, cx, cy, size_w, size_h, line_w=2, clockwise=True):
@@ -3139,6 +3375,9 @@ class AstarIcon(Icon):
         self._size_h = size_h
         self._line_w = line_w
         self._clockwise = clockwise
+
+    def connect(self, obj):
+        pass
 
     def setup(self):
         pass
@@ -3228,7 +3467,8 @@ class AstarIcon(Icon):
         pass
 
 
-class Waves(Icon):
+class Waves(Icon, Element, Manager):
+
     DELTA = 0.25
 
     def __init__(self, cx, cy, size=32, waves_q=5, line_w=2):
@@ -3236,6 +3476,9 @@ class Waves(Icon):
         self._size = size
         self._waves_q = waves_q
         self._line_w = line_w
+
+    def connect(self, obj):
+        pass
 
     def setup(self):
         pass
@@ -3270,13 +3513,17 @@ class Waves(Icon):
         pass
 
 
-class BfsDfsIcon(Icon):
+class BfsDfsIcon(Icon, Element, Manager):
+
     DELTA = 0.15
 
     def __init__(self, cx, cy, size, line_w):
         super().__init__(cx, cy)
         self._size = size
         self._line_w = line_w
+
+    def connect(self, obj):
+        pass
 
     def setup(self):
         pass

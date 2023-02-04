@@ -23,9 +23,168 @@ SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1050
 
 
-class Lastar:
-    def __init__(self):
+class Lastar(arcade.Window):
+    def __init__(self, width: int, height: int):
+        super().__init__(width, height)
+        arcade.set_background_color(arcade.color.DUTCH_WHITE)
+        self.set_update_rate(1 / 60)
+        # interaction mode ON/OFF:
+        self._in_interaction = False
+        self._in_interaction_mode_lock = False
+        # game modes and flags:
+        self._mode = 0  # 0 for building the walls and erasing them afterwards, 1 for a start and end nodes choosing and 2 for info getting for every node
+        self._mode_names = {0: 'BUILDING/ERASING', 1: 'START&END_NODES_CHOOSING', 2: 'INFO_GETTING'}
+        self._building_walls_flag = False
+        self._build_or_erase = True  # True for building and False for erasing
+        #names dicts:
+        self._heuristic_names = {0: 'MANHATTAN', 1: 'EUCLIDIAN', 2: 'MAX_DELTA', 3: 'DIJKSTRA'}
+        self._tiebreaker_names = {0: 'VECTOR_CROSS', 1: 'COORDINATES'}
+        self._greedy_names = {0: 'IS_GREEDY'}
+        self._guide_arrows_names = {0: f'ON/OFF'}
+        self._interactive_names = {0: f'IS_INTERACTIVE'}
+        # grid and walls_manager:
+        self._grid = Grid()
+        self._walls_manager = WallsManager()
+        # algorithms:
+        self._astar = None
+        self._wave_lee = None
+        self._bfs_dfs = None
+
+    def elements_setup(self):
+        # pars:
+        sq_size, line_w = 18, 2
+        delta = 2 * (sq_size + line_w)
+        # ASTAR:
+        # a_star algo:
+        self._astar = Astar()
+        # icon setting up for a_star:
+        astar_icon = AstarIcon(1750 + 15 + 6, 1020 - 100 - 25, 22, 53)
+        self._astar.set_icon(astar_icon)
+        # areas setting up:
+        bot_menu_x, bot_menu_y = SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120
+        heurs_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Heuristics', self._heuristic_names)
+        bot_menu_y -= 30 + (len(self._heuristic_names) - 1) * delta + 3 * sq_size
+        tiebreakers_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Tiebreakers', self._tiebreaker_names)
+        bot_menu_y -= 30 + (len(self._tiebreaker_names) - 1) * delta + 3 * sq_size
+        is_greedy_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Is greedy', self._greedy_names)
+        bot_menu_y -= 30 + 3 * sq_size
+        guide_arrows_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Guide arrows', self._guide_arrows_names)
+        bot_menu_y -= 30 + 3 * sq_size
+        show_mode_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Show mode', self._interactive_names)
+        # menu composing:
+        astar_menu = Menu()
+        astar_menu.multiple_append(heurs_area, tiebreakers_area, is_greedy_area, guide_arrows_area, show_mode_area)
+        # icon connecting:
+        astar_menu.connect(astar_icon)
+        # menu setting up:
+        self._astar.set_menu(astar_menu)
+        # WAVE_LEE:
+        # wave_lee algo:
+        self._wave_lee = WaveLee()
+        # icon setting up for wave_lee:
+        wave_lee_icon = Waves(1750 + 50 + 48 + 10 + 6, 1020 - 73 - 25, 32, 5)
+        self._wave_lee.set_icon(wave_lee_icon)
+        # BFS/DFS:
+        # bfs/dfs algo:
+        self._bfs_dfs = BfsDfs()
+        # icon setting up for bfs/dfs:
+        bfs_dfs_icon = BfsDfsIcon(1750 - 30 + 6, 1020 - 73 - 25, 54, 2)
+        self._bfs_dfs.set_icon(bfs_dfs_icon)
+        # area setting up:
+        area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Core', {0: f'BFS', 1: f'DFS'})
+        # menu composing:
+        bfs_dfs_menu = Menu()
+        bfs_dfs_menu.append_area(area)
+        # icon connecting:
+        bfs_dfs_menu.connect(bfs_dfs_icon)
+        # menu setting up:
+        self._bfs_dfs.set_menu(bfs_dfs_menu)
+        # GRID:
+        # grid icon setting up:
+        gear_wheel = GearWheelButton(1785 + 6, 1000, 24)
+        self._grid.set_icon(gear_wheel)
+
+    # PRESETS:
+    def setup(self):
         ...
+
+    # CLEARING/REBUILDING:
+    def rebuild_map(self):
+        self._grid.tile_size, self._grid.hor_tiles_q = self.get_pars()
+        # grid's renewing:
+        self.initialize()
+        # pars resetting:
+        self.aux_clear()
+        self._grid.start_node = None
+        self._grid.end_node = None
+        self._grid.node_chosen = None
+        self._grid.node_sprite_list = arcade.SpriteList()
+        self._grid.grid_line_shapes = arcade.ShapeElementList()
+        self._walls_manager.walls = set()
+        self._grid.get_sprites()
+        self._grid.make_grid_lines()
+
+    # clears all the nodes except start, end and walls
+    def clear_empty_nodes(self):
+        # clearing the every empty node:
+        for row in self._grid.grid:
+            for node in row:
+                if node.type not in [NodeType.WALL, NodeType.START_NODE, NodeType.END_NODE]:
+                    node.clear()
+                elif node.type in [NodeType.START_NODE, NodeType.END_NODE]:
+                    node.heur_clear()
+        # clearing the nodes-relating pars of the game:
+        self.aux_clear()
+
+    # entirely clears the grid:
+    def clear_grid(self):
+        # clearing the every node:
+        for row in self._grid.grid:
+            for node in row:
+                node.clear()
+        # clearing the nodes-relating pars of the game:
+        self._grid._start_node, self._grid._end_node = None, None
+        self.aux_clear()
+        self._walls_manager.walls = set()
+
+    def aux_clear(self):
+        # builder clearing:
+        self._walls_manager.walls_built_erased = [([], True)]
+        self._walls_manager.walls_index = 0
+        # Lastar clearing:
+        self._in_interaction = False
+        self._in_interaction_mode_lock = False
+
+    # UPDATING:
+    # long press logic for mouse buttons, incrementers changing for living icons and so on:
+    def update(self, delta_time: float):
+        ...
+
+    def on_draw(self):
+        ...
+
+    def on_key_press(self, symbol: int, modifiers: int):
+        ...
+
+    def on_key_release(self, symbol: int, modifiers: int):
+        ...
+
+    def on_mouse_motion(self, x: int, y: int, dx: int, dy: int):
+        ...
+
+    def on_mouse_press(self, x: int, y: int, button: int, modifiers: int):
+        ...
+
+    def on_mouse_release(self, x: int, y: int, button: int, modifiers: int):
+        ...
+
+    # game mode switching by scrolling the mouse wheel:
+    def on_mouse_scroll(self, x: int, y: int, scroll_x: int, scroll_y: int):
+        self._mode = (self.mode + 1) % len(self.mode_names)
+
+    @staticmethod
+    def get_ms(start, finish):
+        return (finish - start) // 10 ** 6
 
 
 class DrawLib:
@@ -95,6 +254,7 @@ class Interactable(ABC):
 
 class Manager(ABC):
     def __init__(self):
+        # object to be managed:
         self._obj = None
 
     @abstractmethod
@@ -104,7 +264,7 @@ class Manager(ABC):
 
 class Grid(Drawable):
 
-    def __init__(self, tiles_q):
+    def __init__(self):
         super().__init__()
         # the grid itself:
         self._grid = None
@@ -116,17 +276,17 @@ class Grid(Drawable):
         # settings' icon:
         self._settings_icon = None
         # visualization:
-        self._node_sprite_list = None
-        self._grid_line_shapes = None
+        self._node_sprite_list = arcade.SpriteList()
+        self._grid_line_shapes = arcade.ShapeElementList()
         # algo steps visualization:
         self._triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
         self._arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
         # sizes:
         self._X, self._Y = self.Y, self.X = SCREEN_HEIGHT - 60, SCREEN_WIDTH - 250
         # pars:
-        self._tile_size, self._hor_tiles_q = self.get_pars()
-        self._tiles_q = tiles_q
+        self._tiles_q = None
         self._line_width = None
+        self._tile_size, self._hor_tiles_q = self.get_pars()
         # scaling:  TODO: add AI to calculate the sizes for every resolution possible:
         self._scale = 0
         self._scale_names = {0: 10, 1: 15, 2: 22, 3: 33, 4: 45, 5: 66, 6: 90,
@@ -175,6 +335,30 @@ class Grid(Drawable):
         return self._grid
 
     @property
+    def start_node(self):
+        return self._start_node
+
+    @start_node.setter
+    def start_node(self, start_node):
+        self._start_node = start_node
+
+    @property
+    def end_node(self):
+        return self._end_node
+
+    @end_node.setter
+    def end_node(self, end_node):
+        self._end_node = end_node
+
+    @property
+    def node_chosen(self):
+        return self._node_chosen
+
+    @node_chosen.setter
+    def node_chosen(self, node_chosen):
+        self._node_chosen = node_chosen
+
+    @property
     def tiles_q(self):
         return self._tiles_q
 
@@ -194,6 +378,10 @@ class Grid(Drawable):
     def tile_size(self):
         return self._tile_size
 
+    @tile_size.setter
+    def tile_size(self, tile_size):
+        self._tile_size = tile_size
+
     @property
     def line_width(self):
         return self._line_width
@@ -202,21 +390,33 @@ class Grid(Drawable):
     def arrow_shape_list(self):
         return self._arrow_shape_list
 
+    @arrow_shape_list.setter
+    def arrow_shape_list(self, arrow_shape_list):
+        self._arrow_shape_list = arrow_shape_list
+
     @property
     def triangle_shape_list(self):
         return
+
+    @triangle_shape_list.setter
+    def triangle_shape_list(self, triangle_shape_list):
+        self._triangle_shape_list = triangle_shape_list
 
     @property
     def node_sprite_list(self):
         return self._node_sprite_list
 
-    @arrow_shape_list.setter
-    def arrow_shape_list(self, arrow_shape_list):
-        self._arrow_shape_list = arrow_shape_list
+    @node_sprite_list.setter
+    def node_sprite_list(self, node_sprite_list):
+        self._node_sprite_list = node_sprite_list
 
-    @triangle_shape_list.setter
-    def triangle_shape_list(self, triangle_shape_list):
-        self._triangle_shape_list = triangle_shape_list
+    @property
+    def grid_line_shapes(self):
+        return self._grid_line_shapes
+
+    @grid_line_shapes.setter
+    def grid_line_shapes(self, grid_line_shapes):
+        self._grid_line_shapes = grid_line_shapes
 
     def initialize(self):
         self._grid = [[Node(j, i, 1, NodeType.EMPTY) for i in range(self._hor_tiles_q)] for j in range(self._tiles_q)]
@@ -250,52 +450,6 @@ class Grid(Drawable):
     def on_key_release(self, x, y):
         pass
 
-    def rebuild_map(self):
-        self._tile_size, self._hor_tiles_q = self.get_pars()
-        # grid's renewing:
-        self.initialize()
-        # pars resetting:
-        self.aux_clear()
-        self._start_node = None
-        self._end_node = None
-        self._node_chosen = None
-        self._node_sprite_list = arcade.SpriteList()
-        self._grid_line_shapes = arcade.ShapeElementList()
-        self._walls = set()
-        self.get_sprites()
-        self.make_grid_lines()
-
-    # clears all the nodes except start, end and walls
-    def clear_empty_nodes(self):
-        # clearing the every empty node:
-        for row in self.grid:
-            for node in row:
-                if node.type not in [NodeType.WALL, NodeType.START_NODE, NodeType.END_NODE]:
-                    node.clear()
-                elif node.type in [NodeType.START_NODE, NodeType.END_NODE]:
-                    node.heur_clear()
-        # clearing the nodes-relating pars of the game:
-        self.aux_clear()
-
-    # entirely clears the grid:
-    def clear_grid(self):
-        # clearing the every node:
-        for row in self.grid:
-            for node in row:
-                node.clear()
-        # clearing the nodes-relating pars of the game:
-        self.start_node, self.end_node = None, None
-        self.aux_clear()
-        self.walls = set()
-
-    def aux_clear(self):
-        # builder clearing:
-        self.walls_built_erased = [([], True)]
-        self.walls_index = 0
-        # Lastar clearing:
-        self.in_interaction = False
-        self.in_interaction_mode_lock = False
-
     # creates sprites for all the nodes:
     def get_sprites(self):  # batch -->
         for row in self.grid:
@@ -316,14 +470,6 @@ class Grid(Drawable):
                                    arcade.color.BLACK,
                                    self._line_width))
 
-    @property
-    def start_node(self):
-        return self._start_node
-
-    @property
-    def end_node(self):
-        return self._end_node
-
 
 class WallsManager(Manager):
     def __init__(self):
@@ -338,6 +484,30 @@ class WallsManager(Manager):
 
     def connect(self, grid: Grid):
         self._obj = grid
+
+    @property
+    def walls_built_erased(self):
+        return self._walls_built_erased
+
+    @walls_built_erased.setter
+    def walls_built_erased(self, walls_built_erased):
+        self._walls_built_erased = walls_built_erased
+
+    @property
+    def walls_index(self):
+        return self._walls_index
+
+    @walls_index.setter
+    def walls_index(self, walls_index):
+        self._walls_index = walls_index
+
+    @property
+    def walls(self):
+        return self._walls
+
+    @walls.setter
+    def walls(self, walls):
+        self._walls = walls
 
     # EMPTIES -->> WALLS and BACK:
     def change_nodes_type(self, node_type: 'NodeType', walls_set: set or list):
@@ -751,11 +921,8 @@ class Astar(Algorithm):
         # self._end_node = None
         # 2. a_star_settings:
         self._heuristic = 0
-        self._heuristic_names = {0: 'MANHATTAN', 1: 'EUCLIDIAN', 2: 'MAX_DELTA', 3: 'DIJKSTRA'}
         self._tiebreaker = None
-        self._tiebreaker_names = {0: 'VECTOR_CROSS', 1: 'COORDINATES'}
         self._greedy_ind = None  # is algorithm greedy?
-        self._greedy_names = {0: 'IS_GREEDY'}
         # 3. visiting:
         self._nodes_to_be_visited = []
         self._nodes_visited = {}
@@ -985,7 +1152,7 @@ class Astar(Algorithm):
                 curr_node.type = NodeType.VISITED_NODE
                 curr_node.update_sprite_colour()
             curr_node.times_visited += 1
-            max_times_visited = max(self._max_times_visited, curr_node.times_visited)
+            self._max_times_visited = max(self._max_times_visited, curr_node.times_visited)
             self._nodes_visited[curr_node] = 1
             # base case of finding the shortest path:
             if curr_node == self._obj.end_node:
@@ -1336,6 +1503,10 @@ class Menu(Drawable, Interactable, Manager):
     def append_area(self, area: 'Area'):
         self._areas.append(area)
 
+    def multiple_append(self, *areas: 'Area'):
+        for area in areas:
+            self.append_area(area)
+
     def update(self):
         pass
 
@@ -1365,7 +1536,7 @@ class Menu(Drawable, Interactable, Manager):
         pass
 
 
-class Area(Drawable, Interactable, Manager):
+class Area(Drawable, Interactable):
 
     def __init__(self, cx, cy, delta, sq_size, sq_line_w, header: str, fields: dict[int, str]):
         super().__init__()
@@ -1385,9 +1556,6 @@ class Area(Drawable, Interactable, Manager):
         self._header_text = None
         self._field_texts = []
         self._rectangle_shapes = arcade.ShapeElementList()
-
-    def connect(self, obj):
-        pass
 
     def lock(self):
         self._is_locked = True
@@ -1442,7 +1610,8 @@ class Area(Drawable, Interactable, Manager):
         pass
 
     def on_press(self, x, y):
-        ...
+        ...  # TODO: WRITE!!!
+
 
     def on_release(self, x, y):
         pass
@@ -1869,19 +2038,16 @@ class Undo(Icon, Drawable, Interactable, Manager):
         pass
 
 
-class GearWheelButton(Icon, Drawable, Interactable, Manager):
+class GearWheelButton(Icon, Drawable, Interactable):
     DELTA = 0.02
 
-    def __init__(self, cx, cy, r, cog_size=8, multiplier=1.5, line_w=2, clockwise=True):
+    def __init__(self, cx: int, cy: int, r: int, cog_size=8, multiplier=1.5, line_w=2, clockwise=True):
         super().__init__(cx, cy)
         self._r = r
         self._cog_size = cog_size
         self._multiplier = multiplier
         self._line_w = line_w
         self._clockwise = clockwise
-
-    def connect(self, obj):
-        pass
 
     def setup(self):
         ...
@@ -2235,7 +2401,7 @@ class ArrowReset(Icon, Drawable, Interactable, Manager):
         pass
 
 
-class AstarIcon(Icon, Drawable, Interactable, Manager):
+class AstarIcon(Icon, Drawable, Interactable):
     DELTA = 0.05
 
     def __init__(self, cx, cy, size_w, size_h, line_w=2, clockwise=True):
@@ -2244,9 +2410,6 @@ class AstarIcon(Icon, Drawable, Interactable, Manager):
         self._size_h = size_h
         self._line_w = line_w
         self._clockwise = clockwise
-
-    def connect(self, obj):
-        pass
 
     def setup(self):
         pass
@@ -2342,7 +2505,7 @@ class AstarIcon(Icon, Drawable, Interactable, Manager):
         pass
 
 
-class Waves(Icon, Drawable, Interactable, Manager):
+class Waves(Icon, Drawable, Interactable):
     DELTA = 0.25
 
     def __init__(self, cx, cy, size=32, waves_q=5, line_w=2):
@@ -2350,9 +2513,6 @@ class Waves(Icon, Drawable, Interactable, Manager):
         self._size = size
         self._waves_q = waves_q
         self._line_w = line_w
-
-    def connect(self, obj):
-        pass
 
     def setup(self):
         pass
@@ -2394,16 +2554,13 @@ class Waves(Icon, Drawable, Interactable, Manager):
         pass
 
 
-class BfsDfsIcon(Icon, Drawable, Interactable, Manager):
+class BfsDfsIcon(Icon, Drawable, Interactable):
     DELTA = 0.15
 
     def __init__(self, cx, cy, size, line_w):
         super().__init__(cx, cy)
         self._size = size
         self._line_w = line_w
-
-    def connect(self, obj):
-        pass
 
     def setup(self):
         pass

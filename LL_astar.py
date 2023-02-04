@@ -977,7 +977,7 @@ class Lastar(arcade.Window):  # 36 366 98 989 LL
                                 self.walls.remove(self.number_repr(node))
                             else:
                                 self.walls.add(self.number_repr(node))
-                    self.walls_index -= 1
+                        self.walls_index -= 1
             case arcade.key.Y:  # cancels undo
                 if not (self.in_interaction or self.loading):
                     if self.walls_index < len(self.walls_built_erased) - 1:
@@ -1605,9 +1605,7 @@ class DrawLib:
         ...
 
 
-class Element(ABC):
-    def __init__(self):
-        ...
+class Drawable(ABC):
 
     # on initialization (loads presets):
     @abstractmethod
@@ -1623,6 +1621,9 @@ class Element(ABC):
     @abstractmethod
     def draw(self):
         ...
+
+
+class Interactable(ABC):
 
     # implements the element's behaviour in on_press/on_motion methods:
     @abstractmethod
@@ -1655,16 +1656,66 @@ class Manager(ABC):
         self._obj = obj
 
 
-class Grid(Element):
+class Grid(Drawable):
 
     def __init__(self, tiles_q):
         super().__init__()
-        self._tile_size, self._hor_tiles_q = self.get_pars()
-        self._tiles_q = tiles_q
+        # the grid itself:
         self._grid = None
+        # the current node chosen (for getting info):
+        self._node_chosen = None
+        # settings' icon:
+        self._settings_icon = None
+        # visualization:
         self._node_sprite_list = None
         self._grid_line_shapes = None
-        self._node_chosen = None
+        # sizes:
+        self._X, self._Y = self.Y, self.X = SCREEN_HEIGHT - 60, SCREEN_WIDTH - 250
+        # pars:
+        self._tile_size, self._hor_tiles_q = self.get_pars()
+        self._tiles_q = tiles_q
+        self._line_width = None
+        # scaling:  TODO: add AI to calculate the sizes for every resolution possible:
+        self._scale = 0
+        self._scale_names = {0: 10, 1: 15, 2: 22, 3: 33, 4: 45, 5: 66, 6: 90,
+                            7: 110}  # {0: 5, 1: 10, 2: 15, 3: 22, 4: 33, 5: 45, 6: 66, 7: 90, 8: 110, 9: 165, 10: 198}  # factors of 990 num
+
+    # INITIALIZATION AUX:
+    # calculating grid visualization pars for vertical tiles number given:
+    def get_pars(self):
+        self._Y, self._X = SCREEN_HEIGHT - 60, SCREEN_WIDTH - 250
+        self._tiles_q = self._scale_names[self._scale]
+        self._line_width = int(math.sqrt(max(self._scale_names.values()) / self._tiles_q))
+        tile_size = self.Y // self.tiles_q
+        hor_tiles_q = self.X // tile_size
+        self.Y, self.X = self.tiles_q * tile_size, hor_tiles_q * tile_size
+        return tile_size, hor_tiles_q
+
+    def get_hor_tiles(self, i):
+        return (SCREEN_WIDTH - 250) // ((SCREEN_HEIGHT - 30) // self._scale_names[i])  # TODO: ELIMINATE THE DEVIATION IN Y coordinates!!!
+
+    def set_icon(self, settings_icon: 'Icon'):
+        self._settings_icon = settings_icon
+
+    # AUX:
+    # gets the number representation for the node:
+    def number_repr(self, node: 'Node'):
+        return node.y * self._hor_tiles_q + node.x
+
+    # gets node's coordinates for its number representation:
+    def coords(self, number: int):
+        return divmod(number, self._hor_tiles_q)
+
+    # gets the node itself for its number representation:
+    def node(self, num: int) -> 'Node':
+        y, x = self.coords(num)
+        return self._grid[y][x]
+
+    # gets the node from the current mouse coordinates:
+    def get_node(self, mouse_x, mouse_y):
+        x_, y_ = mouse_x - 5, mouse_y - 5
+        x, y = x_ // self._tile_size, y_ // self._tile_size
+        return self.grid[y][x] if 0 <= x < self._hor_tiles_q and 0 <= y < self.tiles_q else None
 
     @property
     def grid(self):
@@ -1680,6 +1731,11 @@ class Grid(Element):
 
     def initialize(self):
         self._grid = [[Node(j, i, 1, NodeType.EMPTY) for i in range(self._hor_tiles_q)] for j in range(self._tiles_q)]
+
+    # make a node the chosen one:
+    def choose_node(self, node: 'Node'):
+        self._node_chosen = node
+        # draw a frame
 
     def setup(self):
         pass
@@ -1720,55 +1776,144 @@ class Grid(Element):
         self.get_sprites()
         self.make_grid_lines()
 
+    # clears all the nodes except start, end and walls
     def clear_empty_nodes(self):
-        ...
+        # clearing the every empty node:
+        for row in self.grid:
+            for node in row:
+                if node.type not in [NodeType.WALL, NodeType.START_NODE, NodeType.END_NODE]:
+                    node.clear()
+                elif node.type in [NodeType.START_NODE, NodeType.END_NODE]:
+                    node.heur_clear()
+        # clearing the nodes-relating pars of the game:
+        self.aux_clear()
 
+    # entirely clears the grid:
     def clear_grid(self):
-        ...
+        # clearing the every node:
+        for row in self.grid:
+            for node in row:
+                node.clear()
+        # clearing the nodes-relating pars of the game:
+        self.start_node, self.end_node = None, None
+        self.aux_clear()
+        self.walls = set()
 
     def aux_clear(self):
-        ...
+        # builder clearing:
+        self.walls_built_erased = [([], True)]
+        self.walls_index = 0
+        # Lastar clearing:
+        self.in_interaction = False
+        self.in_interaction_mode_lock = False
 
-    def get_sprites(self):
-        ...
+    # creates sprites for all the nodes:
+    def get_sprites(self):  # batch -->
+        for row in self.grid:
+            for node in row:
+                node.get_solid_colour_sprite(self)
 
+    # shaping shape element list of grid lines:
     def make_grid_lines(self):
-        ...
+        for j in range(self.tiles_q + 1):
+            self._grid_line_shapes.append(
+                arcade.create_line(5, 5 + self._tile_size * j, 5 + self.X, 5 + self._tile_size * j,
+                                   arcade.color.BLACK,
+                                   self._line_width))
+
+        for i in range(self._hor_tiles_q + 1):
+            self._grid_line_shapes.append(
+                arcade.create_line(5 + self._tile_size * i, 5, 5 + self._tile_size * i, 5 + self.Y,
+                                   arcade.color.BLACK,
+                                   self._line_width))
 
 
 class WallsManager(Manager):
     def __init__(self):
         super().__init__()
+        # managed object:
         self._grid_obj = None
-        self.building_walls_flag = False
-        self.build_or_erase = True  # True for building and False for erasing
-        self.loading = False
-        self.loading_ind = 0
-        self.walls_built_erased = [([], True)]  # TODO: swap to DICT!!!
-        self.walls_index = 0
-        self.walls = set()  # all walls located on the map at the time being
+        # memoization for undo/redo area:
+        self._walls_built_erased = [([], True)]  # TODO: swap to DICT!!!
+        self._walls_index = 0
+        self._walls = set()  # all walls located on the map at the time being
+        # save/load:
+        self._loading = False
+        self._loading_ind = 0
 
     def connect(self, grid: Grid):
         self._grid_obj = grid
 
+    # EMPTIES -->> WALLS and BACK:
     def change_nodes_type(self, node_type: 'NodeType', walls_set: set or list):
-        ...
+        for node_num in walls_set:
+            y, x = self._grid_obj.coords(node_num)
+            self._grid_obj.grid[y][x].type = node_type
+            self._grid_obj.grid[y][x].update_sprite_colour()
 
-    def erase_all_linked_nodes(self):
-        ...
+    # builds/erases walls:
+    def build_wall(self, x, y):
+        # now building the walls:
+        n = self._grid_obj.get_node(x, y)
+        if n and n.type != NodeType.WALL:
+            n.type = NodeType.WALL
+            self._walls.add(self._grid_obj.number_repr(n))
+            n.update_sprite_colour()
+            if self._walls_index < len(self._walls_built_erased) - 1:
+                self._walls_built_erased = self._walls_built_erased[:self._walls_index + 1]
+            self._walls_built_erased.append(([self._grid_obj.number_repr(n)], True))
+            self._walls_index += 1
 
-    def build_wall(self):
-        ...
+    def erase_wall(self, x, y):
+        # now erasing the walls:
+        n = self._grid_obj.get_node(x, y)
+        if n and n.type == NodeType.WALL:
+            n.type = NodeType.EMPTY
+            self._walls.remove(self._grid_obj.number_repr(n))
+            n.update_sprite_colour()
+            if self._walls_index < len(self._walls_built_erased) - 1:
+                self._walls_built_erased = self._walls_built_erased[:self._walls_index + 1]
+            self._walls_built_erased.append(([self._grid_obj.number_repr(n)], False))
+            self._walls_index += 1
 
-    def erase_wall(self):
-        ...
+    # erases all nodes, that are connected vertically, horizontally or diagonally to a chosen one,
+    # then nodes connected to them the same way and so on recursively...
 
+    def erase_all_linked_nodes(self, node: 'Node'):
+        node.type = NodeType.EMPTY
+        node.update_sprite_colour()
+        self._walls.remove(self._grid_obj.number_repr(node))
+        self._walls_built_erased[self._walls_index][0].append(self._grid_obj.number_repr(node))
+        for neigh in node.get_extended_neighs(self._grid_obj):  # TODO: FIT .get_extended_neighs() method in Node class!!!
+            if neigh.type == NodeType.WALL:
+                self.erase_all_linked_nodes(neigh)
+
+    # undo/redo manager:
     def undo(self):
-        ...
+        if self._walls_index > 0:
+            for num in (l := self._walls_built_erased[self._walls_index])[0]:
+                node = self._grid_obj.node(num)
+                node.type = NodeType.EMPTY if l[1] else NodeType.WALL
+                node.update_sprite_colour()
+                if l[1]:
+                    self._walls.remove(self._grid_obj.number_repr(node))
+                else:
+                    self._walls.add(self._grid_obj.number_repr(node))
+            self._walls_index -= 1
 
     def redo(self):
-        ...
+        if self._walls_index < len(self._walls_built_erased) - 1:
+            for num in (l := self._walls_built_erased[self._walls_index + 1])[0]:
+                node = self._grid_obj.node(num)
+                node.type = NodeType.WALL if l[1] else NodeType.EMPTY
+                node.update_sprite_colour()
+                if l[1]:
+                    self._walls.add(self._grid_obj.number_repr(node))
+                else:
+                    self._walls.remove(self._grid_obj.number_repr(node))
+            self._walls_index += 1
 
+    # save/load area:
     def save(self):
         ...
 
@@ -2059,7 +2204,7 @@ class Node:
 
 
 # class representing an algo:
-class Algorithm(Element):
+class Algorithm(Drawable, Interactable):
     def __init__(self, name: str, game: Lastar):
         super().__init__()
         # info:
@@ -2102,6 +2247,9 @@ class Algorithm(Element):
         # iterations and time:
         self._iterations = 0
         self._time_elapsed_ms = 0
+        # locker:
+        for area in self._menu.areas:
+            area.unlock()
 
     @abstractmethod
     def clear(self):
@@ -2782,7 +2930,7 @@ class BfsDfs(Algorithm):
         pass
 
 
-class Menu(Element, Manager):
+class Menu(Drawable, Interactable, Manager):
 
     def __init__(self):
         super().__init__()
@@ -2828,7 +2976,7 @@ class Menu(Element, Manager):
         pass
 
 
-class Area(Element, Manager):
+class Area(Drawable, Interactable, Manager):
 
     def __init__(self, cx, cy, delta, sq_size, sq_line_w, header: str, fields: dict[int, str]):
         super().__init__()
@@ -2953,7 +3101,7 @@ class Icon(ABC):
         return self._inter_type
 
 
-class PlayButton(Icon, Element, Manager):
+class PlayButton(Icon, Drawable, Interactable, Manager):
     DELTAS = [0.5, 0.015]  # pixels/radians
 
     def __init__(self, cx, cy, r, line_w):
@@ -3051,7 +3199,7 @@ class PlayButton(Icon, Element, Manager):
         pass
 
 
-class StepButton(Icon, Element, Manager):
+class StepButton(Icon, Drawable, Interactable, Manager):
     DELTAS = [0.15, 0.1, 0.05]
     THRESHOLD = 8
     TICKS_THRESHOLD = 12
@@ -3183,7 +3331,7 @@ class StepButton(Icon, Element, Manager):
         self._incrementer[3] = 0
 
 
-class Eraser(Icon, Element, Manager):
+class Eraser(Icon, Drawable, Interactable, Manager):
 
     def __init__(self, cx, cy, h, w, r, line_w):
         super().__init__(cx, cy)
@@ -3257,7 +3405,7 @@ class Eraser(Icon, Element, Manager):
         pass
 
 
-class Undo(Icon, Element, Manager):
+class Undo(Icon, Drawable, Interactable, Manager):
 
     def __init__(self, cx, cy, a, dh, r, line_w, is_right=False):
         super().__init__(cx, cy)
@@ -3332,7 +3480,7 @@ class Undo(Icon, Element, Manager):
         pass
 
 
-class GearWheelButton(Icon, Element, Manager):
+class GearWheelButton(Icon, Drawable, Interactable, Manager):
     DELTA = 0.02
 
     def __init__(self, cx, cy, r, cog_size=8, multiplier=1.5, line_w=2, clockwise=True):
@@ -3411,7 +3559,7 @@ class GearWheelButton(Icon, Element, Manager):
         pass
 
 
-class ArrowsMenu(Icon, Element, Manager):
+class ArrowsMenu(Icon, Drawable, Interactable, Manager):
 
     def __init__(self, cx, cy):
         super().__init__(cx, cy)
@@ -3425,8 +3573,8 @@ class ArrowsMenu(Icon, Element, Manager):
         self._arrows = None
         self._arrows_reset = None
 
-    def connect(self, obj):
-        pass
+    def connect(self, obj):  # is it needed???
+        self._obj = obj
 
     @property
     def walk_index(self):
@@ -3461,19 +3609,28 @@ class ArrowsMenu(Icon, Element, Manager):
         self._arrows_vertices = arrows_vertices
 
     def setup(self):
-        pass
+        for arrow in self._arrows:
+            arrow.setup()
+        self._arrows_reset.setup()
 
     def update(self):
         pass
 
     def draw(self):
-        pass
+        for arrow in self._arrows:
+            arrow.draw()
+        self._arrows_reset.draw()
 
     def on_motion(self, x, y):
-        mhe
+        for arrow in self._arrows:
+            arrow.on_motion(x, y)
+        self._arrows_reset.on_motion(x, y)
 
     def on_press(self, x, y):
-        pass
+        if self._choosing_arrows:
+            for arrow in self._arrows:
+                arrow.on_press(x, y)
+        self._arrows_reset.on_press(x, y)
 
     def on_release(self, x, y):
         pass
@@ -3485,7 +3642,7 @@ class ArrowsMenu(Icon, Element, Manager):
         pass
 
 
-class Arrow(Icon, Element, Manager):  # part of an arrow menu
+class Arrow(Icon, Drawable, Interactable, Manager):  # part of an arrow menu
     # initial directions priority for all algorithms:
     walk = [(1, 0), (0, -1), (-1, 0), (0, 1)]
 
@@ -3619,7 +3776,7 @@ class Arrow(Icon, Element, Manager):  # part of an arrow menu
         pass
 
 
-class ArrowReset(Icon, Element, Manager):
+class ArrowReset(Icon, Drawable, Interactable, Manager):
 
     def __init__(self, cx, cy, arrow_height):
         super().__init__(cx, cy)
@@ -3666,7 +3823,7 @@ class ArrowReset(Icon, Element, Manager):
         pass
 
 
-class AstarIcon(Icon, Element, Manager):
+class AstarIcon(Icon, Drawable, Interactable, Manager):
     DELTA = 0.05
 
     def __init__(self, cx, cy, size_w, size_h, line_w=2, clockwise=True):
@@ -3773,7 +3930,7 @@ class AstarIcon(Icon, Element, Manager):
         pass
 
 
-class Waves(Icon, Element, Manager):
+class Waves(Icon, Drawable, Interactable, Manager):
     DELTA = 0.25
 
     def __init__(self, cx, cy, size=32, waves_q=5, line_w=2):
@@ -3825,7 +3982,7 @@ class Waves(Icon, Element, Manager):
         pass
 
 
-class BfsDfsIcon(Icon, Element, Manager):
+class BfsDfsIcon(Icon, Drawable, Interactable, Manager):
     DELTA = 0.15
 
     def __init__(self, cx, cy, size, line_w):

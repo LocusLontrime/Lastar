@@ -36,7 +36,7 @@ class Lastar(arcade.Window):
         self._mode_names = {0: 'BUILDING/ERASING', 1: 'START&END_NODES_CHOOSING', 2: 'INFO_GETTING'}
         self._building_walls_flag = False
         self._build_or_erase = True  # True for building and False for erasing
-        #names dicts:
+        # names dicts:
         self._heuristic_names = {0: 'MANHATTAN', 1: 'EUCLIDIAN', 2: 'MAX_DELTA', 3: 'DIJKSTRA'}
         self._tiebreaker_names = {0: 'VECTOR_CROSS', 1: 'COORDINATES'}
         self._greedy_names = {0: 'IS_GREEDY'}
@@ -68,7 +68,8 @@ class Lastar(arcade.Window):
         bot_menu_y -= 30 + (len(self._tiebreaker_names) - 1) * delta + 3 * sq_size
         is_greedy_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Is greedy', self._greedy_names)
         bot_menu_y -= 30 + 3 * sq_size
-        guide_arrows_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Guide arrows', self._guide_arrows_names)
+        guide_arrows_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Guide arrows',
+                                 self._guide_arrows_names)
         bot_menu_y -= 30 + 3 * sq_size
         show_mode_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Show mode', self._interactive_names)
         # menu composing:
@@ -91,6 +92,7 @@ class Lastar(arcade.Window):
         bfs_dfs_icon = BfsDfsIcon(1750 - 30 + 6, 1020 - 73 - 25, 54, 2)
         self._bfs_dfs.set_icon(bfs_dfs_icon)
         # area setting up:
+        bot_menu_x, bot_menu_y = SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120
         area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Core', {0: f'BFS', 1: f'DFS'})
         # menu composing:
         bfs_dfs_menu = Menu()
@@ -103,6 +105,23 @@ class Lastar(arcade.Window):
         # grid icon setting up:
         gear_wheel = GearWheelButton(1785 + 6, 1000, 24)
         self._grid.set_icon(gear_wheel)
+        # arrows menu setting up:
+        bot_menu_x, bot_menu_y = SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120
+        arrows_menu = ArrowsMenu(bot_menu_x, bot_menu_y, 2 * sq_size, sq_size)
+        self._grid.set_arrows_menu(arrows_menu)
+        # area setting up:
+        bot_menu_y -= 3 * 3 * sq_size
+        scaling_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Sizes in tiles',
+                            {k: f'{v}x{self._grid.get_hor_tiles(k)}' for k, v in self._grid.scale_names.items()})
+        # menu composing:
+        settings_menu = Menu()
+        settings_menu.append_area(scaling_area)
+        # icon connecting:
+        settings_menu.connect(gear_wheel)
+        # menu setting up:
+        self._grid.set_menu(settings_menu)
+        # MANAGE MENU:
+        ...
 
     # PRESETS:
     def setup(self):
@@ -273,8 +292,10 @@ class Grid(Drawable):
         self._end_node = None
         # the current node chosen (for getting info):
         self._node_chosen = None
-        # settings' icon:
+        # settings' icon, menu and arrows menu:
         self._settings_icon = None
+        self._settings_menu = None
+        self._arrows_menu = None
         # visualization:
         self._node_sprite_list = arcade.SpriteList()
         self._grid_line_shapes = arcade.ShapeElementList()
@@ -309,6 +330,12 @@ class Grid(Drawable):
 
     def set_icon(self, settings_icon: 'Icon'):
         self._settings_icon = settings_icon
+
+    def set_menu(self, menu: 'Menu'):
+        self._settings_menu = menu
+
+    def set_arrows_menu(self, arrows_menu: 'ArrowsMenu'):
+        self._arrows_menu = arrows_menu
 
     # AUX:
     # gets the number representation for the node:
@@ -469,6 +496,10 @@ class Grid(Drawable):
                 arcade.create_line(5 + self._tile_size * i, 5, 5 + self._tile_size * i, 5 + self.Y,
                                    arcade.color.BLACK,
                                    self._line_width))
+
+    @property
+    def scale_names(self):
+        return self._scale_names
 
 
 class WallsManager(Manager):
@@ -1612,7 +1643,6 @@ class Area(Drawable, Interactable):
     def on_press(self, x, y):
         ...  # TODO: WRITE!!!
 
-
     def on_release(self, x, y):
         pass
 
@@ -1644,6 +1674,9 @@ class Icon(ABC):
         self._incrementer = 0
         self._inter_type = InterType.NONE
         self._vertices = []
+
+    def is_pressed(self):
+        return self._inter_type == InterType.PRESSED
 
     # helpful auxiliary methods:
     @staticmethod
@@ -2115,13 +2148,12 @@ class GearWheelButton(Icon, Drawable, Interactable):
 
 
 class ArrowsMenu(Icon, Drawable, Interactable, Manager):  # cx, cy = (1755, 785)
+    arrows_indices = []
+    walk_index = 0
+    choosing_arrows = True
 
     def __init__(self, cx, cy, arrow_length, arrow_height):
         super().__init__(cx, cy)
-        self._arrows_indices = []
-        self._walk_index = 0
-        self._choosing_arrows = True
-        self._arrows_vertices = None
         self._inter_types_arrows = [InterType.NONE for _ in range(4)]
         self._inter_type_reset_square = InterType.NONE
 
@@ -2151,36 +2183,12 @@ class ArrowsMenu(Icon, Drawable, Interactable, Manager):  # cx, cy = (1755, 785)
         self._obj = obj
 
     @property
-    def walk_index(self):
-        return self._walk_index
-
-    @walk_index.setter
-    def walk_index(self, walk_index):
-        self._walk_index = walk_index
-
-    @property
-    def arrows_indices(self):
-        return self._arrows_indices
-
-    @arrows_indices.setter
-    def arrows_indices(self, arrows_indices):
-        self._arrows_indices = arrows_indices
-
-    @property
     def inter_types_arrows(self):
         return self._inter_types_arrows
 
     @inter_types_arrows.setter
     def inter_types_arrows(self, inter_types_arrows):
         self._inter_types_arrows = inter_types_arrows
-
-    @property
-    def arrows_vertices(self):
-        return self._arrows_vertices
-
-    @arrows_vertices.setter
-    def arrows_vertices(self, arrows_vertices):
-        self._arrows_vertices = arrows_vertices
 
     def setup(self):
         for arrow in self._arrows:
@@ -2205,7 +2213,7 @@ class ArrowsMenu(Icon, Drawable, Interactable, Manager):  # cx, cy = (1755, 785)
         self._arrows_reset.on_motion(x, y)
 
     def on_press(self, x, y):
-        if self._choosing_arrows:
+        if self.choosing_arrows:
             for arrow in self._arrows:
                 arrow.on_press(x, y)
         self._arrows_reset.on_press(x, y)
@@ -2220,7 +2228,7 @@ class ArrowsMenu(Icon, Drawable, Interactable, Manager):  # cx, cy = (1755, 785)
         pass
 
 
-class Arrow(Icon, Drawable, Interactable, Manager):  # part of an arrow menu
+class Arrow(Icon, Drawable, Interactable):  # part of an arrow menu
     # initial directions priority for all algorithms:
     walk = [(1, 0), (0, -1), (-1, 0), (0, 1)]
 
@@ -2233,9 +2241,6 @@ class Arrow(Icon, Drawable, Interactable, Manager):  # part of an arrow menu
         self._line_w = line_w
         self._point = point
         self._colour = colour
-
-    def connect(self, obj: ArrowsMenu):
-        self._obj = obj
 
     @property
     def _dx(self):  # TODO: this one should not be a protected property!!!
@@ -2295,7 +2300,7 @@ class Arrow(Icon, Drawable, Interactable, Manager):  # part of an arrow menu
             self._point[1]) * self._arrow_height, abs(
             self._point[0]) * self._arrow_height + abs(self._point[1]) * (self._arrow_length - self._arrow_height)
 
-        if self._obj.inter_types_arrows[ind] == InterType.PRESSED:
+        if self._inter_type == InterType.PRESSED:
             arcade.draw_rectangle_filled(cx_, cy_, w, h, self._colour)
 
             arcade.draw_triangle_filled(
@@ -2311,19 +2316,16 @@ class Arrow(Icon, Drawable, Interactable, Manager):  # part of an arrow menu
             # numbers-hints:
             signed_delta = self._arrow_height / 2 - self._arrow_height / 12
             arcade.Text(
-                f'{self._obj.arrows_indices.index(ind) + 1}',
+                f'{ArrowsMenu.arrows_indices.index(ind) + 1}',
                 self._cx - self._arrow_height / 3 + self._arrow_height / 12 - self._point[0] * signed_delta,
                 self._cy - self._arrow_height / 3 - self._point[1] * signed_delta, arcade.color.BLACK,
                 2 * self._arrow_height / 3,
                 bold=True).draw()
 
-        if self._obj.arrows_vertices is None:
-            self._obj._arrows_vertices = {}
-
         arcade.draw_polygon_outline(
-            self._obj.arrows_vertices[ind],
+            self._vertices,
             arcade.color.BLACK,
-            self._line_w if self._obj.inter_types_arrows[ind] == InterType.NONE else self._line_w + 1
+            self._line_w if self._inter_type == InterType.NONE else self._line_w + 1
         )
 
     def on_motion(self, x, y):
@@ -2337,12 +2339,12 @@ class Arrow(Icon, Drawable, Interactable, Manager):  # part of an arrow menu
         if arcade.is_point_in_polygon(x, y, self._vertices):
             if self._inter_type == InterType.HOVERED:
                 self._inter_type = InterType.PRESSED
-                self._obj.arrows_indices.append(self._index)
-                self._obj.walk_index += 1
-                if self._obj.walk_index == 4:
-                    self._obj.choosing_arrows = False
+                ArrowsMenu.arrows_indices.append(self._index)
+                ArrowsMenu.walk_index += 1
+                if ArrowsMenu.walk_index == 4:
+                    ArrowsMenu.choosing_arrows = False
                     # Node's directions choosing priority change (in .get_neighs() method):
-                    Node.walk = [self.walk[self._obj.arrows_indices[_]] for _ in range(4)]
+                    Node.walk = [self.walk[ArrowsMenu.arrows_indices[_]] for _ in range(4)]
 
     def on_release(self, x, y):
         pass

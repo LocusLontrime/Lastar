@@ -29,8 +29,11 @@ class Lastar(arcade.Window):
         arcade.set_background_color(arcade.color.DUTCH_WHITE)
         self.set_update_rate(1 / 60)
         # interaction mode ON/OFF:
+        self._interactive_ind = None
         self._in_interaction = False
         self._in_interaction_mode_lock = False
+        # save/load mode:
+        self._loading = False
         # game modes and flags:
         self._mode = 0  # 0 for building the walls and erasing them afterwards, 1 for a start and end nodes choosing and 2 for info getting for every node
         self._mode_names = {0: 'BUILDING/ERASING', 1: 'START&END_NODES_CHOOSING', 2: 'INFO_GETTING'}
@@ -49,89 +52,134 @@ class Lastar(arcade.Window):
         self._astar = None
         self._wave_lee = None
         self._bfs_dfs = None
+        # current_algo:
+        self._current_algo = None
+        # algos' icons:
+        self._astar_icon = None
+        self._wave_lee_icon = None
+        self._bfs_dfs_icon = None
+        # algos' menus:
+        self._wave_lee_menu = None
+        self._astar_menu = None
+        self._bfs_dfs_menu = None
+        # settings icon:
+        self._gear_wheel = None
+        # settings menu and arrows menu:
+        self._arrows_menu = None
+        self._settings_menu = None
+        # two aux areas:
+        self._guide_arrows_area = None
+        self._show_mode_area = None
+
+        self.elements_setup()
+
+        # icons_dict:
+        self._icons_dict = {0: self._gear_wheel, 1: self._bfs_dfs_icon, 2: self._astar_icon, 3: self._wave_lee_icon}
+        # menus_dict:
+        self._menus_dict = {0: self._settings_menu, 1: self._bfs_dfs_menu, 2: self._astar_menu, 3: self._wave_lee_menu}
+
+        print(f'LALA')
 
     def elements_setup(self):
         # pars:
         sq_size, line_w = 18, 2
         delta = 2 * (sq_size + line_w)
-        # ASTAR:
-        # a_star algo:
+        # ALGOS:
         self._astar = Astar()
+        self._wave_lee = WaveLee()
+        self._bfs_dfs = BfsDfs()
+        # ICONS and MENUS:
         # icon setting up for a_star:
-        astar_icon = AstarIcon(1750 + 15 + 6, 1020 - 100 - 25, 22, 53)
-        self._astar.set_icon(astar_icon)
+        self._astar_icon = AstarIcon(1750 + 15 + 6, 1020 - 100 - 25, 22, 53)
         # areas setting up:
         bot_menu_x, bot_menu_y = SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120
         heurs_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Heuristics', self._heuristic_names)
+        heurs_area.connect_to_func(self._astar.set_heuristic)
         bot_menu_y -= 30 + (len(self._heuristic_names) - 1) * delta + 3 * sq_size
         tiebreakers_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Tiebreakers', self._tiebreaker_names)
+        tiebreakers_area.connect_to_func(self._astar.set_tiebreaker)
         bot_menu_y -= 30 + (len(self._tiebreaker_names) - 1) * delta + 3 * sq_size
         is_greedy_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Is greedy', self._greedy_names)
-        bot_menu_y -= 30 + 3 * sq_size
-        guide_arrows_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Guide arrows',
-                                 self._guide_arrows_names)
-        bot_menu_y -= 30 + 3 * sq_size
-        show_mode_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Show mode', self._interactive_names)
-        # menu composing:
-        astar_menu = Menu()
-        astar_menu.multiple_append(heurs_area, tiebreakers_area, is_greedy_area, guide_arrows_area, show_mode_area)
-        # icon connecting:
-        astar_menu.connect(astar_icon)
-        # menu setting up:
-        self._astar.set_menu(astar_menu)
-        # WAVE_LEE:
-        # wave_lee algo:
-        self._wave_lee = WaveLee()
+        is_greedy_area.connect_to_func(self._astar.set_greedy_ind)
+        # bot_menu_y -= 30 + 3 * sq_size
+        # guide_arrows_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Guide arrows',
+        #                          self._guide_arrows_names)
+        # bot_menu_y -= 30 + 3 * sq_size
+        # show_mode_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Show mode', self._interactive_names)
+        # menu composing and connecting to an icon:
+        self._astar_menu = Menu()
+        self._astar_menu.multiple_append(heurs_area, tiebreakers_area, is_greedy_area)
+        self._astar_menu.connect(self._astar_icon)
         # icon setting up for wave_lee:
-        wave_lee_icon = Waves(1750 + 50 + 48 + 10 + 6, 1020 - 73 - 25, 32, 5)
-        self._wave_lee.set_icon(wave_lee_icon)
-        # BFS/DFS:
-        # bfs/dfs algo:
-        self._bfs_dfs = BfsDfs()
+        self._wave_lee_icon = Waves(1750 + 50 + 48 + 10 + 6, 1020 - 73 - 25, 32, 5)
         # icon setting up for bfs/dfs:
-        bfs_dfs_icon = BfsDfsIcon(1750 - 30 + 6, 1020 - 73 - 25, 54, 2)
-        self._bfs_dfs.set_icon(bfs_dfs_icon)
+        self._bfs_dfs_icon = BfsDfsIcon(1750 - 30 + 6, 1020 - 73 - 25, 54, 2)
         # area setting up:
         bot_menu_x, bot_menu_y = SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120
         area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Core', {0: f'BFS', 1: f'DFS'})
-        # menu composing:
-        bfs_dfs_menu = Menu()
-        bfs_dfs_menu.append_area(area)
-        # icon connecting:
-        bfs_dfs_menu.connect(bfs_dfs_icon)
-        # menu setting up:
-        self._bfs_dfs.set_menu(bfs_dfs_menu)
+        area.connect_to_func(self._bfs_dfs.set_is_bfs)
+        # menu composing and connecting to an icon:
+        self._bfs_dfs_menu = Menu()
+        self._bfs_dfs_menu.append_area(area)
+        self._bfs_dfs_menu.connect(self._bfs_dfs_icon)
         # GRID:
         # grid icon setting up:
-        gear_wheel = GearWheelButton(1785 + 6, 1000, 24)
-        self._grid.set_icon(gear_wheel)
+        self._gear_wheel = GearWheelButton(1785 + 6, 1000, 24, 6)
         # arrows menu setting up:
         bot_menu_x, bot_menu_y = SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120
-        arrows_menu = ArrowsMenu(bot_menu_x, bot_menu_y, 2 * sq_size, sq_size)
-        self._grid.set_arrows_menu(arrows_menu)
-        # area setting up:
+        self._arrows_menu = ArrowsMenu(bot_menu_x, bot_menu_y, 2 * sq_size, sq_size)
+        self._arrows_menu.connect(self._gear_wheel)
+        # area setting up :
         bot_menu_y -= 3 * 3 * sq_size
         scaling_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Sizes in tiles',
                             {k: f'{v}x{self._grid.get_hor_tiles(k)}' for k, v in self._grid.scale_names.items()})
-        # menu composing:
-        settings_menu = Menu()
-        settings_menu.append_area(scaling_area)
-        # icon connecting:
-        settings_menu.connect(gear_wheel)
+        scaling_area.connect_to_func(self._grid.set_scale)
+        # menu composing connecting to an icon:
+        self._settings_menu = Menu()
+        self._settings_menu.append_area(scaling_area)
+        self._settings_menu.connect(self._gear_wheel)
+        # TWO AUX AREAS:
+        bot_menu_y = 250
+        self._guide_arrows_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Guide arrows',
+                                       self._guide_arrows_names)
+        self._guide_arrows_area.connect_to_func(self._grid.set_guide_arrows_ind)
+        bot_menu_y -= 30 + 3 * sq_size
+        self._show_mode_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Show mode',
+                                    self._interactive_names)
+        self._show_mode_area.connect_to_func(self.set_interactive_ind)
         # menu setting up:
-        self._grid.set_menu(settings_menu)
         # MANAGE MENU:
         ...
 
+    def set_interactive_ind(self, ind: int or None):
+        self._interactive_ind = ind
+
     # PRESETS:
     def setup(self):
+        # algos' menus/icons:
+        for icon in self._icons_dict.values():
+            icon.setup()
+        for menu in self._menus_dict.values():
+            if menu is not None:
+                menu.setup()
+        self._arrows_menu.setup()
+        self._guide_arrows_area.setup()
+        self._show_mode_area.setup()
+        # grid:
+        self._grid.setup()
+        # let us make the new mouse cursor:
+        cursor = self.get_system_mouse_cursor(self.CURSOR_HAND)
+        self.set_mouse_cursor(cursor)
+        # let us change the app icon:
+        self.set_icon(pyglet.image.load('C:\\Users\\langr\\PycharmProjects\\Lastar\\366.png'))
+        # manage icons setting up:
         ...
 
     # CLEARING/REBUILDING:
     def rebuild_map(self):
         self._grid.tile_size, self._grid.hor_tiles_q = self.get_pars()
         # grid's renewing:
-        self.initialize()
+        self._grid.initialize()
         # pars resetting:
         self.aux_clear()
         self._grid.start_node = None
@@ -140,8 +188,7 @@ class Lastar(arcade.Window):
         self._grid.node_sprite_list = arcade.SpriteList()
         self._grid.grid_line_shapes = arcade.ShapeElementList()
         self._walls_manager.walls = set()
-        self._grid.get_sprites()
-        self._grid.make_grid_lines()
+        self._grid.setup()
 
     # clears all the nodes except start, end and walls
     def clear_empty_nodes(self):
@@ -167,32 +214,93 @@ class Lastar(arcade.Window):
         self._walls_manager.walls = set()
 
     def aux_clear(self):
+        # grid's pars clearing:
+        self._grid.triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
+        self._grid.arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
         # builder clearing:
         self._walls_manager.walls_built_erased = [([], True)]
         self._walls_manager.walls_index = 0
         # Lastar clearing:
         self._in_interaction = False
         self._in_interaction_mode_lock = False
+        # algo pars clearing:
+        if self._current_algo is not None:
+            self._current_algo.clear()
 
     # UPDATING:
     # long press logic for mouse buttons, incrementers changing for living icons and so on:
     def update(self, delta_time: float):
+        # algos' icons:
+        for icon in self._icons_dict.values():
+            icon.update()
+        for menu in self._menus_dict.values():
+            if menu is not None:
+                menu.update()
+        # manage icons:
         ...
 
     def on_draw(self):
+        # renders this screen:
+        arcade.start_render()
+        # GRID:
+        self._grid.draw()
+        # HINTS:
+        ...
+        arcade.Text(f'Mode: {self._mode_names[self._mode]}', 25, SCREEN_HEIGHT - 35, arcade.color.BLACK,
+                    bold=True).draw()
+        ...
+        # ICONS and MENUS:
+        for icon in self._icons_dict.values():
+            icon.draw()
+        for menu in self._menus_dict.values():
+            if menu is not None:
+                menu.draw()
+        self._arrows_menu.draw()
+        self._guide_arrows_area.draw()
+        self._show_mode_area.draw()
+        # NODE CHOSEN:
+        ...
+        # MANAGE ICONS:
         ...
 
+    # KEYBOARD:
     def on_key_press(self, symbol: int, modifiers: int):
-        ...
+        # is called when user press the symbol key:
+        match symbol:
+            # a_star_call:
+            case arcade.key.SPACE:
+                if not self._loading:
+                    if self._grid.start_node and self._grid.end_node:
+                        # STEP BY STEP:
+                        if self._interactive_ind is not None:  # TODO: add interactive area to wave_lee and bfs_dfs!!!
+                            # game logic:
+                            self._in_interaction = True
+                            # prepare:
+                            ...
 
     def on_key_release(self, symbol: int, modifiers: int):
         ...
 
     def on_mouse_motion(self, x: int, y: int, dx: int, dy: int):
-        ...
+        for icon in self._icons_dict.values():
+            icon.on_motion(x, y)
+        for menu in self._menus_dict.values():
+            if menu is not None:
+                menu.on_motion(x, y)
+        self._arrows_menu.on_motion(x, y)
+        self._guide_arrows_area.on_motion(x, y)
+        self._show_mode_area.on_motion(x, y)
 
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int):
-        ...
+        for icon in self._icons_dict.values():
+            if icon.on_press(x, y) is not None:
+                self.clear_icons_inter_types(icon)
+        for menu in self._menus_dict.values():
+            if menu is not None:
+                menu.on_press(x, y)
+        self._arrows_menu.on_press(x, y)
+        self._guide_arrows_area.on_press(x, y)
+        self._show_mode_area.on_press(x, y)
 
     def on_mouse_release(self, x: int, y: int, button: int, modifiers: int):
         ...
@@ -200,6 +308,11 @@ class Lastar(arcade.Window):
     # game mode switching by scrolling the mouse wheel:
     def on_mouse_scroll(self, x: int, y: int, scroll_x: int, scroll_y: int):
         self._mode = (self.mode + 1) % len(self.mode_names)
+
+    def clear_icons_inter_types(self, icon_chosen: 'Icon'):
+        for icon in self._icons_dict.values():
+            if icon != icon_chosen:
+                icon.clear_inter_type()
 
     @staticmethod
     def get_ms(start, finish):
@@ -227,6 +340,15 @@ class DrawLib:
             )
         )
         return shape
+
+    # helpful auxiliary methods:
+    @staticmethod
+    def is_point_in_square(cx, cy, size, x, y):
+        return cx - size / 2 <= x <= cx + size / 2 and cy - size / 2 <= y <= cy + size / 2
+
+    @staticmethod
+    def is_point_in_circle(cx, cy, r, x, y):
+        return (cx - x) ** 2 + (cy - y) ** 2 <= r ** 2
 
 
 class Drawable(ABC):
@@ -292,10 +414,8 @@ class Grid(Drawable):
         self._end_node = None
         # the current node chosen (for getting info):
         self._node_chosen = None
-        # settings' icon, menu and arrows menu:
-        self._settings_icon = None
-        self._settings_menu = None
-        self._arrows_menu = None
+        # guide arrows ON/OFF:
+        self._guide_arrows_ind = None
         # visualization:
         self._node_sprite_list = arcade.SpriteList()
         self._grid_line_shapes = arcade.ShapeElementList()
@@ -304,14 +424,14 @@ class Grid(Drawable):
         self._arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
         # sizes:
         self._X, self._Y = self.Y, self.X = SCREEN_HEIGHT - 60, SCREEN_WIDTH - 250
-        # pars:
-        self._tiles_q = None
-        self._line_width = None
-        self._tile_size, self._hor_tiles_q = self.get_pars()
         # scaling:  TODO: add AI to calculate the sizes for every resolution possible:
         self._scale = 0
         self._scale_names = {0: 10, 1: 15, 2: 22, 3: 33, 4: 45, 5: 66, 6: 90,
                              7: 110}  # {0: 5, 1: 10, 2: 15, 3: 22, 4: 33, 5: 45, 6: 66, 7: 90, 8: 110, 9: 165, 10: 198}  # factors of 990 num
+        # pars:
+        self._tiles_q = None
+        self._line_width = None
+        self._tile_size, self._hor_tiles_q = self.get_pars()
 
     # INITIALIZATION AUX:
     # calculating grid visualization pars for vertical tiles number given:
@@ -328,14 +448,11 @@ class Grid(Drawable):
         return (SCREEN_WIDTH - 250) // (
                 (SCREEN_HEIGHT - 30) // self._scale_names[i])  # TODO: ELIMINATE THE DEVIATION IN Y coordinates!!!
 
-    def set_icon(self, settings_icon: 'Icon'):
-        self._settings_icon = settings_icon
+    def set_scale(self, ind: int):
+        self._scale = ind
 
-    def set_menu(self, menu: 'Menu'):
-        self._settings_menu = menu
-
-    def set_arrows_menu(self, arrows_menu: 'ArrowsMenu'):
-        self._arrows_menu = arrows_menu
+    def set_guide_arrows_ind(self, ind: int):
+        self._guide_arrows_ind = ind
 
     # AUX:
     # gets the number representation for the node:
@@ -445,6 +562,10 @@ class Grid(Drawable):
     def grid_line_shapes(self, grid_line_shapes):
         self._grid_line_shapes = grid_line_shapes
 
+    @property
+    def scale_names(self):
+        return self._scale_names
+
     def initialize(self):
         self._grid = [[Node(j, i, 1, NodeType.EMPTY) for i in range(self._hor_tiles_q)] for j in range(self._tiles_q)]
 
@@ -454,28 +575,26 @@ class Grid(Drawable):
         # draw a frame
 
     def setup(self):
-        pass
+        # initialization:
+        self.initialize()
+        # sprites, shapes and etc...
+        # blocks:
+        self.get_sprites()
+        # grid lines:
+        self.make_grid_lines()
 
     def update(self):
         pass
 
     def draw(self):
-        pass
-
-    def on_motion(self, x, y):
-        pass
-
-    def on_press(self, x, y):
-        pass
-
-    def on_release(self, x, y):
-        pass
-
-    def on_key_press(self, x, y):
-        pass
-
-    def on_key_release(self, x, y):
-        pass
+        # grid:
+        self._grid_line_shapes.draw()
+        # blocks:
+        self._node_sprite_list.draw()
+        # arrows:
+        if self._guide_arrows_ind is not None:
+            if len(self.arrow_shape_list) > 0:
+                self.arrow_shape_list.draw()
 
     # creates sprites for all the nodes:
     def get_sprites(self):  # batch -->
@@ -496,10 +615,6 @@ class Grid(Drawable):
                 arcade.create_line(5 + self._tile_size * i, 5, 5 + self._tile_size * i, 5 + self.Y,
                                    arcade.color.BLACK,
                                    self._line_width))
-
-    @property
-    def scale_names(self):
-        return self._scale_names
 
 
 class WallsManager(Manager):
@@ -803,26 +918,17 @@ class Node:
 
 
 # class representing an algo:
-class Algorithm(Drawable, Interactable, Manager):
+class Algorithm(Manager):
     def __init__(self, name: str):
         super().__init__()
         # info:
         self._name = name
-        # visual:
-        self._icon = None
-        self._menu = None
         # path:
         self._path = None
         self._path_index = 0
         # iterations and time:
         self._iterations = 0
         self._time_elapsed_ms = 0
-
-    def set_icon(self, icon):
-        self._icon = icon
-
-    def set_menu(self, menu):
-        self._menu = menu
 
     def connect(self, grid: Grid):
         self._obj = grid
@@ -837,9 +943,6 @@ class Algorithm(Drawable, Interactable, Manager):
         # iterations and time:
         self._iterations = 0
         self._time_elapsed_ms = 0
-        # locker:
-        for area in self._menu.areas:
-            area.unlock()
 
     @abstractmethod
     def clear(self):
@@ -902,22 +1005,6 @@ class Algorithm(Drawable, Interactable, Manager):
     def full_algo(self):
         ...
 
-    @abstractmethod
-    def setup(self):
-        ...
-
-    @abstractmethod
-    def update(self):
-        ...
-
-    @abstractmethod
-    def on_motion(self, x, y):
-        ...
-
-    @abstractmethod
-    def on_press(self, x, y):
-        ...
-
     # triangle points getting:
     def get_triangle(self, node: 'Node', point: tuple[int, int]):
         scaled_point = point[0] * (self._obj.tile_size // 2 - 2), point[1] * (self._obj.tile_size // 2 - 2)
@@ -975,6 +1062,15 @@ class Astar(Algorithm):
         self._max_times_visited_dict = {0: 0}
         self._neighs_added_to_heap_dict = {}
 
+    def set_heuristic(self, ind: int or None):
+        self._heuristic = ind
+
+    def set_tiebreaker(self, ind: int or None):
+        self._tiebreaker = ind
+
+    def set_greedy_ind(self, ind: int or None):
+        self._greedy_ind = ind
+
     def prepare(self):
         # heap:
         self._nodes_to_be_visited = [self._obj.start_node]
@@ -990,9 +1086,6 @@ class Astar(Algorithm):
         self._max_times_visited_dict = {0: 0}
         # path nullifying:
         self._path = None
-        # lockers locating: TODO: should be relocated to Menu __init__() logic:
-        for area in self._menu.areas:
-            area.unlock()
         # SETTINGS menu should be closed during the algo's interactive phase!!!
         # arrows list renewal:
         self._obj.arrow_shape_list = arcade.ShapeElementList()
@@ -1199,30 +1292,6 @@ class Astar(Algorithm):
                     neigh.previously_visited_node = curr_node
                     hq.heappush(self._nodes_to_be_visited, neigh)
 
-    def setup(self):
-        pass
-
-    def update(self):
-        pass
-
-    def draw(self):
-        pass
-
-    def on_motion(self, x, y):
-        pass
-
-    def on_press(self, x, y):
-        pass
-
-    def on_release(self, x, y):
-        pass
-
-    def on_key_press(self, x, y):
-        pass
-
-    def on_key_release(self, x, y):
-        pass
-
 
 class WaveLee(Algorithm):
     def __init__(self):
@@ -1326,30 +1395,6 @@ class WaveLee(Algorithm):
             front_wave = set() | new_front_wave
         return []
 
-    def setup(self):
-        pass
-
-    def update(self):
-        pass
-
-    def draw(self):
-        pass
-
-    def on_motion(self, x, y):
-        pass
-
-    def on_press(self, x, y):
-        pass
-
-    def on_release(self, x, y):
-        pass
-
-    def on_key_press(self, x, y):
-        pass
-
-    def on_key_release(self, x, y):
-        pass
-
 
 class BfsDfs(Algorithm):
     def __init__(self):
@@ -1373,6 +1418,9 @@ class BfsDfs(Algorithm):
         # dicts:
         self._curr_node_dict = {}
         self._neighs_added_to_heap_dict = {}
+
+    def set_is_bfs(self, ind: int or None):
+        self._is_bfs = (ind == 0)
 
     def prepare(self):
         self._queue = deque()
@@ -1492,36 +1540,12 @@ class BfsDfs(Algorithm):
                 else:
                     queue.append(neigh)
 
-    def setup(self):
-        pass
-
-    def update(self):
-        pass
-
-    def draw(self):
-        pass
-
-    def on_motion(self, x, y):
-        pass
-
-    def on_press(self, x, y):
-        pass
-
-    def on_release(self, x, y):
-        pass
-
-    def on_key_press(self, x, y):
-        pass
-
-    def on_key_release(self, x, y):
-        pass
-
 
 class Menu(Drawable, Interactable, Manager):
 
     def __init__(self):
         super().__init__()
-        self._icon_linked = None
+        self._obj = None
         self._areas = []
 
     @property
@@ -1529,7 +1553,7 @@ class Menu(Drawable, Interactable, Manager):
         return self._areas
 
     def connect(self, icon: 'Icon'):
-        self._icon_linked = icon
+        self._obj = icon
 
     def append_area(self, area: 'Area'):
         self._areas.append(area)
@@ -1546,7 +1570,7 @@ class Menu(Drawable, Interactable, Manager):
             area.setup()
 
     def draw(self):
-        if self._icon_linked.inter_type == InterType.PRESSED:
+        if self._obj.inter_type == InterType.PRESSED:
             for area in self._areas:
                 area.draw()
 
@@ -1569,7 +1593,7 @@ class Menu(Drawable, Interactable, Manager):
 
 class Area(Drawable, Interactable):
 
-    def __init__(self, cx, cy, delta, sq_size, sq_line_w, header: str, fields: dict[int, str]):
+    def __init__(self, cx, cy, delta, sq_size, sq_line_w, header: str, fields: dict[int, str], no_choice=False):
         super().__init__()
         # options, that need to be added: 1. multiple_choice: bool, 2. no_choice: bool
         self._cx = cx
@@ -1587,6 +1611,20 @@ class Area(Drawable, Interactable):
         self._header_text = None
         self._field_texts = []
         self._rectangle_shapes = arcade.ShapeElementList()
+        # logic flags:
+        self._no_choice = no_choice
+        # index_setter:
+        self._func = None
+
+    def connect_to_func(self, _function):
+        self._func = _function
+
+    def choose_field(self, field_chosen_ind: int):
+        if 0 <= field_chosen_ind < len(self._fields):
+            self._field_chosen = field_chosen_ind
+        else:
+            raise IndexError(
+                f"Wrong field's index: {field_chosen_ind} for an area, expected to be in range: [{0},{len(self._fields)})")
 
     def lock(self):
         self._is_locked = True
@@ -1629,7 +1667,7 @@ class Area(Drawable, Interactable):
         if self._field_chosen is not None:
             arcade.draw_rectangle_filled(self._cx + 10, self._cy - 30 - self._delta * self._field_chosen,
                                          14, 14, arcade.color.BLACK)
-        # heuristics lock:
+        # lock:
         if self._is_locked:
             if self._field_chosen is not None:
                 self.draw_lock(self._cx + 10, self._cy - 30 - self._delta * self._field_chosen)
@@ -1641,7 +1679,23 @@ class Area(Drawable, Interactable):
         pass
 
     def on_press(self, x, y):
-        ...  # TODO: WRITE!!!
+        for i in range(len(self._fields)):
+            if DrawLib.is_point_in_square(
+                    self._cx + 10,
+                    self._cy - 30 - self._delta * i,
+                    self._sq_size,
+                    x, y):
+                if self._field_chosen is not None:
+                    if i == self._field_chosen:
+                        if self._no_choice:
+                            self._field_chosen = None
+
+                    else:
+                        self._field_chosen = i
+                else:
+                    self._field_chosen = i
+                # set the index in the algo:
+                self._func(self._field_chosen)
 
     def on_release(self, x, y):
         pass
@@ -1675,17 +1729,11 @@ class Icon(ABC):
         self._inter_type = InterType.NONE
         self._vertices = []
 
+    def clear_inter_type(self):
+        self._inter_type = InterType.NONE
+
     def is_pressed(self):
         return self._inter_type == InterType.PRESSED
-
-    # helpful auxiliary methods:
-    @staticmethod
-    def is_point_in_square(cx, cy, size, x, y):
-        return cx - size / 2 <= x <= cx + size / 2 and cy - size / 2 <= y <= cy + size / 2
-
-    @staticmethod
-    def is_point_in_circle(cx, cy, r, x, y):
-        return (cx - x) ** 2 + (cy - y) ** 2 <= r ** 2
 
     @property
     def inter_type(self):
@@ -1762,19 +1810,19 @@ class PlayButton(Icon, Drawable, Interactable, Manager):
 
     def on_motion(self, x, y):
         if self._inter_type != InterType.PRESSED:
-            if self.is_point_in_circle(self._cx, self._cy, self._r, x, y):
+            if DrawLib.is_point_in_circle(self._cx, self._cy, self._r, x, y):
                 self._inter_type = InterType.HOVERED
             else:
                 self._inter_type = InterType.NONE
         else:
-            if self.is_point_in_circle(self._cx, self._cy, self._r, x, y):
+            if DrawLib.is_point_in_circle(self._cx, self._cy, self._r, x, y):
                 self._multiplier = 1
             else:
                 self._multiplier = -1
 
     def on_press(self, x, y):
         # if self._inter_type != InterType.PRESSED:
-        if self.is_point_in_circle(self._cx, self._cy, self._r, x, y):
+        if DrawLib.is_point_in_circle(self._cx, self._cy, self._r, x, y):
             if self._inter_type == InterType.PRESSED:
                 self._inter_type = InterType.HOVERED
             elif self._inter_type == InterType.HOVERED:
@@ -2050,15 +2098,16 @@ class Undo(Icon, Drawable, Interactable, Manager):
 
     def on_motion(self, x, y):
         if self._inter_type != InterType.PRESSED:
-            if self.is_point_in_circle(self._cx, self._cy, self._r + self._dh, x, y) or arcade.is_point_in_polygon(x, y,
-                                                                                                                   self._vertices):
+            if DrawLib.is_point_in_circle(self._cx, self._cy, self._r + self._dh, x, y) or arcade.is_point_in_polygon(x,
+                                                                                                                      y,
+                                                                                                                      self._vertices):
                 self._inter_type = InterType.HOVERED
             else:
                 self._inter_type = InterType.NONE
 
     def on_press(self, x, y):
-        if self.is_point_in_circle(self._cx, self._cy, self._r + self._dh, x, y) or arcade.is_point_in_polygon(x, y,
-                                                                                                               self._vertices):
+        if DrawLib.is_point_in_circle(self._cx, self._cy, self._r + self._dh, x, y) or arcade.is_point_in_polygon(x, y,
+                                                                                                                  self._vertices):
             self._inter_type = InterType.PRESSED
 
     def on_release(self, x, y):
@@ -2086,7 +2135,8 @@ class GearWheelButton(Icon, Drawable, Interactable):
         ...
 
     def update(self):
-        self._incrementer += self.DELTA
+        if self._inter_type == InterType.HOVERED:
+            self._incrementer += self.DELTA
 
     def draw(self):
         circumference = 2 * math.pi * self._r  # approximately if cog_size << radius
@@ -2095,6 +2145,8 @@ class GearWheelButton(Icon, Drawable, Interactable):
         cogs_q = max_cogs_fit_in_the_gear_wheel // 2
         fit_angular_size = (2 * math.pi - cogs_q * angular_size) / cogs_q
         angle = self._incrementer if self._clockwise else -self._incrementer  # in radians
+
+        self._vertices = []
 
         for i in range(cogs_q):
             # aux pars:
@@ -2117,9 +2169,9 @@ class GearWheelButton(Icon, Drawable, Interactable):
         arcade.draw_polygon_outline(self._vertices, arcade.color.BLACK,
                                     self._line_w + (0 if self._inter_type == InterType.NONE else 1))
         # hole:
-        arcade.draw_circle_filled(self._cx, self._cy, 2 * (self._r - self._multiplier * self._cog_size),
+        arcade.draw_circle_filled(self._cx, self._cy, (self._r - self._multiplier * self._cog_size),
                                   arcade.color.DUTCH_WHITE)
-        arcade.draw_circle_outline(self._cx, self._cy, 2 * (self._r - self._multiplier * self._cog_size),
+        arcade.draw_circle_outline(self._cx, self._cy, (self._r - self._multiplier * self._cog_size),
                                    arcade.color.BLACK,
                                    self._line_w + (0 if self._inter_type == InterType.NONE else 1))
 
@@ -2132,10 +2184,9 @@ class GearWheelButton(Icon, Drawable, Interactable):
 
     def on_press(self, x, y):
         if arcade.is_point_in_polygon(x, y, self._vertices):
-            if self._inter_type == InterType.PRESSED:
-                self._inter_type = InterType.HOVERED
-            else:
+            if self._inter_type != InterType.PRESSED:
                 self._inter_type = InterType.PRESSED
+                return self
 
     def on_release(self, x, y):
         pass
@@ -2153,7 +2204,7 @@ class ArrowsMenu(Icon, Drawable, Interactable, Manager):  # cx, cy = (1755, 785)
     choosing_arrows = True
 
     def __init__(self, cx, cy, arrow_length, arrow_height):
-        super().__init__(cx, cy)
+        super().__init__(cx + 70, cy - 75)
         self._inter_types_arrows = [InterType.NONE for _ in range(4)]
         self._inter_type_reset_square = InterType.NONE
 
@@ -2162,6 +2213,8 @@ class ArrowsMenu(Icon, Drawable, Interactable, Manager):  # cx, cy = (1755, 785)
 
         self._arrow_length = arrow_length
         self._arrow_height = arrow_height
+
+        self.elements_setup()
 
     def elements_setup(self):
         for ind, (dx, dy) in enumerate(Arrow.walk):
@@ -2178,8 +2231,9 @@ class ArrowsMenu(Icon, Drawable, Interactable, Manager):  # cx, cy = (1755, 785)
 
         # ARROWS RESET:
         self._arrows_reset = ArrowReset(self._cx, self._cy, self._arrow_height)
+        self._arrows_reset.connect(self)
 
-    def connect(self, obj):  # is it needed???
+    def connect(self, obj: GearWheelButton):
         self._obj = obj
 
     @property
@@ -2199,13 +2253,14 @@ class ArrowsMenu(Icon, Drawable, Interactable, Manager):  # cx, cy = (1755, 785)
         pass
 
     def draw(self):
-        # text:
-        arcade.draw_text(f'Directions priority: ', SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120, arcade.color.BLACK,
-                         bold=True)
-        # elements:
-        for arrow in self._arrows:
-            arrow.draw()
-        self._arrows_reset.draw()
+        if self._obj.inter_type == InterType.PRESSED:
+            # text:
+            arcade.draw_text(f'Directions priority: ', SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120, arcade.color.BLACK,
+                             bold=True)
+            # elements:
+            for arrow in self._arrows:
+                arrow.draw()
+            self._arrows_reset.draw()
 
     def on_motion(self, x, y):
         for arrow in self._arrows:
@@ -2226,6 +2281,10 @@ class ArrowsMenu(Icon, Drawable, Interactable, Manager):  # cx, cy = (1755, 785)
 
     def on_key_release(self, x, y):
         pass
+
+    @property
+    def arrows(self):
+        return self._arrows
 
 
 class Arrow(Icon, Drawable, Interactable):  # part of an arrow menu
@@ -2381,17 +2440,18 @@ class ArrowReset(Icon, Drawable, Interactable, Manager):
         )
 
     def on_motion(self, x, y):
-        if self.is_point_in_square(self._cx, self._cy, self._arrow_height, x, y):
+        if DrawLib.is_point_in_square(self._cx, self._cy, self._arrow_height, x, y):
             self._inter_type = InterType.HOVERED
         else:
             self._inter_type = InterType.NONE
 
     def on_press(self, x, y):
-        if self.is_point_in_square(self._cx, self._cy, self._arrow_height, x, y):
+        if DrawLib.is_point_in_square(self._cx, self._cy, self._arrow_height, x, y):
             self._obj.choosing_arrows = True
             self._obj.walk_index = 0
             self._obj.arrows_indices = []
-            self._obj.inter_types_arrows = [InterType.NONE for _ in range(4)]
+            for arrow in self._obj.arrows:
+                arrow._inter_type = InterType.NONE
 
     def on_release(self, x, y):
         pass
@@ -2414,7 +2474,34 @@ class AstarIcon(Icon, Drawable, Interactable):
         self._clockwise = clockwise
 
     def setup(self):
-        pass
+        upper_hypot = math.sqrt(self._size_w ** 2 + self._size_h ** 2)
+        cos, sin = self._size_h / upper_hypot, self._size_w / upper_hypot
+        a_w = self._size_w / 3
+        line_w_hour_projection = a_w / cos
+        dh = a_w / sin
+        delta = (self._size_h - a_w - dh) / 2
+        k, upper_k = (delta - a_w / 2) * self._size_w / self._size_h, (delta + a_w / 2) * self._size_w / self._size_h
+
+        # a_outer_points -> self._vertices[0], a_inner_points -> self._vertices[1]
+        self._vertices.append(
+            [
+                [self._cx, self._cy],
+                [self._cx + self._size_w, self._cy + self._size_h],
+                [self._cx + 2 * self._size_w, self._cy],
+                [self._cx + 2 * self._size_w - line_w_hour_projection, self._cy],
+                [self._cx + 2 * self._size_w - line_w_hour_projection - k, self._cy + delta - a_w / 2],
+                [self._cx + k + line_w_hour_projection, self._cy + delta - a_w / 2],
+                [self._cx + line_w_hour_projection, self._cy]
+            ]
+        )
+
+        self._vertices.append(
+            [
+                [self._cx + self._size_w, self._cy + self._size_h - dh],
+                [self._cx + 2 * self._size_w - line_w_hour_projection - upper_k, self._cy + delta + a_w / 2],
+                [self._cx + line_w_hour_projection + upper_k, self._cy + delta + a_w / 2]
+            ]
+        )
 
     def update(self):
         if self._inter_type == InterType.HOVERED:
@@ -2422,7 +2509,7 @@ class AstarIcon(Icon, Drawable, Interactable):
 
     def draw(self):
         # drawing A:
-        self.draw_a(self._cx, self._cy, self._size_w, self._size_h, self._size_w / 3, self._line_w)
+        self.draw_a(self._line_w)
         # Star spinning around A:
         self.draw_star(self._cx + self._size_h / 2 + self._size_h / 3, self._cy + self._size_h, r=self._size_h / 4,
                        line_w=self._line_w, clockwise=self._clockwise)
@@ -2442,35 +2529,7 @@ class AstarIcon(Icon, Drawable, Interactable):
             angle += da
 
     # draws 'A' letter:
-    def draw_a(self, cx, cy, length, height, a_w, line_w):
-        upper_hypot = math.sqrt(length ** 2 + height ** 2)
-        cos, sin = height / upper_hypot, length / upper_hypot
-        line_w_hour_projection = a_w / cos
-        dh = a_w / sin
-        delta = (height - a_w - dh) / 2
-        k, upper_k = (delta - a_w / 2) * length / height, (delta + a_w / 2) * length / height
-
-        # a_outer_points -> self._vertices[0], a_inner_points -> self._vertices[1]
-        self._vertices.append(
-            [
-                [cx, cy],
-                [cx + length, cy + height],
-                [cx + 2 * length, cy],
-                [cx + 2 * length - line_w_hour_projection, cy],
-                [cx + 2 * length - line_w_hour_projection - k, cy + delta - a_w / 2],
-                [cx + k + line_w_hour_projection, cy + delta - a_w / 2],
-                [cx + line_w_hour_projection, cy]
-            ]
-        )
-
-        self._vertices.append(
-            [
-                [cx + length, cy + height - dh],
-                [cx + 2 * length - line_w_hour_projection - upper_k, cy + delta + a_w / 2],
-                [cx + line_w_hour_projection + upper_k, cy + delta + a_w / 2]
-            ]
-        )
-
+    def draw_a(self, line_w):
         if self._inter_type == InterType.NONE:
             arcade.draw_polygon_outline(self._vertices[0], arcade.color.BLACK, line_w)
             arcade.draw_polygon_outline(self._vertices[1], arcade.color.BLACK, line_w)
@@ -2492,10 +2551,9 @@ class AstarIcon(Icon, Drawable, Interactable):
 
     def on_press(self, x, y):
         if arcade.is_point_in_polygon(x, y, self._vertices[0]):
-            if self._inter_type == InterType.PRESSED:
-                self._inter_type = InterType.HOVERED
-            else:
+            if self._inter_type != InterType.PRESSED:
                 self._inter_type = InterType.PRESSED
+                return self
 
     def on_release(self, x, y):
         pass
@@ -2520,7 +2578,8 @@ class Waves(Icon, Drawable, Interactable):
         pass
 
     def update(self):
-        self._incrementer += self.DELTA
+        if self._inter_type == InterType.HOVERED:
+            self._incrementer += self.DELTA
 
     def draw(self):
         ds = self._size / self._waves_q
@@ -2534,17 +2593,16 @@ class Waves(Icon, Drawable, Interactable):
 
     def on_motion(self, x, y):
         if self._inter_type != InterType.PRESSED:
-            if self.is_point_in_circle(self._cx, self._cy, self._size, x, y):
+            if DrawLib.is_point_in_circle(self._cx, self._cy, self._size, x, y):
                 self._inter_type = InterType.HOVERED
             else:
                 self._inter_type = InterType.NONE
 
     def on_press(self, x, y):
-        if self.is_point_in_circle(self._cx, self._cy, self._size, x, y):
-            if self._inter_type == InterType.PRESSED:
-                self._inter_type = InterType.HOVERED
-            else:
+        if DrawLib.is_point_in_circle(self._cx, self._cy, self._size, x, y):
+            if self._inter_type != InterType.PRESSED:
                 self._inter_type = InterType.PRESSED
+                return self
 
     def on_release(self, x, y):
         pass
@@ -2568,7 +2626,8 @@ class BfsDfsIcon(Icon, Drawable, Interactable):
         pass
 
     def update(self):
-        self._incrementer += self.DELTA
+        if self._inter_type == InterType.HOVERED:
+            self._incrementer += self.DELTA
 
     def draw(self):
         # filling:
@@ -2609,17 +2668,16 @@ class BfsDfsIcon(Icon, Drawable, Interactable):
 
     def on_motion(self, x, y):
         if self._inter_type != InterType.PRESSED:
-            if self.is_point_in_square(self._cx, self._cy, self._size, x, y):
+            if DrawLib.is_point_in_square(self._cx, self._cy, self._size, x, y):
                 self._inter_type = InterType.HOVERED
             else:
                 self._inter_type = InterType.NONE
 
     def on_press(self, x, y):
-        if self.is_point_in_square(self._cx, self._cy, self._size, x, y):
-            if self._inter_type == InterType.PRESSED:
-                self._inter_type = InterType.HOVERED
-            else:
+        if DrawLib.is_point_in_square(self._cx, self._cy, self._size, x, y):
+            if self._inter_type != InterType.PRESSED:
                 self._inter_type = InterType.PRESSED
+                return self
 
     def on_release(self, x, y):
         pass
@@ -2663,3 +2721,8 @@ def main():
     game = Lastar(SCREEN_WIDTH, SCREEN_HEIGHT)
     game.setup()
     arcade.run()
+
+
+# start:
+if __name__ == "__main__":
+    main()

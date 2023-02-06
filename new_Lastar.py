@@ -1,13 +1,12 @@
+import functools
 import heapq as hq
 import time
 import math
 from enum import Enum
 from functools import reduce
-
 import numpy as np
 # graphics:
-import arcade
-import arcade.gui
+import arcade, arcade.gui
 # data
 import shelve
 # queues:
@@ -23,22 +22,33 @@ SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1050
 
 
+# decorator, returns func and time in ms as tuple:
+def timer(func):
+    @functools.wraps(func)
+    def _wrapper(*args, **kwargs):
+        start = time.perf_counter()
+        func(*args, **kwargs)
+        runtime = 1000 * (time.perf_counter() - start)
+        return runtime
+
+    return _wrapper
+
+
 class Lastar(arcade.Window):
     def __init__(self, width: int, height: int):
         super().__init__(width, height)
         arcade.set_background_color(arcade.color.DUTCH_WHITE)
         self.set_update_rate(1 / 60)
+        # time elapsed:
+        self._time_elapsed = 0
         # interaction mode ON/OFF:
         self._interactive_ind = None
         self._in_interaction = False
         self._in_interaction_mode_lock = False
-        # save/load mode:
-        self._loading = False
-        # game modes and flags:
-        self._mode = 0  # 0 for building the walls and erasing them afterwards, 1 for a start and end nodes choosing and 2 for info getting for every node
-        self._mode_names = {0: 'BUILDING/ERASING', 1: 'START&END_NODES_CHOOSING', 2: 'INFO_GETTING'}
-        self._building_walls_flag = False
-        self._build_or_erase = True  # True for building and False for erasing
+        # long press pars:
+        self._cycle_breaker_right = False
+        self._cycle_breaker_left = False
+        self._ticks_before = 0
         # names dicts:
         self._heuristic_names = {0: 'MANHATTAN', 1: 'EUCLIDIAN', 2: 'MAX_DELTA', 3: 'DIJKSTRA'}
         self._tiebreaker_names = {0: 'VECTOR_CROSS', 1: 'COORDINATES'}
@@ -47,7 +57,8 @@ class Lastar(arcade.Window):
         self._interactive_names = {0: f'IS_INTERACTIVE'}
         # grid and walls_manager:
         self._grid = Grid()
-        # algorithms:
+        self._grid.connect_to_func(self.aux_clearing)
+        # ALGOS:
         self._astar = None
         self._wave_lee = None
         self._bfs_dfs = None
@@ -77,28 +88,31 @@ class Lastar(arcade.Window):
         # menus_dict:
         self._menus_dict = {0: self._settings_menu, 1: self._bfs_dfs_menu, 2: self._astar_menu, 3: self._wave_lee_menu}
 
-        print(f'LALA')
-
     def elements_setup(self):
+        # ALGOS:
+        self._astar = Astar()
+        self._astar.connect(self._grid)
+        self._wave_lee = WaveLee()
+        self._wave_lee.connect(self._grid)
+        self._bfs_dfs = BfsDfs()
+        self._bfs_dfs.connect(self._grid)
         # pars:
         sq_size, line_w = 18, 2
         delta = 2 * (sq_size + line_w)
-        # ALGOS:
-        self._astar = Astar()
-        self._wave_lee = WaveLee()
-        self._bfs_dfs = BfsDfs()
         # ICONS and MENUS:
         # icon setting up for a_star:
         self._astar_icon = AstarIcon(1750 + 15 + 6, 1020 - 100 - 25, 22, 53)
+        self._astar_icon.connect_to_func(self.choose_a_star)
         # areas setting up:
         bot_menu_x, bot_menu_y = SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120
         heurs_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Heuristics', self._heuristic_names)
         heurs_area.connect_to_func(self._astar.set_heuristic)
         bot_menu_y -= 30 + (len(self._heuristic_names) - 1) * delta + 3 * sq_size
-        tiebreakers_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Tiebreakers', self._tiebreaker_names)
+        tiebreakers_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Tiebreakers', self._tiebreaker_names,
+                                True)
         tiebreakers_area.connect_to_func(self._astar.set_tiebreaker)
         bot_menu_y -= 30 + (len(self._tiebreaker_names) - 1) * delta + 3 * sq_size
-        is_greedy_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Is greedy', self._greedy_names)
+        is_greedy_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Is greedy', self._greedy_names, True)
         is_greedy_area.connect_to_func(self._astar.set_greedy_ind)
         # bot_menu_y -= 30 + 3 * sq_size
         # guide_arrows_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Guide arrows',
@@ -111,8 +125,10 @@ class Lastar(arcade.Window):
         self._astar_menu.connect(self._astar_icon)
         # icon setting up for wave_lee:
         self._wave_lee_icon = Waves(1750 + 50 + 48 + 10 + 6, 1020 - 73 - 25, 32, 5)
+        self._wave_lee_icon.connect_to_func(self.choose_wave_lee)
         # icon setting up for bfs/dfs:
         self._bfs_dfs_icon = BfsDfsIcon(1750 - 30 + 6, 1020 - 73 - 25, 54, 2)
+        self._bfs_dfs_icon.connect_to_func(self.choose_bfs_dfs)
         # area setting up:
         bot_menu_x, bot_menu_y = SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120
         area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Core', {0: f'BFS', 1: f'DFS'})
@@ -124,6 +140,7 @@ class Lastar(arcade.Window):
         # GRID:
         # grid icon setting up:
         self._gear_wheel = GearWheelButton(1785 + 6, 1000, 24, 6)
+        self._gear_wheel.set_pressed()
         # arrows menu setting up:
         bot_menu_x, bot_menu_y = SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120
         self._arrows_menu = ArrowsMenu(bot_menu_x, bot_menu_y, 2 * sq_size, sq_size)
@@ -133,6 +150,7 @@ class Lastar(arcade.Window):
         scaling_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Sizes in tiles',
                             {k: f'{v}x{self._grid.get_hor_tiles(k)}' for k, v in self._grid.scale_names.items()})
         scaling_area.connect_to_func(self._grid.set_scale)
+        scaling_area.choose_field()
         # menu composing connecting to an icon:
         self._settings_menu = Menu()
         self._settings_menu.append_area(scaling_area)
@@ -140,11 +158,11 @@ class Lastar(arcade.Window):
         # TWO AUX AREAS:
         bot_menu_y = 250
         self._guide_arrows_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Guide arrows',
-                                       self._guide_arrows_names)
+                                       self._guide_arrows_names, True)
         self._guide_arrows_area.connect_to_func(self._grid.set_guide_arrows_ind)
         bot_menu_y -= 30 + 3 * sq_size
         self._show_mode_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Show mode',
-                                    self._interactive_names)
+                                    self._interactive_names, True)
         self._show_mode_area.connect_to_func(self.set_interactive_ind)
         # menu setting up:
         # MANAGE MENU:
@@ -152,6 +170,27 @@ class Lastar(arcade.Window):
 
     def set_interactive_ind(self, ind: int or None):
         self._interactive_ind = ind
+
+    def choose_a_star(self):
+        self._grid.clear_grid()
+        self._current_algo = self._astar
+
+    def choose_wave_lee(self):
+        self._grid.clear_grid()
+        self._current_algo = self._wave_lee
+
+    def choose_bfs_dfs(self):
+        self._grid.clear_grid()
+        self._current_algo = self._bfs_dfs
+
+    def aux_clearing(self):
+        # Lastar clearing:
+        self._in_interaction = False
+        self._in_interaction_mode_lock = False
+        # algo pars clearing:
+        if self._current_algo is not None:
+            self._current_algo.clear()
+        print(f'Connection APPROVED...')
 
     # PRESETS:
     def setup(self):
@@ -174,58 +213,6 @@ class Lastar(arcade.Window):
         # manage icons setting up:
         ...
 
-    # CLEARING/REBUILDING:
-    def rebuild_map(self):
-        self._grid.tile_size, self._grid.hor_tiles_q = self.get_pars()
-        # grid's renewing:
-        self._grid.initialize()
-        # pars resetting:
-        self.aux_clear()
-        self._grid.start_node = None
-        self._grid.end_node = None
-        self._grid.node_chosen = None
-        self._grid.node_sprite_list = arcade.SpriteList()
-        self._grid.grid_line_shapes = arcade.ShapeElementList()
-        self._walls_manager.walls = set()
-        self._grid.setup()
-
-    # clears all the nodes except start, end and walls
-    def clear_empty_nodes(self):
-        # clearing the every empty node:
-        for row in self._grid.grid:
-            for node in row:
-                if node.type not in [NodeType.WALL, NodeType.START_NODE, NodeType.END_NODE]:
-                    node.clear()
-                elif node.type in [NodeType.START_NODE, NodeType.END_NODE]:
-                    node.heur_clear()
-        # clearing the nodes-relating pars of the game:
-        self.aux_clear()
-
-    # entirely clears the grid:
-    def clear_grid(self):
-        # clearing the every node:
-        for row in self._grid.grid:
-            for node in row:
-                node.clear()
-        # clearing the nodes-relating pars of the game:
-        self._grid._start_node, self._grid._end_node = None, None
-        self.aux_clear()
-        self._walls_manager.walls = set()
-
-    def aux_clear(self):
-        # grid's pars clearing:
-        self._grid.triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
-        self._grid.arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
-        # builder clearing:
-        self._walls_manager.walls_built_erased = [([], True)]
-        self._walls_manager.walls_index = 0
-        # Lastar clearing:
-        self._in_interaction = False
-        self._in_interaction_mode_lock = False
-        # algo pars clearing:
-        if self._current_algo is not None:
-            self._current_algo.clear()
-
     # UPDATING:
     # long press logic for mouse buttons, incrementers changing for living icons and so on:
     def update(self, delta_time: float):
@@ -237,6 +224,23 @@ class Lastar(arcade.Window):
                 menu.update()
         # manage icons:
         ...
+        # long press on keys (right, left):
+        # consecutive calls during key pressing:
+        ticks_threshold = 12
+        if self._cycle_breaker_right:
+            self._ticks_before += 1
+            if self._ticks_before >= ticks_threshold:
+                if self._current_algo.path is None:
+                    self._current_algo.algo_up()
+                else:
+                    self._current_algo.path_up()
+        if self._cycle_breaker_left:
+            self._ticks_before += 1
+            if self._ticks_before >= ticks_threshold:
+                if self._current_algo.path is None:
+                    self._current_algo.algo_down()
+                else:
+                    self._current_algo.path_down()
 
     def on_draw(self):
         # renders this screen:
@@ -245,7 +249,7 @@ class Lastar(arcade.Window):
         self._grid.draw()
         # HINTS:
         ...
-        arcade.Text(f'Mode: {self._mode_names[self._mode]}', 25, SCREEN_HEIGHT - 35, arcade.color.BLACK,
+        arcade.Text(f'Mode: {self._grid.mode_names[self._grid.mode]}', 25, SCREEN_HEIGHT - 35, arcade.color.BLACK,
                     bold=True).draw()
         ...
         # ICONS and MENUS:
@@ -268,17 +272,74 @@ class Lastar(arcade.Window):
         match symbol:
             # a_star_call:
             case arcade.key.SPACE:
-                if not self._loading:
+                if not self._grid.loading:
                     if self._grid.start_node and self._grid.end_node:
                         # STEP BY STEP:
                         if self._interactive_ind is not None:  # TODO: add interactive area to wave_lee and bfs_dfs!!!
                             # game logic:
                             self._in_interaction = True
                             # prepare:
-                            ...
+                            self._current_algo.prepare()
+                        else:
+                            # getting paths:
+                            self._time_elapsed = self._current_algo.full_algo()
+                            self._current_algo.recover_path()
+                            # path's drawing for all three algos cores:
+                            print(f"PATH'S LENGTH: {len(self.path)}")
+                            self._current_algo.visualize_path()
+            # entirely grid clearing:
+            case arcade.key.ENTER:
+                self._grid.clear_grid()
+            # recall a_star or another algo at the current field:
+            case arcade.key.BACKSPACE:
+                self._grid.clear_empty_nodes()
+            # a_star interactive:
+            case arcade.key.RIGHT:
+                if self._in_interaction:
+                    self._cycle_breaker_right = True
+                    if self._current_algo.path is None:
+                        self._current_algo.algo_up()
+                    else:
+                        self._current_algo.path_up()
+                elif self._grid.loading:
+                    self._grid.change_nodes_type(NodeType.EMPTY, self._grid.walls[f'ornament {self.loading_ind}'])
+                    self._grid.loading_ind = (self._grid.loading_ind + 1) % len(self._grid.walls)
+                    self._grid.change_nodes_type(NodeType.WALL, self._grid.walls[f'ornament {self.loading_ind}'])
+            case arcade.key.LEFT:
+                if self._in_interaction:
+                    self._cycle_breaker_left = True
+                    if self._current_algo.path is None:
+                        self._current_algo.algo_down()
+                    else:
+                        self._current_algo.path_down()
+                elif self._grid.loading:
+                    self._grid.change_nodes_type(NodeType.EMPTY, self._grid.walls[f'ornament {self._grid.loading_ind}'])
+                    self._grid.loading_ind = (self._grid.loading_ind - 1) % len(self._grid.walls)
+                    self._grid.change_nodes_type(NodeType.WALL, self._grid.walls[f'ornament {self._grid.loading_ind}'])
+            # undoing and cancelling:
+            case arcade.key.Z:  # undo
+                if not self.in_interaction:
+                    self._grid.undo()
+            case arcade.key.Y:  # cancels undo
+                if not self.in_interaction:
+                    self._grid.redo()
+            # saving and loading:
+            case arcade.key.S:
+                self._grid.save()
+            case arcade.key.L:
+                # cannot loading while in interaction:
+                if not self.in_interaction:
+                    self._grid.load()
 
     def on_key_release(self, symbol: int, modifiers: int):
-        ...
+        # long press ending:
+        match symbol:
+            case arcade.key.RIGHT:
+                self._cycle_breaker_right = False
+                self._ticks_before = 0
+            case arcade.key.LEFT:
+                self._cycle_breaker_left = False
+                self._ticks_before = 0
 
     def on_mouse_motion(self, x: int, y: int, dx: int, dy: int):
         for icon in self._icons_dict.values():
@@ -289,6 +350,8 @@ class Lastar(arcade.Window):
         self._arrows_menu.on_motion(x, y)
         self._guide_arrows_area.on_motion(x, y)
         self._show_mode_area.on_motion(x, y)
+        # building and erasing walls:
+        self._grid.build_or_erase(x, y)
 
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int):
         for icon in self._icons_dict.values():
@@ -300,22 +363,20 @@ class Lastar(arcade.Window):
         self._arrows_menu.on_press(x, y)
         self._guide_arrows_area.on_press(x, y)
         self._show_mode_area.on_press(x, y)
+        # grid:
+        self._grid.press(x, y, button)
 
     def on_mouse_release(self, x: int, y: int, button: int, modifiers: int):
-        ...
+        self._grid.building_walls_flag = False
 
     # game mode switching by scrolling the mouse wheel:
     def on_mouse_scroll(self, x: int, y: int, scroll_x: int, scroll_y: int):
-        self._mode = (self.mode + 1) % len(self.mode_names)
+        self._grid.scroll()
 
     def clear_icons_inter_types(self, icon_chosen: 'Icon'):
         for icon in self._icons_dict.values():
             if icon != icon_chosen:
                 icon.clear_inter_type()
-
-    @staticmethod
-    def get_ms(start, finish):
-        return (finish - start) // 10 ** 6
 
 
 class DrawLib:
@@ -412,7 +473,7 @@ class FuncConnected(ABC):
         self._func = func
 
 
-class Grid(Drawable):
+class Grid(Drawable, FuncConnected):
 
     def __init__(self):
         super().__init__()
@@ -421,6 +482,9 @@ class Grid(Drawable):
         # important nodes:
         self._start_node = None
         self._end_node = None
+        # game mode:
+        self._mode = 0  # 0 for building the walls and erasing them afterwards, 1 for a start and end nodes choosing and 2 for info getting for every node
+        self._mode_names = {0: 'BUILDING/ERASING', 1: 'START&END_NODES_CHOOSING', 2: 'INFO_GETTING'}
         # the current node chosen (for getting info):
         self._node_chosen = None
         # guide arrows ON/OFF:
@@ -442,6 +506,8 @@ class Grid(Drawable):
         self._line_width = None
         self._tile_size, self._hor_tiles_q = self.get_pars()
         # WALLS MANAGER:
+        self._building_walls_flag = False
+        self._build_or_erase = True  # True for building and False for erasing
         # memoization for undo/redo area:
         self._walls_built_erased = [([], True)]  # TODO: swap to DICT!!!
         self._walls_index = 0
@@ -449,6 +515,9 @@ class Grid(Drawable):
         # save/load:
         self._loading = False
         self._loading_ind = 0
+
+    def connect_to_func(self, func):
+        self._func = func
 
     # INITIALIZATION AUX:
     # calculating grid visualization pars for vertical tiles number given:
@@ -467,11 +536,29 @@ class Grid(Drawable):
 
     def set_scale(self, ind: int):
         self._scale = ind
+        self.rebuild_map()
 
     def set_guide_arrows_ind(self, ind: int):
         self._guide_arrows_ind = ind
 
     # AUX:
+    # triangle points getting:
+    def get_triangle(self, node: 'Node', point: tuple[int, int]):
+        scaled_point = point[0] * (self._tile_size // 2 - 2), point[1] * (self._tile_size // 2 - 2)
+        deltas = (
+            (
+                scaled_point[0] - scaled_point[1],
+                scaled_point[0] + scaled_point[1]
+            ),
+            (
+                scaled_point[0] + scaled_point[1],
+                -scaled_point[0] + scaled_point[1]
+            )
+        )
+        cx, cy = 5 + node.x * self._tile_size + self._tile_size / 2, \
+                 5 + node.y * self._tile_size + self._tile_size / 2
+        return (cx, cy), (cx + deltas[0][0], cy + deltas[0][1]), (cx + deltas[1][0], cy + deltas[1][1])
+
     # gets the number representation for the node:
     def number_repr(self, node: 'Node'):
         return node.y * self._hor_tiles_q + node.x
@@ -557,7 +644,7 @@ class Grid(Drawable):
 
     @property
     def triangle_shape_list(self):
-        return
+        return self._triangle_shape_list
 
     @triangle_shape_list.setter
     def triangle_shape_list(self, triangle_shape_list):
@@ -584,6 +671,14 @@ class Grid(Drawable):
         return self._scale_names
 
     @property
+    def building_walls_flag(self):
+        return self._building_walls_flag
+
+    @building_walls_flag.setter
+    def building_walls_flag(self, building_walls_flag):
+        self._building_walls_flag = building_walls_flag
+
+    @property
     def walls_built_erased(self):
         return self._walls_built_erased
 
@@ -607,6 +702,10 @@ class Grid(Drawable):
     def walls(self, walls):
         self._walls = walls
 
+    @property
+    def loading(self):
+        return self._loading
+
     def initialize(self):
         self._grid = [[Node(j, i, 1, NodeType.EMPTY) for i in range(self._hor_tiles_q)] for j in range(self._tiles_q)]
 
@@ -627,6 +726,9 @@ class Grid(Drawable):
     def update(self):
         pass
 
+    def scroll(self):
+        self._mode = (self._mode + 1) % len(self._mode_names)
+
     def draw(self):
         # grid:
         self._grid_line_shapes.draw()
@@ -636,6 +738,9 @@ class Grid(Drawable):
         if self._guide_arrows_ind is not None:
             if len(self.arrow_shape_list) > 0:
                 self.arrow_shape_list.draw()
+        # path arrows:
+        if self._triangle_shape_list:
+            self._triangle_shape_list.draw()
 
     # creates sprites for all the nodes:
     def get_sprites(self):  # batch -->
@@ -665,7 +770,59 @@ class Grid(Drawable):
             self.grid[y][x].type = node_type
             self.grid[y][x].update_sprite_colour()
 
+    def press(self, x, y, button):
+        # MODES OF DRAWING LOGIC:
+        if self._mode == 0:
+            self._building_walls_flag = True
+            if button == arcade.MOUSE_BUTTON_LEFT:
+                self._build_or_erase = True
+            elif button == arcade.MOUSE_BUTTON_RIGHT:
+                self._build_or_erase = False
+            elif button == arcade.MOUSE_BUTTON_MIDDLE:
+                self._build_or_erase = None
+                n = self.get_node(x, y)
+                if n:
+                    if self._walls_index < len(self._walls_built_erased) - 1:
+                        self._walls_built_erased = self._walls_built_erased[: self._walls_index + 1]
+                    self._walls_built_erased.append(([], False))
+                    self._walls_index += 1
+                    self.erase_all_linked_nodes(n)
+        elif self._mode == 1:
+            if button == arcade.MOUSE_BUTTON_LEFT:
+                sn = self.get_node(x, y)
+                if sn:
+                    if self._start_node:
+                        self._start_node.type = NodeType.EMPTY
+                        self._start_node.update_sprite_colour()
+                    sn.type = NodeType.START_NODE
+                    self._start_node = sn
+                    self._start_node.update_sprite_colour()
+            elif button == arcade.MOUSE_BUTTON_RIGHT:
+                en = self.get_node(x, y)
+                if en:
+                    if self._end_node:
+                        self._end_node.type = NodeType.EMPTY
+                        self._end_node.update_sprite_colour()
+                    en.type = NodeType.END_NODE
+                    self._end_node = en
+                    self._end_node.update_sprite_colour()
+        elif self._mode == 2:  # a_star interactive -->> info getting:
+            n = self.get_node(x, y)
+            if n:
+                if self._node_chosen == n:
+                    self._node_chosen = None
+                else:
+                    self._node_chosen = n
+
     # builds/erases walls:
+    def build_or_erase(self, x, y):
+        if self._building_walls_flag and self._mode == 0:
+            if self._build_or_erase is not None:
+                if self._build_or_erase:
+                    self.build_wall(x, y)
+                else:
+                    self.erase_wall(x, y)
+
     def build_wall(self, x, y):
         # now building the walls:
         n = self.get_node(x, y)
@@ -703,37 +860,115 @@ class Grid(Drawable):
             if neigh.type == NodeType.WALL:
                 self.erase_all_linked_nodes(neigh)
 
+    # CLEARING/REBUILDING:
+    def rebuild_map(self):
+        self._tile_size, self._hor_tiles_q = self.get_pars()
+        # grid's renewing:
+        self.initialize()
+        # pars resetting:
+        self.aux_clear()
+        self._start_node = None
+        self._end_node = None
+        self._node_chosen = None
+        self._node_sprite_list = arcade.SpriteList()
+        self._grid_line_shapes = arcade.ShapeElementList()
+        self._walls = set()
+        self.setup()
+
+    # clears all the nodes except start, end and walls
+    def clear_empty_nodes(self):
+        # clearing the every empty node:
+        for row in self._grid:
+            for node in row:
+                if node.type not in [NodeType.WALL, NodeType.START_NODE, NodeType.END_NODE]:
+                    node.clear()
+                elif node.type in [NodeType.START_NODE, NodeType.END_NODE]:
+                    node.heur_clear()
+        # clearing the nodes-relating pars of the game:
+        self.aux_clear()
+
+    # entirely clears the grid:
+    def clear_grid(self):
+        # clearing the every node:
+        for row in self._grid:
+            for node in row:
+                node.clear()
+        # clearing the nodes-relating pars of the game:
+        self._start_node, self._end_node = None, None
+        self.aux_clear()
+        self._walls = set()
+
+    def aux_clear(self):
+        # grid's pars clearing:
+        self._triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
+        self._arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
+        # builder clearing:
+        self._walls_built_erased = [([], True)]
+        self._walls_index = 0
+        # aux clearing from Lastar:
+        self._func()
+
     # undo/redo manager:
     def undo(self):
-        if self._walls_index > 0:
-            for num in (l := self._walls_built_erased[self._walls_index])[0]:
-                node = self.node(num)
-                node.type = NodeType.EMPTY if l[1] else NodeType.WALL
-                node.update_sprite_colour()
-                if l[1]:
-                    self._walls.remove(self.number_repr(node))
-                else:
-                    self._walls.add(self.number_repr(node))
-            self._walls_index -= 1
+        if not self._loading:
+            if self._walls_index > 0:
+                for num in (l := self._walls_built_erased[self._walls_index])[0]:
+                    node = self.node(num)
+                    node.type = NodeType.EMPTY if l[1] else NodeType.WALL
+                    node.update_sprite_colour()
+                    if l[1]:
+                        self._walls.remove(self.number_repr(node))
+                    else:
+                        self._walls.add(self.number_repr(node))
+                self._walls_index -= 1
 
     def redo(self):
-        if self._walls_index < len(self._walls_built_erased) - 1:
-            for num in (l := self._walls_built_erased[self._walls_index + 1])[0]:
-                node = self.node(num)
-                node.type = NodeType.WALL if l[1] else NodeType.EMPTY
-                node.update_sprite_colour()
-                if l[1]:
-                    self._walls.add(self.number_repr(node))
-                else:
-                    self._walls.remove(self.number_repr(node))
-            self._walls_index += 1
+        if not self._loading:
+            if self._walls_index < len(self._walls_built_erased) - 1:
+                for num in (l := self._walls_built_erased[self._walls_index + 1])[0]:
+                    node = self.node(num)
+                    node.type = NodeType.WALL if l[1] else NodeType.EMPTY
+                    node.update_sprite_colour()
+                    if l[1]:
+                        self._walls.add(self.number_repr(node))
+                    else:
+                        self._walls.remove(self.number_repr(node))
+                self._walls_index += 1
 
     # save/load area:
     def save(self):
-        ...
+        print(f'walls: {self.walls}')
+        with shelve.open(f'saved_walls {self._tiles_q}', 'c') as shelf:
+            index = len(shelf)
+            shelf[f'ornament {index}'] = self._walls
 
     def load(self):
-        ...
+        if self._loading:
+            self._loading = False
+            self._walls = self._walls[f'ornament {self._loading_ind}']
+            self._walls_built_erased.append(([], False))
+            for num in self._walls:
+                self._walls_built_erased[self._walls_index][0].append(num)
+            self._walls_index += 1
+        elif len(self._walls) == 0:
+            with shelve.open(f'saved_walls {self._tiles_q}',
+                             'r') as shelf:  # TODO: flag to 'r' and check if the file exist!
+                index = len(shelf)
+                if index > 0:
+                    self._loading = True
+                    self._walls_built_erased.append(([], True))
+                    for num in self._walls:
+                        self._walls_built_erased[self._walls_index][0].append(num)
+                    self._walls_index += 1
+                    self._walls = dict(shelf)
+
+    @property
+    def mode_names(self):
+        return self._mode_names
+
+    @property
+    def mode(self):
+        return self._mode
 
 
 # class for a node representation:
@@ -932,10 +1167,13 @@ class Algorithm(Connected):
         self._path_index = 0
         # iterations and time:
         self._iterations = 0
-        self._time_elapsed_ms = 0
 
     def connect(self, grid: Grid):
         self._obj = grid
+
+    @property
+    def path(self):
+        return self._path
 
     def base_clear(self):
         # visualization:
@@ -946,7 +1184,6 @@ class Algorithm(Connected):
         self._path_index = 0
         # iterations and time:
         self._iterations = 0
-        self._time_elapsed_ms = 0
 
     @abstractmethod
     def clear(self):
@@ -957,22 +1194,25 @@ class Algorithm(Connected):
         ...
 
     def path_up(self):
-        if (path_node := self._path[self._path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
-            path_node.type = NodeType.PATH_NODE
-            path_node.update_sprite_colour()
-        # arrows:
-        p = -self._path[self._path_index + 1].x + self._path[self._path_index].x, \
-            -self._path[self._path_index + 1].y + self._path[self._path_index].y
-        p1, p2, p3 = self.get_triangle(self._path[self._path_index + 1], p)
-        triangle_shape = arcade.create_triangles_filled_with_colors(
-            [p1, p2, p3],
-            [arcade.color.WHITE, arcade.color.RED, arcade.color.RED])
-        self._obj.triangle_shape_list.append(triangle_shape)  # NOT A BUG!!!
-        # line arrows removing:
-        node = self._path[self._path_index + 1]
-        # if self.inter_types[2] == InterType.PRESSED:
-        if node not in [self._obj.start_node, self._obj.end_node]:
-            node.remove_arrow_from_shape_list(self)
+        if self._path_index < len(self.path) - 1:
+            if (path_node := self._path[self._path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
+                path_node.type = NodeType.PATH_NODE
+                path_node.update_sprite_colour()
+            # arrows:
+            p = -self._path[self._path_index + 1].x + self._path[self._path_index].x, \
+                -self._path[self._path_index + 1].y + self._path[self._path_index].y
+            p1, p2, p3 = self._obj.get_triangle(self._path[self._path_index + 1], p)
+            triangle_shape = arcade.create_triangles_filled_with_colors(
+                [p1, p2, p3],
+                [arcade.color.WHITE, arcade.color.RED, arcade.color.RED])
+            self._obj.triangle_shape_list.append(triangle_shape)  # NOT A BUG!!!
+            # line arrows removing:
+            node = self._path[self._path_index + 1]
+            # if self.inter_types[2] == InterType.PRESSED:
+            if node not in [self._obj.start_node, self._obj.end_node]:
+                node.remove_arrow_from_shape_list(self._obj)
+            # index's step up:
+            self._path_index += 1
 
     # path-recovering process for interactive a_star:
     def recover_path(self):
@@ -985,17 +1225,36 @@ class Algorithm(Connected):
             node = node.previously_visited_node
         shortest_path.append(self._obj.start_node)
         # returns the result:
-        return shortest_path
+        self._path = shortest_path
+
+    def visualize_path(self):
+        for i, node in enumerate(self._path):
+            if node.type not in [NodeType.START_NODE, NodeType.END_NODE]:
+                node.type = NodeType.PATH_NODE
+                node.update_sprite_colour()
+            if i + 1 < len(self.path):
+                p = -self.path[i + 1].x + self.path[i].x, \
+                    -self.path[i + 1].y + self.path[i].y
+                p1, p2, p3 = self._obj.get_triangle(self.path[i + 1], p)
+                triangle_shape = arcade.create_triangles_filled_with_colors(
+                    [p1, p2, p3],
+                    [arcade.color.WHITE, arcade.color.RED, arcade.color.RED])
+                self._obj.triangle_shape_list.append(triangle_shape)
 
     def path_down(self):
-        if (path_node := self._path[self._path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
-            path_node.type = NodeType.VISITED_NODE
-            path_node.update_sprite_colour()
-            # arrows:
-        self._obj.triangle_shape_list.remove(self._obj.triangle_shape_list[self._path_index - 1])  # NOT A BUG!!!
-        # line arrows restoring:
-        if path_node not in [self._obj.start_node, self._obj.end_node]:
-            path_node.append_arrow(self._obj)
+        if self._path_index > 0:
+            if (path_node := self._path[self._path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
+                path_node.type = NodeType.VISITED_NODE
+                path_node.update_sprite_colour()
+                # arrows:
+            self._obj.triangle_shape_list.remove(self._obj.triangle_shape_list[self._path_index - 1])  # NOT A BUG!!!
+            # line arrows restoring:
+            if path_node not in [self._obj.start_node, self._obj.end_node]:
+                path_node.append_arrow(self._obj)
+            self._path_index -= 1
+        else:
+            self._path = None
+            self.algo_down()
 
     @abstractmethod
     def algo_up(self):
@@ -1008,23 +1267,6 @@ class Algorithm(Connected):
     @abstractmethod
     def full_algo(self):
         ...
-
-    # triangle points getting:
-    def get_triangle(self, node: 'Node', point: tuple[int, int]):
-        scaled_point = point[0] * (self._obj.tile_size // 2 - 2), point[1] * (self._obj.tile_size // 2 - 2)
-        deltas = (
-            (
-                scaled_point[0] - scaled_point[1],
-                scaled_point[0] + scaled_point[1]
-            ),
-            (
-                scaled_point[0] + scaled_point[1],
-                -scaled_point[0] + scaled_point[1]
-            )
-        )
-        cx, cy = 5 + node.x * self._obj.tile_size + self._obj.tile_size / 2, \
-                 5 + node.y * self._obj.tile_size + self._obj.tile_size / 2
-        return (cx, cy), (cx + deltas[0][0], cy + deltas[0][1]), (cx + deltas[1][0], cy + deltas[1][1])
 
 
 class Astar(Algorithm):
@@ -1122,7 +1364,7 @@ class Astar(Algorithm):
             self._nodes_visited[curr_node] = 1
         # base case of finding the shortest path:
         if curr_node == self._obj.end_node:
-            self._path = self.recover_path()
+            self.recover_path()
         # next step:
         # we can search for neighs on the fly or use precalculated sets (outdated):
         for neigh in curr_node.get_neighs(self._obj, [NodeType.WALL]):  # getting all the neighs 'on the fly;
@@ -1266,6 +1508,7 @@ class Astar(Algorithm):
         heap[pos] = new_item
         Astar.siftdown(heap, start_pos, pos)
 
+    @timer
     def full_algo(self):
         # False if game.greedy_ind is None else True
         self._nodes_to_be_visited = [self._obj.start_node]
@@ -1332,9 +1575,9 @@ class WaveLee(Algorithm):
                 curr_node.update_sprite_colour()
             if curr_node == self._obj.end_node:
                 # self._end_node.val = self._iterations
-                self._path = self.recover_path()
+                self.recover_path()
                 break
-            for neigh in curr_node.get_neighs(self, [NodeType.START_NODE, NodeType.WALL, NodeType.VISITED_NODE]):
+            for neigh in curr_node.get_neighs(self._obj, [NodeType.START_NODE, NodeType.WALL, NodeType.VISITED_NODE]):
                 if neigh.type == NodeType.EMPTY:  # it is equivalent to if neigh.val == 1, TODO: decide if is it needed???
                     if neigh not in self._next_wave_lee:
                         if neigh != self._obj.end_node:
@@ -1346,7 +1589,7 @@ class WaveLee(Algorithm):
                                 self._obj
                             )
                             neigh.arrow_shape = arrow
-                            neigh.append_arrow(self)
+                            neigh.append_arrow(self._obj)
                         self._next_wave_lee.append(neigh)
                         neigh.previously_visited_node = curr_node
 
@@ -1360,7 +1603,7 @@ class WaveLee(Algorithm):
                 if neigh not in [self._obj.start_node, self._obj.end_node]:
                     neigh.type = NodeType.EMPTY
                     neigh.update_sprite_colour()
-                    neigh.remove_arrow(self)
+                    neigh.remove_arrow(self._obj)
             if self._iterations != 0:
                 # the front nodes have become NEIGHS:
                 for node in self._front_wave_lee:
@@ -1375,6 +1618,7 @@ class WaveLee(Algorithm):
                 self._next_wave_lee = [self._obj.start_node]
                 self._front_wave_lee = []
 
+    @timer
     def full_algo(self):
         # other.get_neighs(game)  # Why is it necessary???
         front_wave = {self._obj.start_node}
@@ -1389,7 +1633,8 @@ class WaveLee(Algorithm):
                     front_node.type = NodeType.VISITED_NODE
                     front_node.update_sprite_colour()
                 if front_node == self._obj.end_node:
-                    return self.recover_path()
+                    self.recover_path()
+                    break
                 for front_neigh in front_node.get_neighs(
                         self._obj,
                         [NodeType.START_NODE, NodeType.VISITED_NODE, NodeType.WALL]):
@@ -1397,7 +1642,6 @@ class WaveLee(Algorithm):
                         front_neigh.previously_visited_node = front_node
                         new_front_wave.add(front_neigh)
             front_wave = set() | new_front_wave
-        return []
 
 
 class BfsDfs(Algorithm):
@@ -1447,9 +1691,9 @@ class BfsDfs(Algorithm):
             self._curr_node_dict[self._iterations].update_sprite_colour()
         curr_node.times_visited += 1
         if curr_node == self._obj.end_node:
-            self._path = self.recover_path()
+            self.recover_path()
         self._neighs_added_to_heap_dict[self._iterations + 1] = set()
-        for neigh in curr_node.get_neighs(self, [NodeType.START_NODE, NodeType.VISITED_NODE, NodeType.WALL] + (
+        for neigh in curr_node.get_neighs(self._obj, [NodeType.START_NODE, NodeType.VISITED_NODE, NodeType.WALL] + (
                 [NodeType.NEIGH] if self._is_bfs else [])):
             if neigh.type != NodeType.END_NODE:
                 # at first memoization for further 'undoing':
@@ -1460,9 +1704,9 @@ class BfsDfs(Algorithm):
                 arrow = DrawLib.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y),
                                                   self._obj)
                 if neigh.arrow_shape is not None:
-                    neigh.remove_arrow(self)
+                    neigh.remove_arrow(self._obj)
                 neigh.arrow_shape = arrow
-                neigh.append_arrow(self)
+                neigh.append_arrow(self._obj)
             neigh.previously_visited_node = curr_node
             # BFS:
             if self._is_bfs:
@@ -1518,6 +1762,7 @@ class BfsDfs(Algorithm):
             # step back:
             self._iterations -= 1
 
+    @timer
     def full_algo(self):
         queue = deque()
         queue.append(self._obj.start_node)
@@ -1581,8 +1826,9 @@ class Menu(Drawable, Interactable, Connected):
         pass
 
     def on_press(self, x, y):
-        for area in self._areas:
-            area.on_press(x, y)
+        if self._obj.inter_type == InterType.PRESSED:
+            for area in self._areas:
+                area.on_press(x, y)
 
     def on_release(self, x, y):
         pass
@@ -1620,7 +1866,7 @@ class Area(Drawable, Interactable, FuncConnected):
     def connect_to_func(self, _function):
         self._func = _function
 
-    def choose_field(self, field_chosen_ind: int):
+    def choose_field(self, field_chosen_ind: int = 0):
         if 0 <= field_chosen_ind < len(self._fields):
             self._field_chosen = field_chosen_ind
         else:
@@ -1685,7 +1931,7 @@ class Area(Drawable, Interactable, FuncConnected):
                     self._cx + 10,
                     self._cy - 30 - self._delta * i,
                     self._sq_size,
-                    x, y):                                            # 36 366 98 989
+                    x, y):  # 36 366 98 989
                 if self._field_chosen is not None:
                     if i == self._field_chosen:
                         if self._no_choice:
@@ -1733,8 +1979,8 @@ class Icon(ABC):
     def clear_inter_type(self):
         self._inter_type = InterType.NONE
 
-    def is_pressed(self):
-        return self._inter_type == InterType.PRESSED
+    def set_pressed(self):
+        self._inter_type = InterType.PRESSED
 
     @property
     def inter_type(self):
@@ -2464,7 +2710,7 @@ class ArrowReset(Icon, Drawable, Interactable, Connected):
         pass
 
 
-class AstarIcon(Icon, Drawable, Interactable):
+class AstarIcon(Icon, Drawable, Interactable, FuncConnected):
     DELTA = 0.05
 
     def __init__(self, cx, cy, size_w, size_h, line_w=2, clockwise=True):
@@ -2473,6 +2719,9 @@ class AstarIcon(Icon, Drawable, Interactable):
         self._size_h = size_h
         self._line_w = line_w
         self._clockwise = clockwise
+
+    def connect_to_func(self, func):
+        self._func = func
 
     def setup(self):
         upper_hypot = math.sqrt(self._size_w ** 2 + self._size_h ** 2)
@@ -2554,6 +2803,7 @@ class AstarIcon(Icon, Drawable, Interactable):
         if arcade.is_point_in_polygon(x, y, self._vertices[0]):
             if self._inter_type != InterType.PRESSED:
                 self._inter_type = InterType.PRESSED
+                self._func()
                 return self
 
     def on_release(self, x, y):
@@ -2566,7 +2816,7 @@ class AstarIcon(Icon, Drawable, Interactable):
         pass
 
 
-class Waves(Icon, Drawable, Interactable):
+class Waves(Icon, Drawable, Interactable, FuncConnected):
     DELTA = 0.25
 
     def __init__(self, cx, cy, size=32, waves_q=5, line_w=2):
@@ -2574,6 +2824,9 @@ class Waves(Icon, Drawable, Interactable):
         self._size = size
         self._waves_q = waves_q
         self._line_w = line_w
+
+    def connect_to_func(self, func):
+        self._func = func
 
     def setup(self):
         pass
@@ -2603,6 +2856,7 @@ class Waves(Icon, Drawable, Interactable):
         if DrawLib.is_point_in_circle(self._cx, self._cy, self._size, x, y):
             if self._inter_type != InterType.PRESSED:
                 self._inter_type = InterType.PRESSED
+                self._func()
                 return self
 
     def on_release(self, x, y):
@@ -2615,13 +2869,16 @@ class Waves(Icon, Drawable, Interactable):
         pass
 
 
-class BfsDfsIcon(Icon, Drawable, Interactable):
+class BfsDfsIcon(Icon, Drawable, Interactable, FuncConnected):
     DELTA = 0.15
 
     def __init__(self, cx, cy, size, line_w):
         super().__init__(cx, cy)
         self._size = size
         self._line_w = line_w
+
+    def connect_to_func(self, func):
+        self._func = func
 
     def setup(self):
         pass
@@ -2678,6 +2935,7 @@ class BfsDfsIcon(Icon, Drawable, Interactable):
         if DrawLib.is_point_in_square(self._cx, self._cy, self._size, x, y):
             if self._inter_type != InterType.PRESSED:
                 self._inter_type = InterType.PRESSED
+                self._func()
                 return self
 
     def on_release(self, x, y):

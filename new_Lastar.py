@@ -47,7 +47,6 @@ class Lastar(arcade.Window):
         self._interactive_names = {0: f'IS_INTERACTIVE'}
         # grid and walls_manager:
         self._grid = Grid()
-        self._walls_manager = WallsManager()
         # algorithms:
         self._astar = None
         self._wave_lee = None

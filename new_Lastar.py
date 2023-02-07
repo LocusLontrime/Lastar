@@ -285,7 +285,7 @@ class Lastar(arcade.Window):
                             self._time_elapsed = self._current_algo.full_algo()
                             self._current_algo.recover_path()
                             # path's drawing for all three algos cores:
-                            print(f"PATH'S LENGTH: {len(self.path)}")
+                            # print(f"PATH'S LENGTH: {len(self.path)}")
                             self._current_algo.visualize_path()
             # entirely grid clearing:
             case arcade.key.ENTER:
@@ -496,7 +496,7 @@ class Grid(Drawable, FuncConnected):
         self._triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
         self._arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
         # sizes:
-        self._X, self._Y = self.Y, self.X = SCREEN_HEIGHT - 60, SCREEN_WIDTH - 250
+        self._X, self._Y = SCREEN_HEIGHT - 60, SCREEN_WIDTH - 250
         # scaling:  TODO: add AI to calculate the sizes for every resolution possible:
         self._scale = 0
         self._scale_names = {0: 10, 1: 15, 2: 22, 3: 33, 4: 45, 5: 66, 6: 90,
@@ -525,9 +525,9 @@ class Grid(Drawable, FuncConnected):
         self._Y, self._X = SCREEN_HEIGHT - 60, SCREEN_WIDTH - 250
         self._tiles_q = self._scale_names[self._scale]
         self._line_width = int(math.sqrt(max(self._scale_names.values()) / self._tiles_q))
-        tile_size = self.Y // self.tiles_q
-        hor_tiles_q = self.X // tile_size
-        self.Y, self.X = self.tiles_q * tile_size, hor_tiles_q * tile_size
+        tile_size = self._Y // self.tiles_q
+        hor_tiles_q = self._X // tile_size
+        self._Y, self._X = self.tiles_q * tile_size, hor_tiles_q * tile_size
         return tile_size, hor_tiles_q
 
     def get_hor_tiles(self, i):
@@ -752,13 +752,13 @@ class Grid(Drawable, FuncConnected):
     def make_grid_lines(self):
         for j in range(self.tiles_q + 1):
             self._grid_line_shapes.append(
-                arcade.create_line(5, 5 + self._tile_size * j, 5 + self.X, 5 + self._tile_size * j,
+                arcade.create_line(5, 5 + self._tile_size * j, 5 + self._X, 5 + self._tile_size * j,
                                    arcade.color.BLACK,
                                    self._line_width))
 
         for i in range(self._hor_tiles_q + 1):
             self._grid_line_shapes.append(
-                arcade.create_line(5 + self._tile_size * i, 5, 5 + self._tile_size * i, 5 + self.Y,
+                arcade.create_line(5 + self._tile_size * i, 5, 5 + self._tile_size * i, 5 + self._Y,
                                    arcade.color.BLACK,
                                    self._line_width))
 
@@ -1559,7 +1559,7 @@ class WaveLee(Algorithm):
         # starting attributes' values:
         self._front_wave_lee = []
         self._next_wave_lee = [self._obj.start_node]
-        # self._start_node.val = 1  # node.val must not be changed during the algo's interactive phase!!!
+        self._obj.start_node.val = 1  # node.val must not be changed during the algo's interactive phase!!!
         self._iterations = 0
         self._fronts_dict = {}
 
@@ -1569,16 +1569,17 @@ class WaveLee(Algorithm):
         self._fronts_dict[self._iterations] = self._front_wave_lee
         self._next_wave_lee = []
         for curr_node in self._front_wave_lee:
-            # curr_node.val = self._iterations
+            curr_node.val = self._iterations
             if curr_node not in [self._obj.end_node, self._obj.start_node]:
                 curr_node.type = NodeType.VISITED_NODE
                 curr_node.update_sprite_colour()
             if curr_node == self._obj.end_node:
-                # self._end_node.val = self._iterations
+                self._obj.end_node.val = self._iterations
                 self.recover_path()
+                print(f'PATH RECOVERED')
                 break
             for neigh in curr_node.get_neighs(self._obj, [NodeType.START_NODE, NodeType.WALL, NodeType.VISITED_NODE]):
-                if neigh.type == NodeType.EMPTY:  # it is equivalent to if neigh.val == 1, TODO: decide if is it needed???
+                if neigh.val == 1:  # it is equivalent to if neigh.type == NodeType.EMPTY, TODO: decide if is it needed???
                     if neigh not in self._next_wave_lee:
                         if neigh != self._obj.end_node:
                             neigh.type = NodeType.NEIGH
@@ -1592,6 +1593,7 @@ class WaveLee(Algorithm):
                             neigh.append_arrow(self._obj)
                         self._next_wave_lee.append(neigh)
                         neigh.previously_visited_node = curr_node
+        print(f'iteration: {self._iterations}, CURRENT FRONT: {self._front_wave_lee}')
 
     def algo_down(self):
         # possibility check of wave_lee's stepping back:
@@ -1607,9 +1609,11 @@ class WaveLee(Algorithm):
             if self._iterations != 0:
                 # the front nodes have become NEIGHS:
                 for node in self._front_wave_lee:
-                    if node not in [self._obj.start_node, self._obj.end_node]:
-                        node.type = NodeType.NEIGH
+                    if node != self._obj.start_node:
+                        if node != self._obj.end_node:
+                            node.type = NodeType.NEIGH
                         node.update_sprite_colour()
+                        node.val = 1
                 # current and next fronts stepping back:
                 self._next_wave_lee = self._front_wave_lee[:]
                 self._front_wave_lee = self._fronts_dict[self._iterations]
@@ -1617,6 +1621,7 @@ class WaveLee(Algorithm):
                 # the starting point:
                 self._next_wave_lee = [self._obj.start_node]
                 self._front_wave_lee = []
+            print(f'iteration: {self._iterations}, CURRENT FRONT: {self._front_wave_lee}')
 
     @timer
     def full_algo(self):
@@ -1628,13 +1633,13 @@ class WaveLee(Algorithm):
             iteration += 1
             new_front_wave = set()
             for front_node in front_wave:
-                # front_node.val = iteration
+                front_node.val = iteration                                          #N
                 if front_node not in [self._obj.start_node, self._obj.end_node]:
                     front_node.type = NodeType.VISITED_NODE
                     front_node.update_sprite_colour()
                 if front_node == self._obj.end_node:
                     self.recover_path()
-                    break
+                    return
                 for front_neigh in front_node.get_neighs(
                         self._obj,
                         [NodeType.START_NODE, NodeType.VISITED_NODE, NodeType.WALL]):
@@ -2696,7 +2701,7 @@ class ArrowReset(Icon, Drawable, Interactable, Connected):
         if DrawLib.is_point_in_square(self._cx, self._cy, self._arrow_height, x, y):
             self._obj.choosing_arrows = True
             self._obj.walk_index = 0
-            self._obj.arrows_indices = []
+            ArrowsMenu.arrows_indices = []
             for arrow in self._obj.arrows:
                 arrow._inter_type = InterType.NONE
 

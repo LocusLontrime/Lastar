@@ -30,7 +30,6 @@ def timer(func):
         func(*args, **kwargs)
         runtime = 1000 * (time.perf_counter() - start)
         return runtime
-
     return _wrapper
 
 
@@ -64,6 +63,7 @@ class Lastar(arcade.Window):
         self._bfs_dfs = None
         # current_algo:
         self._current_algo = None
+        # self._current_icon ???
         # algos' icons:
         self._astar_icon = None
         self._wave_lee_icon = None
@@ -191,6 +191,12 @@ class Lastar(arcade.Window):
         if self._current_algo is not None:
             self._current_algo.clear()
         print(f'Connection APPROVED...')
+        # lockers off:
+        for menu in self._menus_dict.values():
+            if menu is not None:
+                if not menu.is_hidden():
+                    menu.unlock()
+        self._show_mode_area.unlock()
 
     # PRESETS:
     def setup(self):
@@ -280,12 +286,17 @@ class Lastar(arcade.Window):
                             self._in_interaction = True
                             # prepare:
                             self._current_algo.prepare()
+                            # lockers on:
+                            for menu in self._menus_dict.values():
+                                if menu is not None:
+                                    if not menu.is_hidden():
+                                        menu.lock()
+                            self._show_mode_area.lock()
                         else:
                             # getting paths:
                             self._time_elapsed = self._current_algo.full_algo()
                             self._current_algo.recover_path()
                             # path's drawing for all three algos cores:
-                            # print(f"PATH'S LENGTH: {len(self.path)}")
                             self._current_algo.visualize_path()
             # entirely grid clearing:
             case arcade.key.ENTER:
@@ -301,10 +312,8 @@ class Lastar(arcade.Window):
                         self._current_algo.algo_up()
                     else:
                         self._current_algo.path_up()
-                elif self._grid.loading:
-                    self._grid.change_nodes_type(NodeType.EMPTY, self._grid.walls[f'ornament {self.loading_ind}'])
-                    self._grid.loading_ind = (self._grid.loading_ind + 1) % len(self._grid.walls)
-                    self._grid.change_nodes_type(NodeType.WALL, self._grid.walls[f'ornament {self.loading_ind}'])
+                else:
+                    self._grid.change_wall_ornament(is_next=True)
             case arcade.key.LEFT:
                 if self._in_interaction:
                     self._cycle_breaker_left = True
@@ -312,10 +321,8 @@ class Lastar(arcade.Window):
                         self._current_algo.algo_down()
                     else:
                         self._current_algo.path_down()
-                elif self._grid.loading:
-                    self._grid.change_nodes_type(NodeType.EMPTY, self._grid.walls[f'ornament {self._grid.loading_ind}'])
-                    self._grid.loading_ind = (self._grid.loading_ind - 1) % len(self._grid.walls)
-                    self._grid.change_nodes_type(NodeType.WALL, self._grid.walls[f'ornament {self._grid.loading_ind}'])
+                else:
+                    self._grid.change_wall_ornament(is_next=False)
             # undoing and cancelling:
             case arcade.key.Z:  # undo
                 if not self.in_interaction:
@@ -961,6 +968,13 @@ class Grid(Drawable, FuncConnected):
                         self._walls_built_erased[self._walls_index][0].append(num)
                     self._walls_index += 1
                     self._walls = dict(shelf)
+
+    def change_wall_ornament(self, is_next=True):
+        if self._loading:
+            delta = 1 if is_next else -1
+            self.change_nodes_type(NodeType.EMPTY, self._grid.walls[f'ornament {self._loading_ind}'])
+            self._loading_ind = (self._loading_ind + delta) % len(self._grid.walls)
+            self.change_nodes_type(NodeType.WALL, self._grid.walls[f'ornament {self._loading_ind}'])
 
     @property
     def mode_names(self):
@@ -1805,6 +1819,9 @@ class Menu(Drawable, Interactable, Connected):
     def areas(self):
         return self._areas
 
+    def is_hidden(self):
+        return self._obj.inter_type != InterType.PRESSED
+
     def connect(self, icon: 'Icon'):
         self._obj = icon
 
@@ -1814,6 +1831,14 @@ class Menu(Drawable, Interactable, Connected):
     def multiple_append(self, *areas: 'Area'):
         for area in areas:
             self.append_area(area)
+
+    def lock(self):
+        for area in self._areas:
+            area.lock()
+
+    def unlock(self):
+        for area in self._areas:
+            area.unlock()
 
     def update(self):
         pass

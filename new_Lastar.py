@@ -15,7 +15,6 @@ from collections import deque
 from abc import ABC, abstractmethod
 # windows:
 import pyglet
-from typing_extensions import override
 
 # screen sizes:
 SCREEN_WIDTH = 1920
@@ -34,7 +33,19 @@ def timer(func):
     return _wrapper
 
 
+# decorator, runs function if not in interaction mode:
+def lock(func):
+    @functools.wraps(func)
+    def _wrapper(*args, **kwargs):
+        if not Lastar.is_in_interaction():
+            return func(*args, **kwargs)
+    return _wrapper
+
+
 class Lastar(arcade.Window):
+    # base interaction par:
+    _in_interaction = False
+
     def __init__(self, width: int, height: int):
         super().__init__(width, height)
         arcade.set_background_color(arcade.color.DUTCH_WHITE)
@@ -43,7 +54,7 @@ class Lastar(arcade.Window):
         self._time_elapsed = 0
         # interaction mode ON/OFF:
         self._interactive_ind = None
-        self._in_interaction = False
+        ...
         self._in_interaction_mode_lock = False
         # long press pars:
         self._cycle_breaker_right = False
@@ -94,6 +105,10 @@ class Lastar(arcade.Window):
         self._menus_dict = {0: self._settings_menu, 1: self._bfs_dfs_menu, 2: self._astar_menu, 3: self._wave_lee_menu}
         # manage icons dict:
         self._manage_icons_dict = {0: self._play_button, 1: self._step_button_right, 2: self._step_button_left}
+
+    @staticmethod
+    def is_in_interaction():
+        return Lastar._in_interaction
 
     def elements_setup(self):
         # ALGOS:
@@ -176,9 +191,9 @@ class Lastar(arcade.Window):
         self._play_button = PlayButton(1785 + 6, 50, 32, 2)
         self._play_button.connect_to_func(self.play_button_func)
         self._step_button_right = StepButton(1785 + 6 + 50, 50, 24, 16, 2)
-        self._step_button_right.connect_to_func(self.to_the_right)
+        self._step_button_right.connect_to_func(self.up, self.another_ornament)
         self._step_button_left = StepButton(1785 + 6 - 50, 50, 24, 16, 2, False)
-        self._step_button_left.connect_to_func(self.to_the_left)
+        self._step_button_left.connect_to_func(self.down, self.another_ornament)
 
     def set_interactive_ind(self, ind: int or None):
         self._interactive_ind = ind
@@ -302,7 +317,7 @@ class Lastar(arcade.Window):
                 # STEP BY STEP:
                 if self._interactive_ind is not None:  # TODO: add interactive area to wave_lee and bfs_dfs!!!
                     # game logic:
-                    self._in_interaction = True
+                    Lastar._in_interaction = True
                     # prepare:
                     self._current_algo.prepare()
                     # lockers on:
@@ -318,29 +333,20 @@ class Lastar(arcade.Window):
                     # path's drawing for all three algos cores:
                     self._current_algo.visualize_path()
 
-    def to_the_right(self):
-        if self._in_interaction:
-            self._cycle_breaker_right = True
-            if self._current_algo.path is None:
-                self._current_algo.algo_up()
-            else:
-                self._current_algo.path_up()
-            return True
+    def up(self):
+        if self._current_algo.path is None:
+            self._current_algo.algo_up()
         else:
-            self._grid.change_wall_ornament(is_next=True)
-            return False
+            self._current_algo.path_up()
 
-    def to_the_left(self):
-        if self._in_interaction:
-            self._cycle_breaker_left = True
-            if self._current_algo.path is None:
-                self._current_algo.algo_down()
-            else:
-                self._current_algo.path_down()
-            return True
+    def down(self):
+        if self._current_algo.path is None:
+            self._current_algo.algo_down()
         else:
-            self._grid.change_wall_ornament(is_next=False)
-            return False
+            self._current_algo.path_down()
+
+    def another_ornament(self, is_next: bool):
+        return self._grid.change_wall_ornament(is_next)
 
     # KEYBOARD:
     def on_key_press(self, symbol: int, modifiers: int):
@@ -352,20 +358,17 @@ class Lastar(arcade.Window):
             # entirely grid clearing:
             case arcade.key.ENTER:
                 self._grid.clear_grid()
-            # recall a_star or another algo at the current field:
-            case arcade.key.BACKSPACE:
-                self._grid.clear_empty_nodes()
             # a_star interactive:
             case arcade.key.RIGHT:
-                self.to_the_right()
+                self._step_button_right.on_key_press()
             case arcade.key.LEFT:
-                self.to_the_left()
+                self._step_button_left.on_key_press()                                #
             # undoing and cancelling:
             case arcade.key.Z:  # undo
-                if not self.in_interaction:
+                if not Lastar._in_interaction:
                     self._grid.undo()
             case arcade.key.Y:  # cancels undo
-                if not self.in_interaction:
+                if not Lastar._in_interaction:
                     self._grid.redo()
             # saving and loading:
             case arcade.key.S:
@@ -379,11 +382,9 @@ class Lastar(arcade.Window):
         # long press ending:
         match symbol:
             case arcade.key.RIGHT:
-                self._cycle_breaker_right = False
-                self._ticks_before = 0
+                self._step_button_right.on_key_release()
             case arcade.key.LEFT:
-                self._cycle_breaker_left = False
-                self._ticks_before = 0
+                self._step_button_left.on_key_release()
 
     def on_mouse_motion(self, x: int, y: int, dx: int, dy: int):
         for icon in self._icons_dict.values():
@@ -418,6 +419,10 @@ class Lastar(arcade.Window):
         self._grid.building_walls_flag = False
         for manage_icon in self._manage_icons_dict.values():
             manage_icon.on_release(x, y)
+        self._cycle_breaker_right = False
+        self._ticks_before = 0
+        self._cycle_breaker_left = False
+        self._ticks_before = 0
 
     # game mode switching by scrolling the mouse wheel:
     def on_mouse_scroll(self, x: int, y: int, scroll_x: int, scroll_y: int):
@@ -460,6 +465,10 @@ class DrawLib:
     def is_point_in_circle(cx, cy, r, x, y):
         return (cx - x) ** 2 + (cy - y) ** 2 <= r ** 2
 
+    @staticmethod
+    def draw_icon_lock():
+        ...
+
 
 class Drawable(ABC):
 
@@ -495,11 +504,11 @@ class Interactable(ABC):
         ...
 
     @abstractmethod
-    def on_key_press(self, x, y):
+    def on_key_press(self):
         ...
 
     @abstractmethod
-    def on_key_release(self, x, y):
+    def on_key_release(self):
         ...
 
 
@@ -515,11 +524,10 @@ class Connected(ABC):  # Connected
 
 class FuncConnected(ABC):
     def __init__(self):
-        # function connected:
+        # function/functions connected:
         self._func = None
 
-    @abstractmethod
-    def connect_to_func(self, func):
+    def connect_to_func(self, *func):
         self._func = func
 
 
@@ -565,9 +573,6 @@ class Grid(Drawable, FuncConnected):
         # save/load:
         self._loading = False
         self._loading_ind = 0
-
-    def connect_to_func(self, func):
-        self._func = func
 
     # INITIALIZATION AUX:
     # calculating grid visualization pars for vertical tiles number given:
@@ -911,6 +916,7 @@ class Grid(Drawable, FuncConnected):
                 self.erase_all_linked_nodes(neigh)
 
     # CLEARING/REBUILDING:
+    @lock
     def rebuild_map(self):
         self._tile_size, self._hor_tiles_q = self.get_pars()
         # grid's renewing:
@@ -937,6 +943,7 @@ class Grid(Drawable, FuncConnected):
         # clearing the nodes-relating pars of the game:
         self.aux_clear()
 
+    @lock
     # entirely clears the grid:
     def clear_grid(self):
         # clearing the every node:
@@ -956,7 +963,7 @@ class Grid(Drawable, FuncConnected):
         self._walls_built_erased = [([], True)]
         self._walls_index = 0
         # aux clearing from Lastar:
-        self._func()
+        self._func[0]()
 
     # undo/redo manager:
     def undo(self):
@@ -1863,10 +1870,7 @@ class Menu(Drawable, Interactable, FuncConnected):
         return self._areas
 
     def is_hidden(self):
-        return not self._func()
-
-    def connect_to_func(self, func):
-        self._func = func
+        return not self._func[0]()
 
     def append_area(self, area: 'Area'):
         self._areas.append(area)
@@ -1891,7 +1895,7 @@ class Menu(Drawable, Interactable, FuncConnected):
             area.setup()
 
     def draw(self):
-        if self._func():
+        if self._func[0]():
             for area in self._areas:
                 area.draw()
 
@@ -1899,17 +1903,17 @@ class Menu(Drawable, Interactable, FuncConnected):
         pass
 
     def on_press(self, x, y):
-        if self._func():
+        if self._func[0]():
             for area in self._areas:
                 area.on_press(x, y)
 
     def on_release(self, x, y):
         pass
 
-    def on_key_press(self, x, y):
+    def on_key_press(self):
         pass
 
-    def on_key_release(self, x, y):
+    def on_key_release(self):
         pass
 
 
@@ -1935,9 +1939,6 @@ class Area(Drawable, Interactable, FuncConnected):
         self._rectangle_shapes = arcade.ShapeElementList()
         # logic flags:
         self._no_choice = no_choice
-
-    def connect_to_func(self, _function):
-        self._func = _function
 
     def choose_field(self, field_chosen_ind: int = 0):
         if 0 <= field_chosen_ind < len(self._fields):
@@ -2000,7 +2001,7 @@ class Area(Drawable, Interactable, FuncConnected):
 
     def on_press(self, x, y):
         for i in range(len(self._fields)):
-            if DrawLib.is_point_in_square(
+            if not self._is_locked and DrawLib.is_point_in_square(
                     self._cx + 10,
                     self._cy - 30 - self._delta * i,
                     self._sq_size,
@@ -2014,15 +2015,15 @@ class Area(Drawable, Interactable, FuncConnected):
                 else:
                     self._field_chosen = i
                 # set the index in the algo:
-                self._func(self._field_chosen)
+                self._func[0](self._field_chosen)
 
     def on_release(self, x, y):
         pass
 
-    def on_key_press(self, x, y):
+    def on_key_press(self):
         pass
 
-    def on_key_release(self, x, y):
+    def on_key_release(self):
         pass
 
     # draws a lock for right window part: 36 366 98 989
@@ -2068,9 +2069,6 @@ class PlayButton(Icon, Drawable, Interactable, FuncConnected):
         self._line_w = line_w
         self._multiplier = 1
 
-    def connect_to_func(self, func):
-        self._func = func
-
     def setup(self):
         pass
 
@@ -2090,8 +2088,6 @@ class PlayButton(Icon, Drawable, Interactable, FuncConnected):
             self._incrementer[1] += 0.015
 
     def draw(self):
-        #
-        #     self.h_increment +g= 0.5
         dh = self._r / math.sqrt(3)
         delta_line_w = 0 if self._inter_type == InterType.NONE else 1
         arcade.draw_circle_outline(self._cx, self._cy, self._r + self._line_w + 1, arcade.color.BLACK,
@@ -2143,18 +2139,18 @@ class PlayButton(Icon, Drawable, Interactable, FuncConnected):
         if DrawLib.is_point_in_circle(self._cx, self._cy, self._r, x, y):
             if self._inter_type == InterType.PRESSED:
                 self._inter_type = InterType.HOVERED
-                self._func(True)
+                self._func[0](True)
             elif self._inter_type == InterType.HOVERED:
                 self._inter_type = InterType.PRESSED
-                self._func()
+                self._func[0]()
 
     def on_release(self, x, y):
         pass
 
-    def on_key_press(self, x, y):
+    def on_key_press(self):
         pass
 
-    def on_key_release(self, x, y):
+    def on_key_release(self):
         pass
 
 
@@ -2173,9 +2169,6 @@ class StepButton(Icon, Drawable, Interactable, FuncConnected):
         self._is_right = is_right
         self._cycle_breaker = False  # TODO: SHOULD BE REWORKED!!! HOW SHOULD THE ALGO KNOW IF IT IS CHANGED???
 
-    def connect_to_func(self, func):
-        self._func = func
-
     def setup(self):
         pass
 
@@ -2184,6 +2177,7 @@ class StepButton(Icon, Drawable, Interactable, FuncConnected):
         if self._cycle_breaker:
             self._incrementer[3] += 1
             if self._incrementer[3] >= self.TICKS_THRESHOLD:
+                self._func[0]()
                 if self._incrementer[0] <= self.THRESHOLD:
                     self._incrementer[0] += self.DELTAS[0]
                 self._incrementer[1] = (self._incrementer[1] + self.DELTAS[1]) % 3
@@ -2268,27 +2262,33 @@ class StepButton(Icon, Drawable, Interactable, FuncConnected):
                 else:
                     self._inter_type = InterType.NONE
 
+    def press(self):
+        self._inter_type = InterType.PRESSED
+        if Lastar.is_in_interaction():
+            self._cycle_breaker = True
+            self._func[0]()
+        else:
+            self._func[1](self._is_right)
+
     def on_press(self, x, y):
         if len(self._vertices) == 3:
             if reduce(lambda a, b: a or arcade.is_point_in_polygon(x, y, self._vertices[b]), list(range(3)), False):
-                self._inter_type = InterType.PRESSED
-                if self._func():
-                    self._cycle_breaker = True
+                self.press()
+
+    def release(self):
+        self._inter_type = InterType.NONE
+        self._cycle_breaker = False
+        self._incrementer[3] = 0
 
     def on_release(self, x, y):
-        self._inter_type = InterType.NONE
-        self._cycle_breaker = False
-        self._incrementer[3] = 0
+        self.release()
 
     # keys:
-    def on_key_press(self, x, y):
-        self._inter_type = InterType.PRESSED
-        self._cycle_breaker = True
+    def on_key_press(self):
+        self.press()
 
-    def on_key_release(self, x, y):
-        self._inter_type = InterType.NONE
-        self._cycle_breaker = False
-        self._incrementer[3] = 0
+    def on_key_release(self):
+        self.release()
 
 
 class Eraser(Icon, Drawable, Interactable, FuncConnected):
@@ -2300,9 +2300,6 @@ class Eraser(Icon, Drawable, Interactable, FuncConnected):
         self._r = r
         self._line_w = line_w
         self._centers = []
-
-    def connect_to_func(self, func):
-        self._func = func
 
     def setup(self):
         self._vertices = [
@@ -2358,10 +2355,10 @@ class Eraser(Icon, Drawable, Interactable, FuncConnected):
     def on_release(self, x, y):
         self._inter_type = InterType.NONE
 
-    def on_key_press(self, x, y):
+    def on_key_press(self):
         pass
 
-    def on_key_release(self, x, y):
+    def on_key_release(self):
         pass
 
 
@@ -2386,9 +2383,6 @@ class Undo(Icon, Drawable, Interactable, FuncConnected):
     @property
     def line_w(self):
         return self._line_w + (0 if self._inter_type == InterType.NONE else 1)
-
-    def connect_to_func(self, func):
-        self._func = func
 
     def setup(self):
         pass
@@ -2434,10 +2428,10 @@ class Undo(Icon, Drawable, Interactable, FuncConnected):
     def on_release(self, x, y):
         self._inter_type = InterType.NONE
 
-    def on_key_press(self, x, y):
+    def on_key_press(self):
         pass
 
-    def on_key_release(self, x, y):
+    def on_key_release(self):
         pass
 
 
@@ -2512,10 +2506,10 @@ class GearWheelButton(Icon, Drawable, Interactable):
     def on_release(self, x, y):
         pass
 
-    def on_key_press(self, x, y):
+    def on_key_press(self):
         pass
 
-    def on_key_release(self, x, y):
+    def on_key_release(self):
         pass
 
 
@@ -2523,15 +2517,13 @@ class ArrowsMenu(Icon, Drawable, Interactable, FuncConnected):  # cx, cy = (1755
     arrows_indices = []
     walk_index = 0
     choosing_arrows = True
+    arrows = []
+    arrows_reset = None
 
     def __init__(self, cx, cy, arrow_length, arrow_height):
         super().__init__(cx + 70, cy - 75)
         self._inter_types_arrows = [InterType.NONE for _ in range(4)]
         self._inter_type_reset_square = InterType.NONE
-
-        self._arrows = []
-        self._arrows_reset = None
-
         self._arrow_length = arrow_length
         self._arrow_height = arrow_height
 
@@ -2539,7 +2531,7 @@ class ArrowsMenu(Icon, Drawable, Interactable, FuncConnected):  # cx, cy = (1755
 
     def elements_setup(self):
         for ind, (dx, dy) in enumerate(Arrow.walk):
-            self._arrows.append(
+            self.arrows.append(
                 Arrow(
                     self._cx + dx * self._arrow_length,
                     self._cy + dy * self._arrow_length,
@@ -2551,11 +2543,7 @@ class ArrowsMenu(Icon, Drawable, Interactable, FuncConnected):  # cx, cy = (1755
             )
 
         # ARROWS RESET:
-        self._arrows_reset = ArrowReset(self._cx, self._cy, self._arrow_height)
-        self._arrows_reset.connect(self)
-
-    def connect_to_func(self, func):
-        self._func = func
+        self.arrows_reset = ArrowReset(self._cx, self._cy, self._arrow_height)
 
     @property
     def inter_types_arrows(self):
@@ -2566,46 +2554,42 @@ class ArrowsMenu(Icon, Drawable, Interactable, FuncConnected):  # cx, cy = (1755
         self._inter_types_arrows = inter_types_arrows
 
     def setup(self):
-        for arrow in self._arrows:
+        for arrow in self.arrows:
             arrow.setup()
-        self._arrows_reset.setup()
+        self.arrows_reset.setup()
 
     def update(self):
         pass
 
     def draw(self):
-        if self._func():
+        if self._func[0]():
             # text:
             arcade.draw_text(f'Directions priority: ', SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120, arcade.color.BLACK,
                              bold=True)
             # elements:
-            for arrow in self._arrows:
+            for arrow in self.arrows:
                 arrow.draw()
-            self._arrows_reset.draw()
+            self.arrows_reset.draw()
 
     def on_motion(self, x, y):
-        for arrow in self._arrows:
+        for arrow in self.arrows:
             arrow.on_motion(x, y)
-        self._arrows_reset.on_motion(x, y)
+        self.arrows_reset.on_motion(x, y)
 
     def on_press(self, x, y):
         if self.choosing_arrows:
-            for arrow in self._arrows:
+            for arrow in self.arrows:
                 arrow.on_press(x, y)
-        self._arrows_reset.on_press(x, y)
+        self.arrows_reset.on_press(x, y)
 
     def on_release(self, x, y):
         pass
 
-    def on_key_press(self, x, y):
+    def on_key_press(self):
         pass
 
-    def on_key_release(self, x, y):
+    def on_key_release(self):
         pass
-
-    @property
-    def arrows(self):
-        return self._arrows
 
 
 class Arrow(Icon, Drawable, Interactable):  # part of an arrow menu
@@ -2729,21 +2713,18 @@ class Arrow(Icon, Drawable, Interactable):  # part of an arrow menu
     def on_release(self, x, y):
         pass
 
-    def on_key_press(self, x, y):
+    def on_key_press(self):
         pass
 
-    def on_key_release(self, x, y):
+    def on_key_release(self):
         pass
 
 
-class ArrowReset(Icon, Drawable, Interactable, Connected):
+class ArrowReset(Icon, Drawable, Interactable):
 
     def __init__(self, cx, cy, arrow_height):
         super().__init__(cx, cy)
         self._arrow_height = arrow_height
-
-    def connect(self, obj: ArrowsMenu):
-        self._obj = obj
 
     def setup(self):
         pass
@@ -2768,19 +2749,19 @@ class ArrowReset(Icon, Drawable, Interactable, Connected):
 
     def on_press(self, x, y):
         if DrawLib.is_point_in_square(self._cx, self._cy, self._arrow_height, x, y):
-            self._obj.choosing_arrows = True
-            self._obj.walk_index = 0
+            ArrowsMenu.choosing_arrows = True
+            ArrowsMenu.walk_index = 0
             ArrowsMenu.arrows_indices = []
-            for arrow in self._obj.arrows:
+            for arrow in ArrowsMenu.arrows:
                 arrow._inter_type = InterType.NONE
 
     def on_release(self, x, y):
         pass
 
-    def on_key_press(self, x, y):
+    def on_key_press(self):
         pass
 
-    def on_key_release(self, x, y):
+    def on_key_release(self):
         pass
 
 
@@ -2793,9 +2774,6 @@ class AstarIcon(Icon, Drawable, Interactable, FuncConnected):
         self._size_h = size_h
         self._line_w = line_w
         self._clockwise = clockwise
-
-    def connect_to_func(self, func):
-        self._func = func
 
     def setup(self):
         upper_hypot = math.sqrt(self._size_w ** 2 + self._size_h ** 2)
@@ -2877,16 +2855,16 @@ class AstarIcon(Icon, Drawable, Interactable, FuncConnected):
         if arcade.is_point_in_polygon(x, y, self._vertices[0]):
             if self._inter_type != InterType.PRESSED:
                 self._inter_type = InterType.PRESSED
-                self._func()
+                self._func[0]()
                 return self
 
     def on_release(self, x, y):
         pass
 
-    def on_key_press(self, x, y):
+    def on_key_press(self):
         pass
 
-    def on_key_release(self, x, y):
+    def on_key_release(self):
         pass
 
 
@@ -2898,9 +2876,6 @@ class Waves(Icon, Drawable, Interactable, FuncConnected):
         self._size = size
         self._waves_q = waves_q
         self._line_w = line_w
-
-    def connect_to_func(self, func):
-        self._func = func
 
     def setup(self):
         pass
@@ -2930,16 +2905,16 @@ class Waves(Icon, Drawable, Interactable, FuncConnected):
         if DrawLib.is_point_in_circle(self._cx, self._cy, self._size, x, y):
             if self._inter_type != InterType.PRESSED:
                 self._inter_type = InterType.PRESSED
-                self._func()
+                self._func[0]()
                 return self
 
     def on_release(self, x, y):
         pass
 
-    def on_key_press(self, x, y):
+    def on_key_press(self):
         pass
 
-    def on_key_release(self, x, y):
+    def on_key_release(self):
         pass
 
 
@@ -2950,9 +2925,6 @@ class BfsDfsIcon(Icon, Drawable, Interactable, FuncConnected):
         super().__init__(cx, cy)
         self._size = size
         self._line_w = line_w
-
-    def connect_to_func(self, func):
-        self._func = func
 
     def setup(self):
         pass
@@ -3009,16 +2981,16 @@ class BfsDfsIcon(Icon, Drawable, Interactable, FuncConnected):
         if DrawLib.is_point_in_square(self._cx, self._cy, self._size, x, y):
             if self._inter_type != InterType.PRESSED:
                 self._inter_type = InterType.PRESSED
-                self._func()
+                self._func[0]()
                 return self
 
     def on_release(self, x, y):
         pass
 
-    def on_key_press(self, x, y):
+    def on_key_press(self):
         pass
 
-    def on_key_release(self, x, y):
+    def on_key_release(self):
         pass
 
 

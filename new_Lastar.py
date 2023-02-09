@@ -22,7 +22,7 @@ import numpy as np
 import pyglet
 
 # screen sizes:
-SCREEN_WIDTH = 1960
+SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1080
 
 

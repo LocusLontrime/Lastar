@@ -22,8 +22,8 @@ import numpy as np
 import pyglet
 
 # screen sizes:
-SCREEN_WIDTH = 1500
-SCREEN_HEIGHT = 800
+SCREEN_WIDTH = 1960
+SCREEN_HEIGHT = 1080
 
 
 # decorator, returns func and time in ms as tuple:

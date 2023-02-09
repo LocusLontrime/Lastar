@@ -212,7 +212,7 @@ class Lastar(arcade.Window):
 
     def aux_clearing(self):
         # Lastar clearing:
-        self._in_interaction = False
+        Lastar._in_interaction = False
         self._in_interaction_mode_lock = False
         # algo pars clearing:
         if self._current_algo is not None:
@@ -354,7 +354,7 @@ class Lastar(arcade.Window):
         match symbol:
             # a_star_call:
             case arcade.key.SPACE:
-                self.start_algo()
+                self._play_button.press()
             # entirely grid clearing:
             case arcade.key.ENTER:
                 self._grid.clear_grid()
@@ -2134,15 +2134,18 @@ class PlayButton(Icon, Drawable, Interactable, FuncConnected):
             else:
                 self._multiplier = -1
 
+    def press(self):
+        if self._inter_type == InterType.PRESSED:
+            self._inter_type = InterType.HOVERED
+            self._func[0](True)
+        else:
+            self._inter_type = InterType.PRESSED
+            self._func[0]()
+
     def on_press(self, x, y):
         # if self._inter_type != InterType.PRESSED:
         if DrawLib.is_point_in_circle(self._cx, self._cy, self._r, x, y):
-            if self._inter_type == InterType.PRESSED:
-                self._inter_type = InterType.HOVERED
-                self._func[0](True)
-            elif self._inter_type == InterType.HOVERED:
-                self._inter_type = InterType.PRESSED
-                self._func[0]()
+            self.press()
 
     def on_release(self, x, y):
         pass

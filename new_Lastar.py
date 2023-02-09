@@ -1,24 +1,29 @@
 import functools
 import heapq as hq
-import time
+# logging
+import logging
 import math
-from enum import Enum
-from functools import reduce
-import numpy as np
-# graphics:
-import arcade, arcade.gui
 # data
 import shelve
-# queues:
-from collections import deque
+import time
 # abstract classes:
 from abc import ABC, abstractmethod
+# queues:
+from collections import deque
+from enum import Enum
+from functools import reduce
+from logging import config
+
+# graphics:
+import arcade
+import arcade.gui
+import numpy as np
 # windows:
 import pyglet
 
 # screen sizes:
-SCREEN_WIDTH = 1920
-SCREEN_HEIGHT = 1050
+SCREEN_WIDTH = 1500
+SCREEN_HEIGHT = 800
 
 
 # decorator, returns func and time in ms as tuple:
@@ -39,16 +44,19 @@ def lock(func):
     def _wrapper(*args, **kwargs):
         if not Lastar.is_in_interaction():
             return func(*args, **kwargs)
+
     return _wrapper
 
 
 class Lastar(arcade.Window):
+    logging.config.fileConfig('log.conf', disable_existing_loggers=True)
     # base interaction par:
     _in_interaction = False
 
     def __init__(self, width: int, height: int):
         super().__init__(width, height)
         arcade.set_background_color(arcade.color.DUTCH_WHITE)
+        self.log = logging.getLogger('Lastar')
         self.set_update_rate(1 / 60)
         # time elapsed:
         self._time_elapsed = 0
@@ -96,7 +104,6 @@ class Lastar(arcade.Window):
         self._play_button = None
         self._step_button_right = None
         self._step_button_left = None
-
         self.elements_setup()
 
         # icons_dict:
@@ -111,6 +118,7 @@ class Lastar(arcade.Window):
         return Lastar._in_interaction
 
     def elements_setup(self):
+        self.log.debug('elements_setup_start')
         # ALGOS:
         self._astar = Astar()
         self._astar.connect(self._grid)
@@ -194,23 +202,29 @@ class Lastar(arcade.Window):
         self._step_button_right.connect_to_func(self.up, self.another_ornament)
         self._step_button_left = StepButton(1785 + 6 - 50, 50, 24, 16, 2, False)
         self._step_button_left.connect_to_func(self.down, self.another_ornament)
+        self.log.debug('elements_setup_end')
 
     def set_interactive_ind(self, ind: int or None):
         self._interactive_ind = ind
+        self.log.info('elements_setup_end successfully')
 
     def choose_a_star(self):
         self._grid.clear_grid()
         self._current_algo = self._astar
+        self.log.info('choose_a_star successfully')
 
     def choose_wave_lee(self):
         self._grid.clear_grid()
         self._current_algo = self._wave_lee
+        self.log.info('choose_wave_lee successfully')
 
     def choose_bfs_dfs(self):
         self._grid.clear_grid()
         self._current_algo = self._bfs_dfs
+        self.log.info('choose_bfs_dfs successfully')
 
     def aux_clearing(self):
+        self.log.debug('aux_clearing')
         # Lastar clearing:
         Lastar._in_interaction = False
         self._in_interaction_mode_lock = False
@@ -218,12 +232,14 @@ class Lastar(arcade.Window):
         if self._current_algo is not None:
             self._current_algo.clear()
         print(f'Connection APPROVED...')
+        self.log.info('Connection APPROVED...')
         # lockers off:
         for menu in self._menus_dict.values():
             if menu is not None:
                 if not menu.is_hidden():
                     menu.unlock()
         self._show_mode_area.unlock()
+        self.log.info('aux_clearing successfully')
 
     # PRESETS:
     def setup(self):
@@ -244,7 +260,7 @@ class Lastar(arcade.Window):
         cursor = self.get_system_mouse_cursor(self.CURSOR_HAND)
         self.set_mouse_cursor(cursor)
         # let us change the app icon:
-        self.set_icon(pyglet.image.load('C:\\Users\\langr\\PycharmProjects\\Lastar\\366.png'))
+        self.set_icon(pyglet.image.load('366.png'))
         # manage icons setting up:
         ...
 
@@ -306,12 +322,14 @@ class Lastar(arcade.Window):
         ...
 
     def play_button_func(self, is_pressed: bool = False):
+        self.log.debug('method called "play_button_func"')
         if is_pressed:
             self._grid.clear_empty_nodes()
         else:
             self.start_algo()
 
     def start_algo(self):
+        self.log.debug('method called "start_algo"')
         if not self._grid.loading:
             if self._grid.start_node and self._grid.end_node:
                 # STEP BY STEP:
@@ -354,36 +372,46 @@ class Lastar(arcade.Window):
         match symbol:
             # a_star_call:
             case arcade.key.SPACE:
+                self.log.info('key.SPACE -> method called "start_algo"')
                 self._play_button.press()
             # entirely grid clearing:
             case arcade.key.ENTER:
+                self.log.info('key.ENTER -> method called "clear_grid"')
                 self._grid.clear_grid()
             # a_star interactive:
             case arcade.key.RIGHT:
+                self.log.info('key.RIGHT -> method called "on_key_press"')
                 self._step_button_right.on_key_press()
             case arcade.key.LEFT:
-                self._step_button_left.on_key_press()                                #
+                self.log.info('key.LEFT -> method called "on_key_press"')
+                self._step_button_left.on_key_press()  #
             # undoing and cancelling:
             case arcade.key.Z:  # undo
                 if not Lastar._in_interaction:
+                    self.log.info('key.Z -> method called "undo"')
                     self._grid.undo()
             case arcade.key.Y:  # cancels undo
                 if not Lastar._in_interaction:
+                    self.log.info('key.Y -> method called "redo"')
                     self._grid.redo()
             # saving and loading:
             case arcade.key.S:
+                self.log.info('key.S -> method called "save"')
                 self._grid.save()
             case arcade.key.L:
                 # cannot loading while in interaction:
                 if not self.in_interaction:
+                    self.log.info('key.L -> method called "load"')
                     self._grid.load()
 
     def on_key_release(self, symbol: int, modifiers: int):
         # long press ending:
         match symbol:
             case arcade.key.RIGHT:
+                self.log.info('key.RIGHT release-> method called "on_key_release"')
                 self._step_button_right.on_key_release()
             case arcade.key.LEFT:
+                self.log.info('key.LEFT release-> method called "on_key_release"')
                 self._step_button_left.on_key_release()
 
     def on_mouse_motion(self, x: int, y: int, dx: int, dy: int):
@@ -435,6 +463,8 @@ class Lastar(arcade.Window):
 
 
 class DrawLib:
+    # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
+
     @staticmethod
     # by default the arrow to be drawn is left sided:
     def create_line_arrow(node: 'Node', deltas: tuple[int, int] = (-1, 0),
@@ -471,6 +501,7 @@ class DrawLib:
 
 
 class Drawable(ABC):
+    # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
 
     # on initialization (loads presets):
     @abstractmethod
@@ -489,6 +520,7 @@ class Drawable(ABC):
 
 
 class Interactable(ABC):
+    # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
 
     # implements the element's behaviour in on_press/on_motion methods:
     @abstractmethod
@@ -513,28 +545,42 @@ class Interactable(ABC):
 
 
 class Connected(ABC):  # Connected
+    logging.config.fileConfig('log.conf', disable_existing_loggers=True)
+
     def __init__(self):
         # object to be managed:
+        self.log = logging.getLogger('Connected')
         self._obj = None
 
     @abstractmethod
     def connect(self, obj):
+        self.log.info('Connected')
         self._obj = obj
 
 
 class FuncConnected(ABC):
+    logging.config.fileConfig('log.conf', disable_existing_loggers=True)
+
     def __init__(self):
+
         # function/functions connected:
         self._func = None
 
     def connect_to_func(self, *func):
+        log = logging.getLogger('FuncConnected')
+        try:
+            log.info(f'Connected to funk {func.__name__ }')
+        except AttributeError:
+            log.info(f'Connected to funk {func}')
         self._func = func
 
 
 class Grid(Drawable, FuncConnected):
+    logging.config.fileConfig('log.conf', disable_existing_loggers=True)
 
     def __init__(self):
         super().__init__()
+        self.log = logging.getLogger('Grid')
         # the grid itself:
         self._grid = None
         # important nodes:
@@ -577,12 +623,14 @@ class Grid(Drawable, FuncConnected):
     # INITIALIZATION AUX:
     # calculating grid visualization pars for vertical tiles number given:
     def get_pars(self):
+        self.log.debug('Calculating grid visualization pars for vertical tiles number given')
         self._Y, self._X = SCREEN_HEIGHT - 60, SCREEN_WIDTH - 250
         self._tiles_q = self._scale_names[self._scale]
         self._line_width = int(math.sqrt(max(self._scale_names.values()) / self._tiles_q))
         tile_size = self._Y // self.tiles_q
         hor_tiles_q = self._X // tile_size
         self._Y, self._X = self.tiles_q * tile_size, hor_tiles_q * tile_size
+        self.log.info('Calculation successfully')
         return tile_size, hor_tiles_q
 
     def get_hor_tiles(self, i):
@@ -612,25 +660,30 @@ class Grid(Drawable, FuncConnected):
         )
         cx, cy = 5 + node.x * self._tile_size + self._tile_size / 2, \
                  5 + node.y * self._tile_size + self._tile_size / 2
+        self.log.info('Triangle points getting')
         return (cx, cy), (cx + deltas[0][0], cy + deltas[0][1]), (cx + deltas[1][0], cy + deltas[1][1])
 
     # gets the number representation for the node:
     def number_repr(self, node: 'Node'):
+        self.log.debug('number_repr')
         return node.y * self._hor_tiles_q + node.x
 
     # gets node's coordinates for its number representation:
     def coords(self, number: int):
+        self.log.debug('coords')
         return divmod(number, self._hor_tiles_q)
 
     # gets the node itself for its number representation:
     def node(self, num: int) -> 'Node':
         y, x = self.coords(num)
+        self.log.debug('Gets the node itself for its number representation')
         return self._grid[y][x]
 
     # gets the node from the current mouse coordinates:
     def get_node(self, mouse_x, mouse_y):
         x_, y_ = mouse_x - 5, mouse_y - 5
         x, y = x_ // self._tile_size, y_ // self._tile_size
+        self.log.debug('Gets the node from the current mouse coordinates')
         return self.grid[y][x] if 0 <= x < self._hor_tiles_q and 0 <= y < self.tiles_q else None
 
     @property
@@ -763,6 +816,7 @@ class Grid(Drawable, FuncConnected):
 
     def initialize(self):
         self._grid = [[Node(j, i, 1, NodeType.EMPTY) for i in range(self._hor_tiles_q)] for j in range(self._tiles_q)]
+        self.log.info('Grid initialize')
 
     # make a node the chosen one:
     def choose_node(self, node: 'Node'):
@@ -777,6 +831,7 @@ class Grid(Drawable, FuncConnected):
         self.get_sprites()
         # grid lines:
         self.make_grid_lines()
+        self.log.info('Setup grid successfully')
 
     def update(self):
         pass
@@ -792,10 +847,13 @@ class Grid(Drawable, FuncConnected):
         # arrows:
         if self._guide_arrows_ind is not None:
             if len(self.arrow_shape_list) > 0:
+                self.log.debug('Drawing a arrows')
                 self.arrow_shape_list.draw()
         # path arrows:
         if self._triangle_shape_list:
+            self.log.debug('Drawing a path arrows')
             self._triangle_shape_list.draw()
+
 
     # creates sprites for all the nodes:
     def get_sprites(self):  # batch -->
@@ -1037,6 +1095,8 @@ class Grid(Drawable, FuncConnected):
 
 # class for a node representation:
 class Node:
+    logging.config.fileConfig('log.conf', disable_existing_loggers=True)
+
     # horizontal and vertical up and down moves:
     walk = [(dy, dx) for dx in range(-1, 2) for dy in range(-1, 2) if dy * dx == 0 and (dy, dx) != (0, 0)]
     extended_walk = [(dy, dx) for dx in range(-1, 2) for dy in range(-1, 2) if (dy, dx) != (0, 0)]
@@ -1222,6 +1282,8 @@ class Node:
 
 # class representing an algo:
 class Algorithm(Connected):
+    logging.config.fileConfig('log.conf', disable_existing_loggers=True)
+
     def __init__(self, name: str):
         super().__init__()
         # info:
@@ -1334,6 +1396,7 @@ class Algorithm(Connected):
 
 
 class Astar(Algorithm):
+    logging.config.fileConfig('log.conf', disable_existing_loggers=True)
 
     def __init__(self):
         super().__init__('Astar')
@@ -1605,6 +1668,8 @@ class Astar(Algorithm):
 
 
 class WaveLee(Algorithm):
+    logging.config.fileConfig('log.conf', disable_existing_loggers=True)
+
     def __init__(self):
         super().__init__('WaveLee')
         # wave lee algo's important pars:
@@ -1714,6 +1779,8 @@ class WaveLee(Algorithm):
 
 
 class BfsDfs(Algorithm):
+    logging.config.fileConfig('log.conf', disable_existing_loggers=True)
+
     def __init__(self):
         super().__init__('Bfs/Dfs')
         # important algo's attributes:
@@ -1860,6 +1927,7 @@ class BfsDfs(Algorithm):
 
 
 class Menu(Drawable, Interactable, FuncConnected):
+    # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
 
     def __init__(self):
         super().__init__()
@@ -1918,6 +1986,7 @@ class Menu(Drawable, Interactable, FuncConnected):
 
 
 class Area(Drawable, Interactable, FuncConnected):
+    # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
 
     def __init__(self, cx, cy, delta, sq_size, sq_line_w, header: str, fields: dict[int, str], no_choice=False):
         super().__init__()
@@ -2042,6 +2111,8 @@ class Area(Drawable, Interactable, FuncConnected):
 
 # class for design element:
 class Icon(ABC):
+    # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
+
     def __init__(self, cx, cy):
         self._cx = cx
         self._cy = cy
@@ -2060,6 +2131,8 @@ class Icon(ABC):
 
 
 class PlayButton(Icon, Drawable, Interactable, FuncConnected):
+    # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
+
     DELTAS = [0.5, 0.015]  # pixels/radians
 
     def __init__(self, cx, cy, r, line_w):
@@ -2158,6 +2231,8 @@ class PlayButton(Icon, Drawable, Interactable, FuncConnected):
 
 
 class StepButton(Icon, Drawable, Interactable, FuncConnected):
+    # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
+
     DELTAS = [0.15, 0.1, 0.05]
     THRESHOLD = 8
     TICKS_THRESHOLD = 12
@@ -2295,6 +2370,7 @@ class StepButton(Icon, Drawable, Interactable, FuncConnected):
 
 
 class Eraser(Icon, Drawable, Interactable, FuncConnected):
+    # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
 
     def __init__(self, cx, cy, h, w, r, line_w):
         super().__init__(cx, cy)
@@ -2366,6 +2442,7 @@ class Eraser(Icon, Drawable, Interactable, FuncConnected):
 
 
 class Undo(Icon, Drawable, Interactable, FuncConnected):
+    # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
 
     def __init__(self, cx, cy, a, dh, r, line_w, is_right=False):
         super().__init__(cx, cy)
@@ -2439,6 +2516,8 @@ class Undo(Icon, Drawable, Interactable, FuncConnected):
 
 
 class GearWheelButton(Icon, Drawable, Interactable):
+    # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
+
     DELTA = 0.02
 
     def __init__(self, cx: int, cy: int, r: int, cog_size=8, multiplier=1.5, line_w=2, clockwise=True):
@@ -2517,6 +2596,8 @@ class GearWheelButton(Icon, Drawable, Interactable):
 
 
 class ArrowsMenu(Icon, Drawable, Interactable, FuncConnected):  # cx, cy = (1755, 785)
+    # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
+
     arrows_indices = []
     walk_index = 0
     choosing_arrows = True
@@ -2596,6 +2677,8 @@ class ArrowsMenu(Icon, Drawable, Interactable, FuncConnected):  # cx, cy = (1755
 
 
 class Arrow(Icon, Drawable, Interactable):  # part of an arrow menu
+    # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
+
     # initial directions priority for all algorithms:
     walk = [(1, 0), (0, -1), (-1, 0), (0, 1)]
 
@@ -2724,6 +2807,7 @@ class Arrow(Icon, Drawable, Interactable):  # part of an arrow menu
 
 
 class ArrowReset(Icon, Drawable, Interactable):
+    # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
 
     def __init__(self, cx, cy, arrow_height):
         super().__init__(cx, cy)
@@ -2769,6 +2853,8 @@ class ArrowReset(Icon, Drawable, Interactable):
 
 
 class AstarIcon(Icon, Drawable, Interactable, FuncConnected):
+    # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
+
     DELTA = 0.05
 
     def __init__(self, cx, cy, size_w, size_h, line_w=2, clockwise=True):
@@ -2872,6 +2958,8 @@ class AstarIcon(Icon, Drawable, Interactable, FuncConnected):
 
 
 class Waves(Icon, Drawable, Interactable, FuncConnected):
+    # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
+
     DELTA = 0.25
 
     def __init__(self, cx, cy, size=32, waves_q=5, line_w=2):
@@ -2922,6 +3010,8 @@ class Waves(Icon, Drawable, Interactable, FuncConnected):
 
 
 class BfsDfsIcon(Icon, Drawable, Interactable, FuncConnected):
+    # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
+
     DELTA = 0.15
 
     def __init__(self, cx, cy, size, line_w):

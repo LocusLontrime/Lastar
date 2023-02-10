@@ -23,7 +23,7 @@ import pyglet
 
 # screen sizes:
 SCREEN_WIDTH = 1920
-SCREEN_HEIGHT = 1080
+SCREEN_HEIGHT = 1050
 
 
 # decorator, returns func and time in ms as tuple:

@@ -1,32 +1,41 @@
+# functools:
 import functools
-import heapq as hq
+from functools import reduce
+
+# math:
+import math
+import numpy as np
+
 # logging
 import logging
-import math
+from logging import config
+
 # data
 import shelve
 import time
+from enum import Enum
+
 # abstract classes:
 from abc import ABC, abstractmethod
+
 # queues:
 from collections import deque
-from enum import Enum
-from functools import reduce
-from logging import config
+import heapq as hq
 
 # graphics:
 import arcade
 import arcade.gui
-import numpy as np
+
 # windows:
 import pyglet
+
 
 # screen sizes:
 SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1050
 
 
-# decorator, returns func and time in ms as tuple:
+# decorator for void funcs, it returns the function's runtime in ms as int instead of void function's return value (None):
 def timer(func):
     @functools.wraps(func)
     def _wrapper(*args, **kwargs):
@@ -38,6 +47,19 @@ def timer(func):
     return _wrapper
 
 
+# returns the runtime for recursive function or method:
+def rec_timer(func):
+    @functools.wraps(func)
+    def _wrapper(*args, **kwargs):
+        start = time.perf_counter()
+        f = func(*args, **kwargs)
+        _wrapper.runtime += 1000 * (time.perf_counter() - start)
+        return f
+    # initial state:
+    _wrapper.runtime = 0
+    return _wrapper
+
+
 # decorator, runs function if not in interaction mode:
 def lock(func):
     @functools.wraps(func)
@@ -45,6 +67,47 @@ def lock(func):
         if not Lastar.is_in_interaction():
             return func(*args, **kwargs)
 
+    return _wrapper
+
+
+# logs non-recursive functions and methods:
+def logged(func):
+    @functools.wraps(func)
+    def _wrapper(*args, **kwargs):
+        obj = args[0]
+        obj.log.debug(f'method .{func.__name__}() of {obj.__class__} started')
+        obj.log.debug(f"method's description: {func.__doc__}")
+        f = func(*args, **kwargs)
+        obj.log.debug(f'method .{func.__name__}() of {obj.__class__} successfully finished')
+        return f
+
+    return _wrapper
+
+
+# depth and calls for recursive function:
+def counted(func):
+    def reset():
+        _wrapper.rec_depth = 0
+        _wrapper.rec_calls = 0
+
+    @functools.wraps(func)
+    def _wrapper(*args, **kwargs):
+        nonlocal depth
+        # what for?..
+        if depth == 0:
+            reset()
+        # depth and calls incrementation:
+        depth += 1
+        _wrapper.rec_calls += 1
+        # max depth defining:
+        _wrapper.rec_depth = max(_wrapper.rec_depth, depth)
+        f = func(*args, **kwargs)
+        # depth backtracking:
+        depth -= 1
+        return f
+    # starts a wrapper:
+    depth = 0
+    reset()
     return _wrapper
 
 
@@ -118,7 +181,7 @@ class Lastar(arcade.Window):
         return Lastar._in_interaction
 
     def elements_setup(self):
-        self.log.debug('elements_setup_start')
+        self.log.debug('.elements_setup() started')
         # ALGOS:
         self._astar = Astar()
         self._astar.connect(self._grid)
@@ -204,29 +267,29 @@ class Lastar(arcade.Window):
         self._step_button_right.connect_to_func(self.up, self.another_ornament)
         self._step_button_left = StepButton(1785 + 6 - 50, 50, 24, 16, 2, False)
         self._step_button_left.connect_to_func(self.down, self.another_ornament)
-        self.log.debug('elements_setup_end')
+        self.log.debug('.elements_setup() successfully finished')
 
     def set_interactive_ind(self, ind: int or None):
         self._interactive_ind = ind
-        self.log.info('elements_setup_end successfully')
+        self.log.info('.set_interactive_ind() successfully finished')
 
     def choose_a_star(self):
         self._grid.clear_grid()
         self._current_algo = self._astar
-        self.log.info('choose_a_star successfully')
+        self.log.info('choose_a_star successfully finished')
 
     def choose_wave_lee(self):
         self._grid.clear_grid()
         self._current_algo = self._wave_lee
-        self.log.info('choose_wave_lee successfully')
+        self.log.info('choose_wave_lee successfully finished')
 
     def choose_bfs_dfs(self):
         self._grid.clear_grid()
         self._current_algo = self._bfs_dfs
-        self.log.info('choose_bfs_dfs successfully')
+        self.log.info('choose_bfs_dfs successfully finished')
 
     def aux_clearing(self):
-        self.log.debug('aux_clearing')
+        self.log.debug('.aux_clearing() started')
         # Lastar clearing:
         Lastar._in_interaction = False
         self._in_interaction_mode_lock = False
@@ -241,7 +304,7 @@ class Lastar(arcade.Window):
                 if not menu.is_hidden():
                     menu.unlock()
         self._show_mode_area.unlock()
-        self.log.info('aux_clearing successfully')
+        self.log.info('.aux_clearing() successfully finished')
 
     # PRESETS:
     def setup(self):
@@ -324,14 +387,14 @@ class Lastar(arcade.Window):
         ...
 
     def play_button_func(self, is_pressed: bool = False):
-        self.log.debug('method called "play_button_func"')
+        self.log.debug('.play_button_func() call')
         if is_pressed:
             self._grid.clear_empty_nodes()
         else:
             self.start_algo()
 
     def start_algo(self):
-        self.log.debug('method called "start_algo"')
+        self.log.debug('.start_algo() call')
         if not self._grid.loading:
             if self._grid.start_node and self._grid.end_node:
                 # STEP BY STEP:
@@ -374,7 +437,7 @@ class Lastar(arcade.Window):
         match symbol:
             # a_star_call:
             case arcade.key.SPACE:
-                self.log.info('key.SPACE -> method called "start_algo"')
+                self.log.info('key.SPACE -> method called "start_algo"')  # FIX THIS!
                 self._play_button.press()
             # entirely grid clearing:
             case arcade.key.ENTER:
@@ -382,38 +445,38 @@ class Lastar(arcade.Window):
                 self._grid.clear_grid()
             # a_star interactive:
             case arcade.key.RIGHT:
-                self.log.info('key.RIGHT -> method called "on_key_press"')
+                self.log.info('key.RIGHT -> method called "on_key_press"')  # FOR WHICH KEY???
                 self._step_button_right.on_key_press()
             case arcade.key.LEFT:
-                self.log.info('key.LEFT -> method called "on_key_press"')
+                self.log.info('key.LEFT -> method called "on_key_press"')  # FOR WHICH KEY???
                 self._step_button_left.on_key_press()  #
             # undoing and cancelling:
             case arcade.key.Z:  # undo
                 if not Lastar._in_interaction:
-                    self.log.info('key.Z -> method called "undo"')
+                    self.log.info('key.Z -> method called "undo"')  # FOR WHICH OBJ?..
                     self._grid.undo()
             case arcade.key.Y:  # cancels undo
                 if not Lastar._in_interaction:
-                    self.log.info('key.Y -> method called "redo"')
+                    self.log.info('key.Y -> method called "redo"')  # FOR WHICH OBJ?..
                     self._grid.redo()
             # saving and loading:
             case arcade.key.S:
-                self.log.info('key.S -> method called "save"')
+                self.log.info('key.S -> method called "save"')  # FOR WHICH OBJ?..
                 self._grid.save()
             case arcade.key.L:
                 # cannot loading while in interaction:
                 if not self.in_interaction:
-                    self.log.info('key.L -> method called "load"')
+                    self.log.info('key.L -> method called "load"')  # FOR WHICH OBJ?..
                     self._grid.load()
 
     def on_key_release(self, symbol: int, modifiers: int):
         # long press ending:
         match symbol:
             case arcade.key.RIGHT:
-                self.log.info('key.RIGHT release-> method called "on_key_release"')
+                self.log.info('key.RIGHT release-> method called "on_key_release"')  # FOR WHICH KEY???
                 self._step_button_right.on_key_release()
             case arcade.key.LEFT:
-                self.log.info('key.LEFT release-> method called "on_key_release"')
+                self.log.info('key.LEFT release-> method called "on_key_release"')  # FOR WHICH KEY???
                 self._step_button_left.on_key_release()
 
     def on_mouse_motion(self, x: int, y: int, dx: int, dy: int):
@@ -556,7 +619,7 @@ class Connected(ABC):  # Connected
 
     @abstractmethod
     def connect(self, obj):
-        self.log.info('Connected')
+        self.log.info('Connected')  # WITH WHAT???
         self._obj = obj
 
 
@@ -569,11 +632,11 @@ class FuncConnected(ABC):
         self._func = None
 
     def connect_to_func(self, *func):
-        log = logging.getLogger('FuncConnected')
+        log = logging.getLogger('FuncConnected')  # WITH WHAT FUNCTION OF WHICH OBJECT???
         try:
-            log.info(f'Connected to funk {func.__name__ }')
+            log.info(f'Connected to funñ {func.__name__ }')
         except AttributeError:
-            log.info(f'Connected to funk {func}')
+            log.info(f'Connected to func {func}')
         self._func = func
 
 
@@ -636,10 +699,12 @@ class Grid(Drawable, FuncConnected):
         return tile_size, hor_tiles_q
 
     def get_hor_tiles(self, i):
+        self.log.debug('Getting horizontal tiles number')
         return (SCREEN_WIDTH - 250) // (
                 (SCREEN_HEIGHT - 30) // self._scale_names[i])  # TODO: ELIMINATE THE DEVIATION IN Y coordinates!!!
 
     def set_scale(self, ind: int):
+        self.log.debug(f'Setting grid scale, now self._scale: {self._scale}')  # USE THIS!!! f-string
         self._scale = ind
         self.rebuild_map()
 
@@ -667,25 +732,25 @@ class Grid(Drawable, FuncConnected):
 
     # gets the number representation for the node:
     def number_repr(self, node: 'Node'):
-        self.log.debug('number_repr')
+        self.log.debug('.number_repr() call')
         return node.y * self._hor_tiles_q + node.x
 
     # gets node's coordinates for its number representation:
     def coords(self, number: int):
-        self.log.debug('coords')
+        self.log.debug('.coords() call')
         return divmod(number, self._hor_tiles_q)
 
     # gets the node itself for its number representation:
     def node(self, num: int) -> 'Node':
         y, x = self.coords(num)
-        self.log.debug('Gets the node itself for its number representation')
+        self.log.debug('Getting the node itself for its number representation')
         return self._grid[y][x]
 
     # gets the node from the current mouse coordinates:
     def get_node(self, mouse_x, mouse_y):
         x_, y_ = mouse_x - 5, mouse_y - 5
         x, y = x_ // self._tile_size, y_ // self._tile_size
-        self.log.debug('Gets the node from the current mouse coordinates')
+        self.log.debug('Getting the node from the current mouse coordinates')
         return self.grid[y][x] if 0 <= x < self._hor_tiles_q and 0 <= y < self.tiles_q else None
 
     @property
@@ -818,11 +883,12 @@ class Grid(Drawable, FuncConnected):
 
     def initialize(self):
         self._grid = [[Node(j, i, 1, NodeType.EMPTY) for i in range(self._hor_tiles_q)] for j in range(self._tiles_q)]
-        self.log.info('Grid initialize')
+        self.log.info('Grid initialization')
 
     # make a node the chosen one:
     def choose_node(self, node: 'Node'):
         self._node_chosen = node
+        self.log.info(f'Node chosen: {node}')
         # draw a frame
 
     def setup(self):
@@ -833,12 +899,13 @@ class Grid(Drawable, FuncConnected):
         self.get_sprites()
         # grid lines:
         self.make_grid_lines()
-        self.log.info('Setup grid successfully')
+        self.log.info('Grid has been initialized and set up successfully')
 
     def update(self):
         pass
 
     def scroll(self):
+        self.log.info('.scroll() call')
         self._mode = (self._mode + 1) % len(self._mode_names)
 
     def draw(self):
@@ -849,22 +916,24 @@ class Grid(Drawable, FuncConnected):
         # arrows:
         if self._guide_arrows_ind is not None:
             if len(self.arrow_shape_list) > 0:
-                self.log.debug('Drawing a arrows')
+                self.log.debug('Drawing an arrow')
                 self.arrow_shape_list.draw()
         # path arrows:
         if self._triangle_shape_list:
-            self.log.debug('Drawing a path arrows')
+            self.log.debug('Drawing the path-guiding arrows')
             self._triangle_shape_list.draw()
-
 
     # creates sprites for all the nodes:
     def get_sprites(self):  # batch -->
+        self.log.info(f"Grid nodes' sprites initialization started")
         for row in self.grid:
             for node in row:
                 node.get_solid_colour_sprite(self)
+        self.log.info(f"{self._tiles_q * self._hor_tiles_q} grid nodes' sprites initialization successfully finished")
 
     # shaping shape element list of grid lines:
     def make_grid_lines(self):
+        self.log.info(f"Grid lines' shapes initialization started")
         for j in range(self.tiles_q + 1):
             self._grid_line_shapes.append(
                 arcade.create_line(5, 5 + self._tile_size * j, 5 + self._X, 5 + self._tile_size * j,
@@ -876,16 +945,19 @@ class Grid(Drawable, FuncConnected):
                 arcade.create_line(5 + self._tile_size * i, 5, 5 + self._tile_size * i, 5 + self._Y,
                                    arcade.color.BLACK,
                                    self._line_width))
+        self.log.info(f"{self._tiles_q + self._hor_tiles_q + 2} grid lines' shapes initialization  successfully finished")
 
     # WALLS MANAGER:
     # EMPTIES -->> WALLS and BACK:
     def change_nodes_type(self, node_type: 'NodeType', walls_set: set or list):
+        self.log.info(f"Grid nodes' type changing started")
         for node_num in walls_set:
             y, x = self.coords(node_num)
             self.grid[y][x].type = node_type
             self.grid[y][x].update_sprite_colour()
+        self.log.info(f"{len(walls_set)} grid nodes successfully changing their type")
 
-    def press(self, x, y, button):
+    def press(self, x, y, button):  # MUST BE LOGGED!!!
         # MODES OF DRAWING LOGIC:
         if self._mode == 0:
             self._building_walls_flag = True
@@ -931,6 +1003,7 @@ class Grid(Drawable, FuncConnected):
 
     # builds/erases walls:
     def build_or_erase(self, x, y):
+        self.log.info(f'.build_or_erase() call')
         if self._building_walls_flag and self._mode == 0:
             if self._build_or_erase is not None:
                 if self._build_or_erase:
@@ -939,9 +1012,11 @@ class Grid(Drawable, FuncConnected):
                     self.erase_wall(x, y)
 
     def build_wall(self, x, y):
+        self.log.info(f'Trying to build a wall')
         # now building the walls:
         n = self.get_node(x, y)
         if n and n.type != NodeType.WALL:
+            self.log.info(f'Building a wall')
             n.type = NodeType.WALL
             self._walls.add(self.number_repr(n))
             n.update_sprite_colour()
@@ -949,11 +1024,14 @@ class Grid(Drawable, FuncConnected):
                 self._walls_built_erased = self._walls_built_erased[:self._walls_index + 1]
             self._walls_built_erased.append(([self.number_repr(n)], True))
             self._walls_index += 1
+            self.log.info(f'The wall successfully built')
 
     def erase_wall(self, x, y):
+        self.log.info(f'Trying to erase a wall')
         # now erasing the walls:
         n = self.get_node(x, y)
         if n and n.type == NodeType.WALL:
+            self.log.info(f'Erasing a wall')
             n.type = NodeType.EMPTY
             self._walls.remove(self.number_repr(n))
             n.update_sprite_colour()
@@ -961,11 +1039,11 @@ class Grid(Drawable, FuncConnected):
                 self._walls_built_erased = self._walls_built_erased[:self._walls_index + 1]
             self._walls_built_erased.append(([self.number_repr(n)], False))
             self._walls_index += 1
+            self.log.info(f'The wall successfully erased')
 
     # erases all nodes, that are connected vertically, horizontally or diagonally to a chosen one,
     # then nodes connected to them the same way and so on recursively...
-
-    def erase_all_linked_nodes(self, node: 'Node'):
+    def erase_all_linked_nodes(self, node: 'Node'):  # TODO: PROCESS AND LOG THIS RECURSIVE METHOD VERY CAREFULLY!!!
         node.type = NodeType.EMPTY
         node.update_sprite_colour()
         self._walls.remove(self.number_repr(node))
@@ -1219,7 +1297,7 @@ class Node:
         return hash((self.y, self.x))
 
     # CLEARING:
-    # entirely clears the node, returning it to the initial state:
+    # entirely clears the node, returning it to the initial state it came from:
     def clear(self):
         self.heur_clear()
         self.type = NodeType.EMPTY

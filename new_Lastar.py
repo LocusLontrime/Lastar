@@ -128,6 +128,7 @@ class Lastar(arcade.Window):
         # areas setting up:
         bot_menu_x, bot_menu_y = SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120
         heurs_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Heuristics', self._heuristic_names)
+        heurs_area.choose_field()
         heurs_area.connect_to_func(self._astar.set_heuristic)
         bot_menu_y -= 30 + (len(self._heuristic_names) - 1) * delta + 3 * sq_size
         tiebreakers_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Tiebreakers', self._tiebreaker_names,
@@ -154,6 +155,7 @@ class Lastar(arcade.Window):
         # area setting up:
         bot_menu_x, bot_menu_y = SCREEN_WIDTH - 235, SCREEN_HEIGHT - 70 - 120
         area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Core', {0: f'BFS', 1: f'DFS'})
+        area.choose_field()
         area.connect_to_func(self._bfs_dfs.set_is_bfs)
         # menu composing and connecting to an icon:
         self._bfs_dfs_menu = Menu()
@@ -2185,7 +2187,7 @@ class StepButton(Icon, Drawable, Interactable, FuncConnected):
                     self._incrementer[0] += self.DELTAS[0]
                 self._incrementer[1] = (self._incrementer[1] + self.DELTAS[1]) % 3
                 self._incrementer[2] += self.DELTAS[2]
-        else:
+        else:                                                              # 36 366 98 989
             if self._incrementer[0] > 0:
                 self._incrementer[0] -= self.DELTAS[0]
             else:

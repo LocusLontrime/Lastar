@@ -29,7 +29,6 @@ import arcade.gui
 # windows:
 import pyglet
 
-
 # screen sizes:
 SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1050
@@ -55,6 +54,7 @@ def rec_timer(func):
         f = func(*args, **kwargs)
         _wrapper.runtime += 1000 * (time.perf_counter() - start)
         return f
+
     # initial state:
     _wrapper.runtime = 0
     return _wrapper
@@ -70,15 +70,21 @@ def lock(func):
     return _wrapper
 
 
-# logs non-recursive functions and methods:
+# logs non-recursive methods:
 def logged(func):
     @functools.wraps(func)
     def _wrapper(*args, **kwargs):
-        obj = args[0]
-        obj.log.debug(f'method .{func.__name__}() of {obj.__class__} started')
-        obj.log.debug(f"method's description: {func.__doc__}")
+        obj = args[0]  # <<-- self
+        if type(func) != dict:
+            name = func.__name__
+            doc = func.__doc__
+        else:
+            name = [value.__name__ for value in func.values()]
+            doc = [value.__doc__ for value in func.values()]
+        obj.log.debug(f'method(s) .{name}() of {obj.__class__} started')
+        obj.log.debug(f"method(s)' description: {doc}")
         f = func(*args, **kwargs)
-        obj.log.debug(f'method .{func.__name__}() of {obj.__class__} successfully finished')
+        obj.log.debug(f'method(s) .{name}() of {obj.__class__} successfully finished')
         return f
 
     return _wrapper
@@ -92,21 +98,22 @@ def counted(func):
 
     @functools.wraps(func)
     def _wrapper(*args, **kwargs):
-        nonlocal depth
+        nonlocal _depth
         # what for?..
-        if depth == 0:
+        if _depth == 0:
             reset()
         # depth and calls incrementation:
-        depth += 1
+        _depth += 1
         _wrapper.rec_calls += 1
         # max depth defining:
-        _wrapper.rec_depth = max(_wrapper.rec_depth, depth)
+        _wrapper.rec_depth = max(_wrapper.rec_depth, _depth)
         f = func(*args, **kwargs)
         # depth backtracking:
-        depth -= 1
+        _depth -= 1
         return f
+
     # starts a wrapper:
-    depth = 0
+    _depth = 0
     reset()
     return _wrapper
 
@@ -121,6 +128,10 @@ class Lastar(arcade.Window):
         arcade.set_background_color(arcade.color.DUTCH_WHITE)
         self.log = logging.getLogger('Lastar')
         self.set_update_rate(1 / 60)
+        # sounds:
+        self._player = pyglet.media.player.Player()
+        # self._source = pyglet.media.load("", streaming=False)
+        # self._player.queue(self._source)
         # time elapsed:
         self._time_elapsed = 0
         # interaction mode ON/OFF:
@@ -159,6 +170,8 @@ class Lastar(arcade.Window):
         # two aux areas:
         self._guide_arrows_area = None
         self._show_mode_area = None
+        # HINTS:
+        self._mode_info = None
         # manage icons:
         self._play_button = None
         self._step_button_right = None
@@ -178,7 +191,7 @@ class Lastar(arcade.Window):
 
     def elements_setup(self):
         """screen pars, algorithms, menus and icons set up, connectors activating"""
-        self.log.debug('.elements_setup() started')
+        self.log.debug(f'.{self.elements_setup.__name__}() started')
         # ALGOS:
         self._astar = Astar()
         self._astar.connect(self._grid)
@@ -259,7 +272,13 @@ class Lastar(arcade.Window):
         self._step_button_right.connect_to_func(self.up, self.another_ornament)
         self._step_button_left = StepButton(1785 + 6 - 50, 50, 24, 16, 2, False)
         self._step_button_left.connect_to_func(self.down, self.another_ornament)
+        # HINTS:
+        self._mode_info = Info(250, SCREEN_HEIGHT - 35, 250 + 50 + 15 + 2, 26)
+        self._mode_info.connect_to_func(self.get_mode_info)
         self.log.debug('.elements_setup() successfully finished')
+
+    def get_mode_info(self):
+        return f'Mode: {self._grid.mode_names[self._grid.mode]}'
 
     def set_interactive_ind(self, ind: int or None):
         """sets interactive_ind to ind's value"""
@@ -327,6 +346,9 @@ class Lastar(arcade.Window):
         # manage icons setting up:
         ...
 
+        # HINTS:
+        self._mode_info.setup()
+
     # UPDATING:
     def update(self, delta_time: float):
         """main update method being called once per frame, contains long press logic for mouse buttons,
@@ -341,17 +363,20 @@ class Lastar(arcade.Window):
         # manage icons:
         for manage_icon in self._manage_icons_dict.values():
             manage_icon.update()
+        # HINTS:
+        self._mode_info.update()
 
+    @logged
     def on_draw(self):
-        """main drawing method, draws all the elements once per every frame"""       #
+        """main drawing method, draws all the elements once per every frame"""  #
         # renders this screen:
         arcade.start_render()
         # GRID:
         self._grid.draw()
         # HINTS:
         ...
-        arcade.Text(f'Mode: {self._grid.mode_names[self._grid.mode]}', 25, SCREEN_HEIGHT - 35, arcade.color.BLACK,
-                    bold=True).draw()
+        self._mode_info.draw()
+        # arcade.Text(f'Mode: {self._grid.mode_names[self._grid.mode]}', 25, SCREEN_HEIGHT - 35, arcade.color.BLACK, bold=True).draw()
         ...
         # ICONS and MENUS:
         for icon in self._icons_dict.values():
@@ -523,9 +548,10 @@ class DrawLib:
     # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
 
     @staticmethod
-    # by default the arrow to be drawn is left sided:
     def create_line_arrow(node: 'Node', deltas: tuple[int, int] = (-1, 0),
-                          grid: 'Grid' = None):  # left arrow by default
+                          grid: 'Grid' = None):
+        """creates a guiding triangle-arrow in order to visualize the path and visited nodes more comprehensively,
+        by default the arrow to be drawn is left sided"""
         cx, cy = 5 + node.x * grid.tile_size + grid.tile_size / 2, 5 + node.y * grid.tile_size + grid.tile_size / 2
         h = 2 * grid.tile_size // 3
         _h, h_, dh = h / 6, h / 3, h / 2  # for 90 degrees triangle
@@ -546,18 +572,23 @@ class DrawLib:
     # helpful auxiliary methods:
     @staticmethod
     def is_point_in_square(cx, cy, size, x, y):
+        """checks if the point given located in the square with the center in (cx, cy) and side that equals size"""
         return cx - size / 2 <= x <= cx + size / 2 and cy - size / 2 <= y <= cy + size / 2
 
     @staticmethod
     def is_point_in_circle(cx, cy, r, x, y):
+        """checks if the point given located in the circle with the center in (cx, cy) and radius that equals r"""
         return (cx - x) ** 2 + (cy - y) ** 2 <= r ** 2
 
     @staticmethod
     def draw_icon_lock():
+        """draws a lock for an icon"""
         ...
 
 
 class Drawable(ABC):
+    """interface for drawable element"""
+
     # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
 
     # on initialization (loads presets):
@@ -577,6 +608,8 @@ class Drawable(ABC):
 
 
 class Interactable(ABC):
+    """interface for interactable element (that can be pressed, hovered and so on)"""
+
     # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
 
     # implements the element's behaviour in on_press/on_motion methods:
@@ -602,6 +635,7 @@ class Interactable(ABC):
 
 
 class Connected(ABC):  # Connected
+    """interface for connection between two elements (class exemplars)"""
     logging.config.fileConfig('log.conf', disable_existing_loggers=True)
 
     def __init__(self):
@@ -609,6 +643,7 @@ class Connected(ABC):  # Connected
         self.log = logging.getLogger('Connected')
         self._obj = None
 
+    # connects elements (one-way link):
     @abstractmethod
     def connect(self, obj):
         self.log.info('Connected')  # WITH WHAT???
@@ -616,12 +651,15 @@ class Connected(ABC):  # Connected
 
 
 class FuncConnected(ABC):
+    """interface for connection between an element (class exemplar)
+    and some method(s) of another one"""
     logging.config.fileConfig('log.conf', disable_existing_loggers=True)
 
     def __init__(self):
         # function/functions connected:
         self._func = None
 
+    # connects elements and methods:
     def connect_to_func(self, *func):
         log = logging.getLogger('FuncConnected')
         try:
@@ -632,6 +670,8 @@ class FuncConnected(ABC):
 
 
 class Grid(Drawable, FuncConnected):
+    """core class for grid lines, nodes and guiding arrows display, start/end nodes and walls building and erasing,
+    node choosing for info getting and saving/loading of wall-ornaments"""
     logging.config.fileConfig('log.conf', disable_existing_loggers=True)
 
     def __init__(self):
@@ -873,11 +913,13 @@ class Grid(Drawable, FuncConnected):
         return self._loading
 
     def initialize(self):
+        """initializes all the nodes for _tiles_q par"""
         self._grid = [[Node(j, i, 1, NodeType.EMPTY) for i in range(self._hor_tiles_q)] for j in range(self._tiles_q)]
         self.log.info('Grid initialization')
 
     # make a node the chosen one:
     def choose_node(self, node: 'Node'):
+        """chooses a node for info display"""
         self._node_chosen = node
         self.log.info(f'Node chosen: {node}')
         # draw a frame
@@ -916,14 +958,15 @@ class Grid(Drawable, FuncConnected):
 
     # creates sprites for all the nodes:
     def get_sprites(self):  # batch -->
+        """nodes' sprites initialization for fast further batch-drawing"""
         self.log.info(f"Grid nodes' sprites initialization started")
         for row in self.grid:
             for node in row:
                 node.get_solid_colour_sprite(self)
         self.log.info(f"{self._tiles_q * self._hor_tiles_q} grid nodes' sprites initialization successfully finished")
 
-    # shaping shape element list of grid lines:
     def make_grid_lines(self):
+        """creates a shape element list of grid lines for fast further batch-drawing"""
         self.log.info(f"Grid lines' shapes initialization started")
         for j in range(self.tiles_q + 1):
             self._grid_line_shapes.append(
@@ -936,7 +979,8 @@ class Grid(Drawable, FuncConnected):
                 arcade.create_line(5 + self._tile_size * i, 5, 5 + self._tile_size * i, 5 + self._Y,
                                    arcade.color.BLACK,
                                    self._line_width))
-        self.log.info(f"{self._tiles_q + self._hor_tiles_q + 2} grid lines' shapes initialization  successfully finished")
+        self.log.info(
+            f"{self._tiles_q + self._hor_tiles_q + 2} grid lines' shapes initialization  successfully finished")
 
     # WALLS MANAGER:
     # EMPTIES -->> WALLS and BACK:
@@ -1034,15 +1078,23 @@ class Grid(Drawable, FuncConnected):
 
     # erases all nodes, that are connected vertically, horizontally or diagonally to a chosen one,
     # then nodes connected to them the same way and so on recursively...
+    @logged
     def erase_all_linked_nodes(self, node: 'Node'):  # TODO: PROCESS AND LOG THIS RECURSIVE METHOD VERY CAREFULLY!!!
-        node.type = NodeType.EMPTY
-        node.update_sprite_colour()
-        self._walls.remove(self.number_repr(node))
-        self._walls_built_erased[self._walls_index][0].append(self.number_repr(node))
-        for neigh in node.get_extended_neighs(
-                self):  # TODO: FIT .get_extended_neighs() method in Node class!!!
-            if neigh.type == NodeType.WALL:
-                self.erase_all_linked_nodes(neigh)
+        @counted
+        def _erase_all_linked_nodes(curr_node: 'Node'):
+            curr_node.type = NodeType.EMPTY
+            curr_node.update_sprite_colour()
+            _number_repr = self.number_repr(curr_node)
+            self._walls.remove(_number_repr)
+            self._walls_built_erased[self._walls_index][0].append(_number_repr)
+            for neigh in curr_node.get_extended_neighs(
+                    self):  # TODO: FIT .get_extended_neighs() method in Node class!!!
+                if neigh.type == NodeType.WALL:
+                    _erase_all_linked_nodes(neigh)
+
+        _erase_all_linked_nodes(node)
+        self.log.info(
+            f'inner recursive method .{_erase_all_linked_nodes}() called {_erase_all_linked_nodes.rec_calls} times and has max depth of {_erase_all_linked_nodes.rec_depth}')
 
     # CLEARING/REBUILDING:
     @lock
@@ -2168,16 +2220,19 @@ class Area(Drawable, Interactable, FuncConnected):
 
     # draws a lock for right window part: 36 366 98 989
     @staticmethod
-    def draw_lock(center_x: int, center_y: int):
-        arcade.draw_rectangle_filled(center_x, center_y, 14, 14, arcade.color.RED)
-        arcade.draw_rectangle_outline(center_x, center_y + 7, 8.4, 16.8, arcade.color.RED, border_width=2)
+    def draw_lock(center_x: int, center_y: int, size=14, line_w=2):
+
+        arcade.draw_rectangle_filled(center_x, center_y, size, size, arcade.color.RED)
+        arcade.draw_rectangle_outline(center_x, center_y + size / 2, size / 2 + size / 10, size + size / 5,
+                                      arcade.color.RED, border_width=line_w)
 
     # draws the cross of forbiddance:
     @staticmethod
-    def draw_cross(center_x: int, center_y: int):
-        arcade.draw_line(center_x - 9, center_y + 9, center_x + 9, center_y - 9, arcade.color.BLACK, line_width=2)
-        arcade.draw_line(center_x + 9, center_y + 9, center_x - 9,
-                         center_y - 9, arcade.color.BLACK, line_width=2)
+    def draw_cross(center_x: int, center_y: int, delta=9, line_w=2):
+        arcade.draw_line(center_x - delta, center_y + delta, center_x + delta, center_y - delta, arcade.color.BLACK,
+                         line_width=line_w)
+        arcade.draw_line(center_x + delta, center_y + delta, center_x - delta,
+                         center_y - delta, arcade.color.BLACK, line_width=line_w)
 
 
 # class for design element:
@@ -2331,7 +2386,7 @@ class StepButton(Icon, Drawable, Interactable, FuncConnected):
                     self._incrementer[0] += self.DELTAS[0]
                 self._incrementer[1] = (self._incrementer[1] + self.DELTAS[1]) % 3
                 self._incrementer[2] += self.DELTAS[2]
-        else:                                                              # 36 366 98 989
+        else:  # 36 366 98 989
             if self._incrementer[0] > 0:
                 self._incrementer[0] -= self.DELTAS[0]
             else:
@@ -3147,6 +3202,62 @@ class BfsDfsIcon(Icon, Drawable, Interactable, FuncConnected):
                 self._inter_type = InterType.PRESSED
                 self._func[0]()
                 return self
+
+    def on_release(self, x, y):
+        pass
+
+    def on_key_press(self):
+        pass
+
+    def on_key_release(self):
+        pass
+
+
+# INFO CLASSES:
+class Info(Drawable, FuncConnected):
+    """displays some information like heuristical and other important node's pars and so on"""
+
+    def __init__(self, cx, cy, width, height, line_w=2):
+        super().__init__()
+        self._cx, self._cy = cx, cy
+        self._width, self._height = width, height
+        self._line_w = line_w
+        self._text = None
+        self._shape = None
+
+    def setup(self):
+        self._text = arcade.Text('', self._cx - self._width / 2 + self._height / 6,
+                                 self._cy - self._height / 2 + self._height / 6, arcade.color.BLACK,
+                                 2 * self._height / 3, bold=True)
+        self._shape = arcade.create_rectangle_outline(self._cx, self._cy, self._width, self._height, arcade.color.BLACK,
+                                                      self._line_w)
+
+    def update(self):
+        # text updating per frame:
+        self._text.text = self._func[0]()
+
+    def draw(self):
+        self._shape.draw()
+        self._text.draw()
+
+
+# LEVI GIN AREA:
+class MessageBox(Drawable, Interactable):
+
+    def setup(self):
+        pass
+
+    def update(self):
+        pass
+
+    def draw(self):
+        pass
+
+    def on_motion(self, x, y):
+        pass
+
+    def on_press(self, x, y):
+        pass
 
     def on_release(self, x, y):
         pass

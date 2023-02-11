@@ -127,10 +127,6 @@ class Lastar(arcade.Window):
         self._interactive_ind = None
         ...
         self._in_interaction_mode_lock = False
-        # long press pars:
-        self._cycle_breaker_right = False
-        self._cycle_breaker_left = False
-        self._ticks_before = 0
         # names dicts:
         self._heuristic_names = {0: 'MANHATTAN', 1: 'EUCLIDIAN', 2: 'MAX_DELTA', 3: 'DIJKSTRA'}
         self._tiebreaker_names = {0: 'VECTOR_CROSS', 1: 'COORDINATES'}
@@ -181,6 +177,7 @@ class Lastar(arcade.Window):
         return Lastar._in_interaction
 
     def elements_setup(self):
+        """screen pars, algorithms, menus and icons set up, connectors activating"""
         self.log.debug('.elements_setup() started')
         # ALGOS:
         self._astar = Astar()
@@ -208,11 +205,6 @@ class Lastar(arcade.Window):
         bot_menu_y -= 30 + (len(self._tiebreaker_names) - 1) * delta + 3 * sq_size
         is_greedy_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Is greedy', self._greedy_names, True)
         is_greedy_area.connect_to_func(self._astar.set_greedy_ind)
-        # bot_menu_y -= 30 + 3 * sq_size
-        # guide_arrows_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Guide arrows',
-        #                          self._guide_arrows_names)
-        # bot_menu_y -= 30 + 3 * sq_size
-        # show_mode_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Show mode', self._interactive_names)
         # menu composing and connecting to an icon:
         self._astar_menu = Menu()
         self._astar_menu.multiple_append(heurs_area, tiebreakers_area, is_greedy_area)
@@ -270,25 +262,30 @@ class Lastar(arcade.Window):
         self.log.debug('.elements_setup() successfully finished')
 
     def set_interactive_ind(self, ind: int or None):
+        """sets interactive_ind to ind's value"""
         self._interactive_ind = ind
         self.log.info('.set_interactive_ind() successfully finished')
 
     def choose_a_star(self):
+        """chooses a_star as current_algo"""
         self._grid.clear_grid()
         self._current_algo = self._astar
         self.log.info('choose_a_star successfully finished')
 
     def choose_wave_lee(self):
+        """chooses wave_lee as current_algo"""
         self._grid.clear_grid()
         self._current_algo = self._wave_lee
         self.log.info('choose_wave_lee successfully finished')
 
     def choose_bfs_dfs(self):
+        """chooses bfs_dfs as current_algo"""
         self._grid.clear_grid()
         self._current_algo = self._bfs_dfs
         self.log.info('choose_bfs_dfs successfully finished')
 
     def aux_clearing(self):
+        """auxiliary clearing method, clears interactive pars, current_algo pars and unlocks all the lockers"""
         self.log.debug('.aux_clearing() started')
         # Lastar clearing:
         Lastar._in_interaction = False
@@ -308,6 +305,7 @@ class Lastar(arcade.Window):
 
     # PRESETS:
     def setup(self):
+        """main set up method, that is called only ones"""
         # algos' menus/icons:
         for icon in self._icons_dict.values():
             icon.setup()
@@ -330,37 +328,22 @@ class Lastar(arcade.Window):
         ...
 
     # UPDATING:
-    # long press logic for mouse buttons, incrementers changing for living icons and so on:
     def update(self, delta_time: float):
-        # algos' icons:
+        """main update method being called once per frame, contains long press logic for mouse buttons,
+        incrementers changing for living icons and so on"""
+        # algos' and settings' icons:
         for icon in self._icons_dict.values():
             icon.update()
+        # algos' and settings' menus:
         for menu in self._menus_dict.values():
             if menu is not None:
                 menu.update()
+        # manage icons:
         for manage_icon in self._manage_icons_dict.values():
             manage_icon.update()
-        # manage icons:
-        ...
-        # long press on keys (right, left):
-        # consecutive calls during key pressing:
-        ticks_threshold = 12
-        if self._cycle_breaker_right:
-            self._ticks_before += 1
-            if self._ticks_before >= ticks_threshold:
-                if self._current_algo.path is None:
-                    self._current_algo.algo_up()
-                else:
-                    self._current_algo.path_up()
-        if self._cycle_breaker_left:
-            self._ticks_before += 1
-            if self._ticks_before >= ticks_threshold:
-                if self._current_algo.path is None:
-                    self._current_algo.algo_down()
-                else:
-                    self._current_algo.path_down()
 
     def on_draw(self):
+        """main drawing method, draws all the elements once per every frame"""       #
         # renders this screen:
         arcade.start_render()
         # GRID:
@@ -376,17 +359,17 @@ class Lastar(arcade.Window):
         for menu in self._menus_dict.values():
             if menu is not None:
                 menu.draw()
-        for manage_icon in self._manage_icons_dict.values():
-            manage_icon.draw()
         self._arrows_menu.draw()
         self._guide_arrows_area.draw()
         self._show_mode_area.draw()
         # NODE CHOSEN:
         ...
         # MANAGE ICONS:
-        ...
+        for manage_icon in self._manage_icons_dict.values():
+            manage_icon.draw()
 
     def play_button_func(self, is_pressed: bool = False):
+        """function-connector for play_button_icon"""
         self.log.debug('.play_button_func() call')
         if is_pressed:
             self._grid.clear_empty_nodes()
@@ -394,6 +377,7 @@ class Lastar(arcade.Window):
             self.start_algo()
 
     def start_algo(self):
+        """starts and prepares the current algorithm for the further using"""
         self.log.debug('.start_algo() call')
         if not self._grid.loading:
             if self._grid.start_node and self._grid.end_node:
@@ -417,22 +401,28 @@ class Lastar(arcade.Window):
                     self._current_algo.visualize_path()
 
     def up(self):
+        """function-connector for right step_button_icon,
+        steps up during the algo or path-restoring phase"""
         if self._current_algo.path is None:
             self._current_algo.algo_up()
         else:
             self._current_algo.path_up()
 
     def down(self):
+        """function-connector for left step_button_icon,
+        steps down during the algo or path-restoring phase"""
         if self._current_algo.path is None:
             self._current_algo.algo_down()
         else:
             self._current_algo.path_down()
 
     def another_ornament(self, is_next: bool):
+        """switches the current walls-ornament during the loading"""
         return self._grid.change_wall_ornament(is_next)
 
     # KEYBOARD:
     def on_key_press(self, symbol: int, modifiers: int):
+        """main key-pressing method"""
         # is called when user press the symbol key:
         match symbol:
             # a_star_call:
@@ -470,6 +460,7 @@ class Lastar(arcade.Window):
                     self._grid.load()
 
     def on_key_release(self, symbol: int, modifiers: int):
+        """main key-releasing method"""
         # long press ending:
         match symbol:
             case arcade.key.RIGHT:
@@ -480,6 +471,7 @@ class Lastar(arcade.Window):
                 self._step_button_left.on_key_release()
 
     def on_mouse_motion(self, x: int, y: int, dx: int, dy: int):
+        """main method processing the mouse motion"""
         for icon in self._icons_dict.values():
             icon.on_motion(x, y)
         for menu in self._menus_dict.values():
@@ -494,6 +486,7 @@ class Lastar(arcade.Window):
         self._grid.build_or_erase(x, y)
 
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int):
+        """main mouse-pressing method"""
         for icon in self._icons_dict.values():
             if icon.on_press(x, y) is not None:
                 self.clear_icons_inter_types(icon)
@@ -509,19 +502,18 @@ class Lastar(arcade.Window):
         self._grid.press(x, y, button)
 
     def on_mouse_release(self, x: int, y: int, button: int, modifiers: int):
+        """main mouse-releasing method"""
         self._grid.building_walls_flag = False
         for manage_icon in self._manage_icons_dict.values():
             manage_icon.on_release(x, y)
-        self._cycle_breaker_right = False
-        self._ticks_before = 0
-        self._cycle_breaker_left = False
-        self._ticks_before = 0
 
     # game mode switching by scrolling the mouse wheel:
     def on_mouse_scroll(self, x: int, y: int, scroll_x: int, scroll_y: int):
+        """main mouse-scrolling method"""
         self._grid.scroll()
 
     def clear_icons_inter_types(self, icon_chosen: 'Icon'):
+        """clear the inter_types of settings and algo icons"""
         for icon in self._icons_dict.values():
             if icon != icon_chosen:
                 icon.clear_inter_type()
@@ -627,14 +619,13 @@ class FuncConnected(ABC):
     logging.config.fileConfig('log.conf', disable_existing_loggers=True)
 
     def __init__(self):
-
         # function/functions connected:
         self._func = None
 
     def connect_to_func(self, *func):
-        log = logging.getLogger('FuncConnected')  # WITH WHAT FUNCTION OF WHICH OBJECT???
+        log = logging.getLogger('FuncConnected')
         try:
-            log.info(f'Connected to funñ {func.__name__ }')
+            log.info(f'Connected to func {func.__name__}')
         except AttributeError:
             log.info(f'Connected to func {func}')
         self._func = func

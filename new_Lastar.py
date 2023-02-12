@@ -39,10 +39,10 @@ def timer(func):
     @functools.wraps(func)
     def _wrapper(*args, **kwargs):
         start = time.perf_counter()
-        func(*args, **kwargs)
+        f = func(*args, **kwargs)
         runtime = 1000 * (time.perf_counter() - start)
-        return runtime
-
+        args[0].time_elapsed += runtime
+        return f
     return _wrapper
 
 
@@ -54,7 +54,6 @@ def rec_timer(func):
         f = func(*args, **kwargs)
         _wrapper.runtime += 1000 * (time.perf_counter() - start)
         return f
-
     # initial state:
     _wrapper.runtime = 0
     return _wrapper
@@ -66,7 +65,6 @@ def lock(func):
     def _wrapper(*args, **kwargs):
         if not Lastar.is_in_interaction():
             return func(*args, **kwargs)
-
     return _wrapper
 
 
@@ -86,7 +84,6 @@ def logged(func):
         f = func(*args, **kwargs)
         obj.log.debug(f'method(s) .{name}() of {obj.__class__} successfully finished')
         return f
-
     return _wrapper
 
 
@@ -111,7 +108,6 @@ def counted(func):
         # depth backtracking:
         _depth -= 1
         return f
-
     # starts a wrapper:
     _depth = 0
     reset()
@@ -195,6 +191,7 @@ class Lastar(arcade.Window):
         # ALGOS:
         self._astar = Astar()
         self._astar.connect(self._grid)
+        self._astar.connect_to_func(Node.set_greedy)
         self._wave_lee = WaveLee()
         self._wave_lee.connect(self._grid)
         self._bfs_dfs = BfsDfs()
@@ -273,7 +270,7 @@ class Lastar(arcade.Window):
         self._step_button_left = StepButton(1785 + 6 - 50, 50, 24, 16, 2, False)
         self._step_button_left.connect_to_func(self.down, self.another_ornament)
         # HINTS:
-        self._mode_info = Info(250, SCREEN_HEIGHT - 35, 250 + 50 + 15 + 2, 26)
+        self._mode_info = Info(100, SCREEN_HEIGHT - 30, 26)
         self._mode_info.connect_to_func(self.get_mode_info)
         self.log.debug('.elements_setup() successfully finished')
 
@@ -368,7 +365,7 @@ class Lastar(arcade.Window):
 
     @logged
     def on_draw(self):
-        """main drawing method, draws all the elements once per every frame"""  #
+        """main drawing method, draws all the elements once per every frame"""    #
         # renders this screen:
         arcade.start_render()
         # GRID:
@@ -376,7 +373,8 @@ class Lastar(arcade.Window):
         # HINTS:
         ...
         self._mode_info.draw()
-        # arcade.Text(f'Mode: {self._grid.mode_names[self._grid.mode]}', 25, SCREEN_HEIGHT - 35, arcade.color.BLACK, bold=True).draw()
+        if self._current_algo is not None:
+            arcade.Text(self._current_algo.get_current_state(),365, SCREEN_HEIGHT - 35, arcade.color.BROWN, bold=True).draw()
         ...
         # ICONS and MENUS:
         for icon in self._icons_dict.values():
@@ -684,7 +682,7 @@ class Grid(Drawable, FuncConnected):
         self._end_node = None
         # game mode:
         self._mode = 0  # 0 for building the walls and erasing them afterwards, 1 for a start and end nodes choosing and 2 for info getting for every node
-        self._mode_names = {0: 'BUILDING/ERASING', 1: 'START&END_NODES_CHOOSING', 2: 'INFO_GETTING'}
+        self._mode_names = {0: 'BUILDING', 1: 'START&END', 2: 'DETAILS'}
         # the current node chosen (for getting info):
         self._node_chosen = None
         # guide arrows ON/OFF:
@@ -1219,11 +1217,10 @@ class Grid(Drawable, FuncConnected):
 # class for a node representation:
 class Node:
     logging.config.fileConfig('log.conf', disable_existing_loggers=True)
-
+    is_greedy = False
     # horizontal and vertical up and down moves:
     walk = [(dy, dx) for dx in range(-1, 2) for dy in range(-1, 2) if dy * dx == 0 and (dy, dx) != (0, 0)]
     extended_walk = [(dy, dx) for dx in range(-1, 2) for dy in range(-1, 2) if (dy, dx) != (0, 0)]
-    IS_GREEDY = False
     # for a_star (accurate removing from heap):
     aux_equal_flag = False
 
@@ -1247,6 +1244,10 @@ class Node:
         self.heuristics = {0: self.manhattan_distance, 1: self.euclidian_distance, 2: self.max_delta,
                            3: self.no_heuristic}
         self.tiebreakers = {0: self.vector_cross_product_deviation, 1: self.coordinates_pair}
+
+    @staticmethod
+    def set_greedy(greedy_ind: int):
+        Node.is_greedy = False if greedy_ind is None else True
 
     # COPYING/RESTORING:
     # makes an auxiliary copy for a nde, it is needed for a_star interactive:
@@ -1331,7 +1332,7 @@ class Node:
 
     # this is needed for using Node objects in priority queue like heapq and so on
     def __lt__(self, other: 'Node'):
-        if self.IS_GREEDY:
+        if self.is_greedy:
             return (self.h, self.tiebreaker) < (other.h, other.tiebreaker)
         else:
             return (self.g + self.h, self.tiebreaker) < (other.g + other.h, other.tiebreaker)
@@ -1416,6 +1417,7 @@ class Algorithm(Connected):
         self._path_index = 0
         # iterations and time:
         self._iterations = 0
+        self._time_elapsed = 0
 
     def connect(self, grid: Grid):
         self._obj = grid
@@ -1423,6 +1425,26 @@ class Algorithm(Connected):
     @property
     def path(self):
         return self._path
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def iterations(self):
+        return self._iterations
+
+    @property
+    def time_elapsed(self):
+        return self._time_elapsed
+
+    @time_elapsed.setter
+    def time_elapsed(self, time_elapsed):
+        self._time_elapsed = time_elapsed
+
+    @abstractmethod
+    def get_nodes_visited_q(self):
+        ...
 
     def base_clear(self):
         # visualization:
@@ -1433,6 +1455,7 @@ class Algorithm(Connected):
         self._path_index = 0
         # iterations and time:
         self._iterations = 0
+        self._time_elapsed = 0
 
     @abstractmethod
     def clear(self):
@@ -1440,6 +1463,17 @@ class Algorithm(Connected):
 
     @abstractmethod
     def prepare(self):
+        ...
+
+    def get_current_state(self):
+        """returns the important pars of the current algo state as f-string"""
+        return f"{self._name}'s iters: {self._iterations}, path's length:" \
+               f" {len(self._path) if self._path else 'no path found still'}, " \
+               f"nodes visited: {self.get_nodes_visited_q()}, time elapsed: {self._time_elapsed} ms"
+
+    @abstractmethod
+    def get_details(self):
+        """returns the important details (like heur, val and so on) for the node chosen"""
         ...
 
     def path_up(self):
@@ -1518,7 +1552,8 @@ class Algorithm(Connected):
         ...
 
 
-class Astar(Algorithm):
+class Astar(Algorithm, FuncConnected):
+
     logging.config.fileConfig('log.conf', disable_existing_loggers=True)
 
     def __init__(self):
@@ -1549,6 +1584,9 @@ class Astar(Algorithm):
         self._neighs_added_to_heap_dict = {}
         self._max_times_visited = 0
 
+    def get_nodes_visited_q(self):
+        return len(self._nodes_visited)
+
     def clear(self):
         self.base_clear()
         # 3. visiting:
@@ -1567,6 +1605,9 @@ class Astar(Algorithm):
     def set_greedy_ind(self, ind: int or None):
         self._greedy_ind = ind
 
+    def get_details(self):
+        pass
+
     def prepare(self):
         # heap:
         self._nodes_to_be_visited = [self._obj.start_node]
@@ -1574,9 +1615,10 @@ class Astar(Algorithm):
         # heur/cost:
         self._obj.start_node.g = 0
         # transmitting the greedy flag to the Node class: TODO: fix this strange doing <<--
-        Node.IS_GREEDY = False if self._greedy_ind is None else True
+        self._func[0](self._greedy_ind)
         # important pars and dicts:
         self._iterations = 0
+        self._time_elapsed = 0
         self._neighs_added_to_heap_dict = {0: [self._obj.start_node]}
         self._curr_node_dict = {0: None}
         self._max_times_visited_dict = {0: 0}
@@ -1761,6 +1803,8 @@ class Astar(Algorithm):
     @timer
     def full_algo(self):
         # False if game.greedy_ind is None else True
+        # transmitting the greedy flag to the Node class: TODO: fix this strange doing <<--
+        self._func[0](self._greedy_ind)
         self._nodes_to_be_visited = [self._obj.start_node]
         self._obj.start_node.g = 0
         hq.heapify(self._nodes_to_be_visited)
@@ -1784,13 +1828,14 @@ class Astar(Algorithm):
                     neigh.g = curr_node.g + neigh.val
                     neigh.h = neigh.heuristics[self._heuristic](neigh, self._obj.end_node)
                     if self._tiebreaker is not None:
-                        neigh.tiebreaker = self._obj.start_node.tiebreakers[self._tiebreaker](self, self._obj.end_node,
+                        neigh.tiebreaker = self._obj.start_node.tiebreakers[self._tiebreaker](self._obj.start_node, self._obj.end_node,
                                                                                               neigh)
                     neigh.previously_visited_node = curr_node
                     hq.heappush(self._nodes_to_be_visited, neigh)
 
 
 class WaveLee(Algorithm):
+
     logging.config.fileConfig('log.conf', disable_existing_loggers=True)
 
     def __init__(self):
@@ -1799,6 +1844,10 @@ class WaveLee(Algorithm):
         self._front_wave_lee = None
         self._next_wave_lee = None
         self._fronts_dict = None
+        self._nodes_visited_q = 0
+
+    def get_nodes_visited_q(self):
+        return self._nodes_visited_q
 
     def clear(self):
         self.base_clear()
@@ -1806,6 +1855,10 @@ class WaveLee(Algorithm):
         self._front_wave_lee = None
         self._next_wave_lee = None
         self._fronts_dict = None
+        self._nodes_visited_q = 0
+
+    def get_details(self):
+        pass
 
     def prepare(self):
         # starting attributes' values:
@@ -1814,11 +1867,13 @@ class WaveLee(Algorithm):
         self._obj.start_node.val = 1  # node.val must not be changed during the algo's interactive phase!!!
         self._iterations = 0
         self._fronts_dict = {}
+        self._nodes_visited_q = 0
 
     def algo_up(self):
         self._iterations += 1
         self._front_wave_lee = self._next_wave_lee[:]
         self._fronts_dict[self._iterations] = self._front_wave_lee
+        self._nodes_visited_q += len(self._front_wave_lee)
         self._next_wave_lee = []
         for curr_node in self._front_wave_lee:
             curr_node.val = self._iterations
@@ -1868,6 +1923,7 @@ class WaveLee(Algorithm):
                         node.val = 1
                 # current and next fronts stepping back:
                 self._next_wave_lee = self._front_wave_lee[:]
+                self._nodes_visited_q -= len(self._next_wave_lee)
                 self._front_wave_lee = self._fronts_dict[self._iterations]
             else:
                 # the starting point:
@@ -1902,6 +1958,7 @@ class WaveLee(Algorithm):
 
 
 class BfsDfs(Algorithm):
+
     logging.config.fileConfig('log.conf', disable_existing_loggers=True)
 
     def __init__(self):
@@ -1917,6 +1974,9 @@ class BfsDfs(Algorithm):
     def bfs_dfs_ind(self):
         return 0 if self._is_bfs else 1
 
+    def get_nodes_visited_q(self):
+        return len(self._curr_node_dict)
+
     def clear(self):
         self.base_clear()
         # important algo's attributes:
@@ -1928,6 +1988,9 @@ class BfsDfs(Algorithm):
 
     def set_is_bfs(self, ind: int or None):
         self._is_bfs = (ind == 0)
+
+    def get_details(self):
+        pass
 
     def prepare(self):
         self._queue = deque()
@@ -3217,28 +3280,47 @@ class BfsDfsIcon(Icon, Drawable, Interactable, FuncConnected):
 class Info(Drawable, FuncConnected):
     """displays some information like heuristical and other important node's pars and so on"""
 
-    def __init__(self, cx, cy, width, height, line_w=2):
+    def __init__(self, cx, cy, height, line_w=2):  # (cx, cy) -->> left bottom vertex
         super().__init__()
         self._cx, self._cy = cx, cy
-        self._width, self._height = width, height
+        self._width, self._height = 0, height
         self._line_w = line_w
         self._text = None
-        self._shape = None
 
     def setup(self):
-        self._text = arcade.Text('', self._cx - self._width / 2 + self._height / 6,
-                                 self._cy - self._height / 2 + self._height / 6, arcade.color.BLACK,
-                                 2 * self._height / 3, bold=True)
-        self._shape = arcade.create_rectangle_outline(self._cx, self._cy, self._width, self._height, arcade.color.BLACK,
-                                                      self._line_w)
+        self._text = arcade.Text('', self._cx - self._width / 2 + self._height // 4,
+                                 self._cy - self._height / 2 + self._height // 4, arcade.color.BLACK,
+                                 self._height / 2, italic=True, bold=True)
 
     def update(self):
         # text updating per frame:
         self._text.text = self._func[0]()
+        self._width = self._text.content_width + self._height / 2
+        self._text.x = self._cx - self._width / 2 + self._height // 4
+        self._text.y = self._cy - self._height / 2 + self._height // 4
 
     def draw(self):
-        self._shape.draw()
         self._text.draw()
+        arcade.draw_rectangle_outline(
+            self._cx, self._cy,
+            self._width, self._height,
+            arcade.color.BLACK, self._line_w
+        )
+
+        arcade.draw_rectangle_outline(
+            self._cx, self._cy,
+            self._width + 4 * self._line_w, self._height + 4 * self._line_w,
+            arcade.color.BLACK, self._line_w
+        )
+
+        for j, i in [(1, 1), (-1, 1), (-1, -1), (1, -1)]:
+            arcade.draw_line(
+                self._cx + j * self._width / 2,
+                self._cy + i * self._height / 2,
+                self._cx + j * (self._width / 2 + 2 * self._line_w),
+                self._cy + i * (self._height / 2 + 2 * self._line_w),
+                arcade.color.BLACK, self._line_w
+            )
 
 
 # LEVI GIN AREA:

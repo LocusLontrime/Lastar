@@ -365,7 +365,7 @@ class Lastar(arcade.Window):
 
     @logged
     def on_draw(self):
-        """main drawing method, draws all the elements once per every frame"""    #
+        """main drawing method, draws all the elements once per every frame"""       #
         # renders this screen:
         arcade.start_render()
         # GRID:
@@ -374,7 +374,9 @@ class Lastar(arcade.Window):
         ...
         self._mode_info.draw()
         if self._current_algo is not None:
-            arcade.Text(self._current_algo.get_current_state(),365, SCREEN_HEIGHT - 35, arcade.color.BROWN, bold=True).draw()
+            arcade.Text(self._current_algo.get_current_state(), 225, SCREEN_HEIGHT - 35, arcade.color.BROWN, bold=True).draw()
+            if self._grid.node_chosen is not None:
+                arcade.Text(self._current_algo.get_details(), 1050, SCREEN_HEIGHT - 35, arcade.color.BROWN, bold=True).draw()
         ...
         # ICONS and MENUS:
         for icon in self._icons_dict.values():
@@ -1141,6 +1143,8 @@ class Grid(Drawable, FuncConnected):
         # builder clearing:
         self._walls_built_erased = [([], True)]
         self._walls_index = 0
+        # node chosen clearing:
+        self._node_chosen = None
         # aux clearing from Lastar:
         self._func[0]()
 
@@ -1606,7 +1610,10 @@ class Astar(Algorithm, FuncConnected):
         self._greedy_ind = ind
 
     def get_details(self):
-        pass
+        node_chosen = self._obj.node_chosen
+        return f"Node: {node_chosen.y, node_chosen.x}, val: {node_chosen.val}, g: {node_chosen.g}, h: {node_chosen.h}, " \
+               f"f=g+h: {node_chosen.g + node_chosen.h}, t: {node_chosen.tiebreaker}, " \
+               f"times visited: {node_chosen.times_visited}"  # , type: {node_chosen.type}"
 
     def prepare(self):
         # heap:
@@ -1858,7 +1865,9 @@ class WaveLee(Algorithm):
         self._nodes_visited_q = 0
 
     def get_details(self):
-        pass
+        node_chosen = self._obj.node_chosen
+        return f"Node: {node_chosen.y, node_chosen.x}, wave_num: {node_chosen.val}, " \
+               f"times visited: {node_chosen.times_visited}, type: {node_chosen.type}"
 
     def prepare(self):
         # starting attributes' values:
@@ -1990,7 +1999,9 @@ class BfsDfs(Algorithm):
         self._is_bfs = (ind == 0)
 
     def get_details(self):
-        pass
+        node_chosen = self._obj.node_chosen
+        return f"Node: {node_chosen.y, node_chosen.x}, val: {node_chosen.val}, " \
+               f"times visited: {node_chosen.times_visited}, type: {node_chosen.type}"
 
     def prepare(self):
         self._queue = deque()

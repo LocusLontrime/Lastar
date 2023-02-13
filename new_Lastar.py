@@ -87,6 +87,24 @@ def logged(func):
     return _wrapper
 
 
+def long_pressable(cls):
+    long_press_attributes = {
+        '_cycle_breaker': False,
+        '_ticks': 0,
+        '_interactive_incr': 0
+    }
+
+    for attr_name, attr_val in long_press_attributes.items():
+        setattr(cls, attr_name, attr_val)
+
+    def s_foo(val: int):
+        print(f'val: {val}')
+
+    cls.__dict__['s_foo'] = s_foo
+
+    return cls
+
+
 # depth and calls for recursive function:
 def counted(func):
     def reset():
@@ -2430,6 +2448,7 @@ class PlayButton(Icon, Drawable, Interactable, FuncConnected):
         pass
 
 
+@long_pressable
 class StepButton(Icon, Drawable, Interactable, FuncConnected):
     # logging.config.fileConfig('log.conf', disable_existing_loggers=True)
 
@@ -2451,6 +2470,7 @@ class StepButton(Icon, Drawable, Interactable, FuncConnected):
         pass
 
     def update(self):
+        print(f'ticks: {self._ticks}')
         # long press logic:
         if self._cycle_breaker:
             self._incrementer[3] += 1
@@ -2467,6 +2487,10 @@ class StepButton(Icon, Drawable, Interactable, FuncConnected):
                 self._incrementer[0] = 0
             self._incrementer[1] = 0
             self._incrementer[2] = 0
+
+    @property
+    def cycle_breaker(self):
+        return self._cycle_breaker
 
     @property
     def multiplier(self):

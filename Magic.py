@@ -117,12 +117,87 @@ def rec_seeker(val: int):
 def function():
     ...
 
+#
+# print(f'res: {rec_seeker(15)}')
+# print(f'f depth: {rec_seeker.rec_depth}, f calls: {rec_seeker.rec_calls}')
+#
+# print(f'res: {function()}')
+# print(f'f depth: {function.rec_depth}, f calls: {function.rec_calls}')
+#
+#
+#
 
-print(f'res: {rec_seeker(15)}')
-print(f'f depth: {rec_seeker.rec_depth}, f calls: {rec_seeker.rec_calls}')
 
-print(f'res: {function()}')
-print(f'f depth: {function.rec_depth}, f calls: {function.rec_calls}')
+def long_pressable(cls):
+    long_press_attributes = {
+        '_cycle_breaker': False,
+        '_ticks': 0,
+        '_interactive_incr': 0
+    }
+
+    for attr_name, attr_val in long_press_attributes.items():
+        setattr(cls, attr_name, attr_val)
+
+    k = cls.boo
+
+    def s_foo(self, val: int):
+        print(f'Upper covering...')
+        print(f'val: {val}')
+        k(self)
+        print(f'Lower covering...')
+
+    setattr(cls, "boo", s_foo)
+
+    return cls
+
+
+@long_pressable
+class Cl:
+    def __init__(self, name):
+        self.name = name
+
+    def boo(self):
+        print(f'Boo, {self.name}!')
+
+
+cl = Cl('class')
+cl.boo(98)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class S:
+    ...
+
+
+
+
+
 
 
 

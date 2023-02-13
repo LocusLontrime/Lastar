@@ -31,6 +31,7 @@
 import functools
 import logging
 from logging import config
+from abc import ABC
 
 
 class Logger:
@@ -152,8 +153,9 @@ def long_pressable(cls):
 
 
 @long_pressable
-class Cl:
+class Cl(Ex):
     def __init__(self, name):
+        super().__init__('Lala', 98)
         self.name = name
 
     def boo(self):
@@ -162,6 +164,11 @@ class Cl:
 
 cl = Cl('class')
 cl.boo(98)
+print(f'subclasses: {Cl.__subclasses__()}')
+print(f'is subclass: {issubclass(Cl, Ex)}')
+
+print(f'dict: {Cl.__dict__}')
+print(f'dir: {dir(Cl)}')
 
 
 

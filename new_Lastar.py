@@ -100,11 +100,13 @@ def logged(is_debug: bool = True):
 def class_logged(is_debug: bool = True):
     def core(cls):
         """logging all the methods in class, excluding the dunder ones:"""
-        cls_method_list = [cls.__dict__[key] for key in cls.__dict__.keys() if callable(getattr(cls, key)) and not key.startswith("__")]
+        cls_method_list = [cls.__dict__[key] for key in cls.__dict__.keys() if
+                           callable(getattr(cls, key)) and not key.startswith("__")]
         for method in cls_method_list:
             logged_method = logged(is_debug)(method)
             setattr(cls, method.__name__, logged_method)
         return cls
+
     return core
 
 
@@ -215,14 +217,34 @@ class Lastar(arcade.Window):
         self._play_button = None
         self._step_button_right = None
         self._step_button_left = None
+        self._eraser = None
+        self._undo_button = None
+        self._redo_button = None
         self.elements_setup()
 
         # icons_dict:
-        self._icons_dict = {0: self._gear_wheel, 1: self._bfs_dfs_icon, 2: self._astar_icon, 3: self._wave_lee_icon}
+        self._icons_dict = {
+            0: self._gear_wheel,
+            1: self._bfs_dfs_icon,
+            2: self._astar_icon,
+            3: self._wave_lee_icon
+        }
         # menus_dict:
-        self._menus_dict = {0: self._settings_menu, 1: self._bfs_dfs_menu, 2: self._astar_menu, 3: self._wave_lee_menu}
+        self._menus_dict = {
+            0: self._settings_menu,
+            1: self._bfs_dfs_menu,
+            2: self._astar_menu,
+            3: self._wave_lee_menu
+        }
         # manage icons dict:
-        self._manage_icons_dict = {0: self._play_button, 1: self._step_button_right, 2: self._step_button_left}
+        self._manage_icons_dict = {
+            0: self._play_button,
+            1: self._step_button_right,
+            2: self._step_button_left,
+            3: self._eraser,
+            4: self._undo_button,
+            5: self._redo_button
+        }
 
     @staticmethod
     def is_in_interaction():
@@ -296,7 +318,7 @@ class Lastar(arcade.Window):
         self._settings_menu.append_area(scaling_area)
         self._settings_menu.connect_to_func(self._gear_wheel.is_pressed)
         # TWO AUX AREAS:
-        bot_menu_y = 250
+        bot_menu_y -= 30 + (len(self._grid.scale_names) - 1) * delta + 3 * sq_size
         self._guide_arrows_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Guide arrows',
                                        self._guide_arrows_names, True)
         self._guide_arrows_area.connect_to_func(self._grid.set_guide_arrows_ind)
@@ -312,6 +334,12 @@ class Lastar(arcade.Window):
         self._step_button_right.connect_to_func(self.up, self.another_ornament)
         self._step_button_left = StepButton(1785 + 6 - 50, 50, 24, 16, 2, False)
         self._step_button_left.connect_to_func(self.down, self.another_ornament)
+        self._eraser = Eraser(1785 + 6, 125, 16, 32, 8, 2)
+        # self._eraser.connect_to_func()
+        self._undo_button = Undo(1785 + 6 - 75, 125, 24, 8, 12, 2)
+        # self._undo_button.connect_to_func()
+        self._redo_button = Undo(1785 + 6 + 75, 125, 24, 8, 12, 2, True)
+        # self._redo_button.connect_to_func()
         # HINTS:
         self._mode_info = Info(100, SCREEN_HEIGHT - 30, 26)
         self._mode_info.connect_to_func(self.get_mode_info)
@@ -974,6 +1002,13 @@ class Grid(Drawable, FuncConnected):
         self._grid = [[Node(j, i, 1, NodeType.EMPTY) for i in range(self._hor_tiles_q)] for j in range(self._tiles_q)]
 
     @logged()
+    def clear_redo_memo(self):
+        """clears redo memo list to the right from the current point if some action has been done
+         while still there is some possibility of redoing"""
+        if self._walls_index < len(self._walls_built_erased) - 1:
+            self._walls_built_erased = self._walls_built_erased[:self._walls_index + 1]
+
+    @logged()
     # make a node the chosen one:
     def choose_node(self, node: 'Node'):
         """chooses a node for info display"""
@@ -1063,8 +1098,9 @@ class Grid(Drawable, FuncConnected):
                 self._build_or_erase = None
                 n = self.get_node(x, y)
                 if n:
-                    if self._walls_index < len(self._walls_built_erased) - 1:
-                        self._walls_built_erased = self._walls_built_erased[: self._walls_index + 1]
+                    self.clear_redo_memo()
+                    # if self._walls_index < len(self._walls_built_erased) - 1:
+                    #     self._walls_built_erased = self._walls_built_erased[: self._walls_index + 1]
                     self._walls_built_erased.append(([], False))
                     self._walls_index += 1
                     self.erase_all_linked_nodes(n)
@@ -1102,6 +1138,7 @@ class Grid(Drawable, FuncConnected):
     # builds/erases walls:
     @logged()
     def build_or_erase(self, x, y):
+        """builds or erases a wall depending on the self._build_or_erase flag"""
         if self._building_walls_flag and self._mode == 0:
             if self._build_or_erase is not None:
                 if self._build_or_erase:
@@ -1119,8 +1156,9 @@ class Grid(Drawable, FuncConnected):
             n.type = NodeType.WALL
             self._walls.add(self.number_repr(n))
             n.update_sprite_colour()
-            if self._walls_index < len(self._walls_built_erased) - 1:
-                self._walls_built_erased = self._walls_built_erased[:self._walls_index + 1]
+            self.clear_redo_memo()
+            # if self._walls_index < len(self._walls_built_erased) - 1:
+            #     self._walls_built_erased = self._walls_built_erased[:self._walls_index + 1]
             self._walls_built_erased.append(([self.number_repr(n)], True))
             self._walls_index += 1
             self.log.info(f'The wall successfully built')
@@ -1133,8 +1171,9 @@ class Grid(Drawable, FuncConnected):
             n.type = NodeType.EMPTY
             self._walls.remove(self.number_repr(n))
             n.update_sprite_colour()
-            if self._walls_index < len(self._walls_built_erased) - 1:
-                self._walls_built_erased = self._walls_built_erased[:self._walls_index + 1]
+            self.clear_redo_memo()
+            # if self._walls_index < len(self._walls_built_erased) - 1:
+            #     self._walls_built_erased = self._walls_built_erased[:self._walls_index + 1]
             self._walls_built_erased.append(([self.number_repr(n)], False))
             self._walls_index += 1
             self.log.info(f'The wall successfully erased')
@@ -1150,7 +1189,8 @@ class Grid(Drawable, FuncConnected):
             _number_repr = self.number_repr(curr_node)
             self._walls.remove(_number_repr)
             self._walls_built_erased[self._walls_index][0].append(_number_repr)
-            for neigh in curr_node.get_extended_neighs(self):  # TODO: FIT .get_extended_neighs() method in Node class!!!
+            for neigh in curr_node.get_extended_neighs(
+                    self):  # TODO: FIT .get_extended_neighs() method in Node class!!!
                 if neigh.type == NodeType.WALL:
                     _erase_all_linked_nodes(neigh)
 
@@ -1199,6 +1239,8 @@ class Grid(Drawable, FuncConnected):
         self._start_node, self._end_node = None, None
         self.aux_clear()
         self._walls = set()
+        # memoization for possible undoing:
+        ...
 
     @logged()
     def aux_clear(self):
@@ -2235,17 +2277,21 @@ class Menu(Drawable, Interactable, FuncConnected):
         return not self._func[0]()
 
     def append_area(self, area: 'Area'):
+        """appends an area to the menu:"""
         self._areas.append(area)
 
     def multiple_append(self, *areas: 'Area'):
+        """appends several areas to menu at once"""
         for area in areas:
             self.append_area(area)
 
     def lock(self):
+        """prevents menu from changes"""
         for area in self._areas:
             area.lock()
 
     def unlock(self):
+        """makes the menu interactable again"""
         for area in self._areas:
             area.unlock()
 
@@ -2414,6 +2460,7 @@ class Area(Drawable, Interactable, FuncConnected):
 
 # class for design element:
 class Icon(ABC):
+    """abstract class for Icon representation"""
 
     def __init__(self, cx, cy):
         self._cx = cx
@@ -2697,7 +2744,7 @@ class StepButton(Icon, Drawable, Interactable, FuncConnected):
 
 
 class Eraser(Icon, Drawable, Interactable, FuncConnected):
-    # does it make sense to log???
+    """Icon for clearing grid entirely"""
 
     def __init__(self, cx, cy, h, w, r, line_w):
         super().__init__(cx, cy)
@@ -2771,7 +2818,9 @@ class Eraser(Icon, Drawable, Interactable, FuncConnected):
 
 
 class Undo(Icon, Drawable, Interactable, FuncConnected):
-    # does it make sense to log???
+    """Icon for operations with walls:
+     undoing -->> is_right = False
+     redoing -->> is_right = True"""
 
     def __init__(self, cx, cy, a, dh, r, line_w, is_right=False):
         super().__init__(cx, cy)

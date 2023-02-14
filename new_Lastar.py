@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 # functools:
 import functools
 from functools import reduce
@@ -32,6 +34,11 @@ import pyglet
 # screen sizes:
 SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1050
+
+# LOGGING CONSTANTS:
+graphic_logging = False  # ОТРИСОВКА
+pressing_motion_logging = False  # НАЖАТИЯ МЫШИ И КЛАВИШ И ПЕРЕМЕЩЕНИЕ МЫШИ
+logic_math_logging = False  # ЛОГИКА АЛГОРИТМОВ, РАСЧЁТЫ И ПРОЦЕССИНГ
 
 
 # decorator for void funcs, it returns the function's runtime in ms as int instead of void function's return value (None):
@@ -72,7 +79,8 @@ def lock(func):
 
 
 # logs non-recursive methods:
-def logged(is_debug: bool = True):
+def logged(is_debug: bool = True, is_used: bool = True):
+    """decorator-constructor for loggers"""
     # inner decorator
     def core(func):
         @functools.wraps(func)
@@ -92,7 +100,7 @@ def logged(is_debug: bool = True):
             foo(f'method(s) .{name}() of {obj.__class__} successfully finished')
             return f
 
-        return _wrapper
+        return _wrapper if is_used else func
 
     return core
 
@@ -332,14 +340,14 @@ class Lastar(arcade.Window):
         self._play_button.connect_to_func(self.play_button_func)
         self._step_button_right = StepButton(1785 + 6 + 50, 50, 24, 16, 2)
         self._step_button_right.connect_to_func(self.up, self.another_ornament)
-        self._step_button_left = StepButton(1785 + 6 - 50, 50, 24, 16, 2, False)
+        self._step_button_left = StepButton(1786 + 6 - 50, 50, 24, 16, 2, False)     #
         self._step_button_left.connect_to_func(self.down, self.another_ornament)
         self._eraser = Eraser(1785 + 6, 125, 16, 32, 8, 2)
-        # self._eraser.connect_to_func()
+        self._eraser.connect_to_func(self._grid.clear_grid)
         self._undo_button = Undo(1785 + 6 - 75, 125, 24, 8, 12, 2)
-        # self._undo_button.connect_to_func()
+        self._undo_button.connect_to_func(self._grid.undo)
         self._redo_button = Undo(1785 + 6 + 75, 125, 24, 8, 12, 2, True)
-        # self._redo_button.connect_to_func()
+        self._redo_button.connect_to_func(self._grid.redo)
         # HINTS:
         self._mode_info = Info(100, SCREEN_HEIGHT - 30, 26)
         self._mode_info.connect_to_func(self.get_mode_info)
@@ -1409,7 +1417,7 @@ class Node:
             other.__dict__[attribute] = self.__getattribute__(attribute)
 
     # TYPE/SPRITE CHANGE/INIT:
-    @logged()
+    @logged(is_used=graphic_logging)  # TODO: DANGEROUS TO LOG!!!
     def get_solid_colour_sprite(self, grid: Grid):
         """makes a solid colour sprite for a node"""
         cx, cy, size, colour = self.get_center_n_sizes(grid)
@@ -1424,6 +1432,7 @@ class Node:
                 grid.tile_size - 2 * grid.line_width - (1 if grid.line_width % 2 != 0 else 0),
                 self.type.value)
 
+    # TODO: DANGEROUS TO LOG!!!
     def update_sprite_colour(self):
         """updates the sprite's color (calls after node's type switching)"""
         self.sprite.color = self.type.value
@@ -1431,11 +1440,13 @@ class Node:
     def append_arrow(self, grid: Grid):
         grid.arrow_shape_list.append(self.arrow_shape)
 
+    # TODO: DANGEROUS TO LOG!!!
     # removes the arrow shape of the node from the arrow_shape_list in Astar class
     def remove_arrow(self, grid: Grid):
         grid.arrow_shape_list.remove(self.arrow_shape)
         self.arrow_shape = None
 
+    # TODO: DANGEROUS TO LOG!!!
     def remove_arrow_from_shape_list(self, grid: Grid):
         grid.arrow_shape_list.remove(self.arrow_shape)
 
@@ -1465,7 +1476,8 @@ class Node:
         return hash((self.y, self.x))
 
     # CLEARING:
-    @logged()
+    # TODO: DANGEROUS TO LOG!!!
+    # @logged()
     def clear(self):
         """entirely clears the node, returning it to the initial state it came from"""
         self.heur_clear()
@@ -1473,7 +1485,8 @@ class Node:
         self.update_sprite_colour()
         self.arrow_shape = None
 
-    @logged()
+    # TODO: DANGEROUS TO LOG!!!
+    # @logged()
     def heur_clear(self):
         """clears the node heuristically"""
         self.g = np.Infinity
@@ -1484,7 +1497,7 @@ class Node:
         # wave lee:
         self.val = 1
 
-    # HEURISTICS:
+    # HEURISTICS: # TODO: DANGEROUS TO LOG!!!
     @staticmethod
     def manhattan_distance(node1, node2: 'Node'):
         return abs(node1.y - node2.y) + abs(node1.x - node2.x)
@@ -1513,7 +1526,8 @@ class Node:
         return neigh.y, neigh.x
 
     # NEIGHS:
-    @logged()
+    # TODO: DANGEROUS TO LOG!!!
+    # @logged()
     def get_neighs(self, grid: Grid, forbidden_node_types: list['NodeType']):  # has become smarter
         """gets neighs of the node, now can be set up"""
         for dy, dx in self.walk:
@@ -1523,7 +1537,8 @@ class Node:
                 if grid.grid[ny][nx].type not in forbidden_node_types:
                     yield grid.grid[ny][nx]
 
-    @logged()
+    # TODO: DANGEROUS TO LOG!!!
+    # @logged()
     def get_extended_neighs(self, grid: Grid) -> list['Node']:
         """gets extended neighs (with diagonal ones) of the node, generator"""
         for dy, dx in self.extended_walk:
@@ -2612,24 +2627,17 @@ class StepButton(Icon, Drawable, Interactable, FuncConnected):
         # long press logic:
         if self._cycle_breaker:
             self._ticks += 1
-            # self._incrementer[3] += 1
             if self._ticks >= self.TICKS_THRESHOLD:
-                # if self._incrementer[3] >= self.TICKS_THRESHOLD:
                 self._func[0]()
                 if self._interactive_incr <= self.THRESHOLD:
-                    # if self._incrementer[0] <= self.THRESHOLD:
                     self._interactive_incr += self.DELTAS[0]
-                    # self._incrementer[0] += self.DELTAS[0]
                 self._incrementer[1] = (self._incrementer[1] + self.DELTAS[1]) % 3
                 self._incrementer[2] += self.DELTAS[2]
         else:  # 36 366 98 989
             if self._interactive_incr > 0:
-                # if self._incrementer[0] > 0:
                 self._interactive_incr -= self.DELTAS[0]
-                # self._incrementer[0] -= self.DELTAS[0]
             else:
                 self._interactive_incr = 0
-                # self._incrementer[0] = 0
             self._incrementer[1] = 0
             self._incrementer[2] = 0
 
@@ -2746,7 +2754,7 @@ class StepButton(Icon, Drawable, Interactable, FuncConnected):
 class Eraser(Icon, Drawable, Interactable, FuncConnected):
     """Icon for clearing grid entirely"""
 
-    def __init__(self, cx, cy, h, w, r, line_w):
+    def __init__(self, cx, cy, h, w, r, line_w=2):
         super().__init__(cx, cy)
         self.log = logging.getLogger('Eraser')
         self._h = h
@@ -2806,6 +2814,7 @@ class Eraser(Icon, Drawable, Interactable, FuncConnected):
     def on_press(self, x, y):
         if arcade.is_point_in_polygon(x, y, self._vertices):
             self._inter_type = InterType.PRESSED
+            self._func[0]()
 
     def on_release(self, x, y):
         self._inter_type = InterType.NONE
@@ -2817,12 +2826,18 @@ class Eraser(Icon, Drawable, Interactable, FuncConnected):
         pass
 
 
+@long_pressable
 class Undo(Icon, Drawable, Interactable, FuncConnected):
     """Icon for operations with walls:
      undoing -->> is_right = False
      redoing -->> is_right = True"""
 
-    def __init__(self, cx, cy, a, dh, r, line_w, is_right=False):
+    DELTA = 0.5
+    THRESHOLD = 12
+    TICKS_THRESHOLD = 12
+    MAGNITUDE = 3
+
+    def __init__(self, cx, cy, a, dh, r, line_w=2, is_right=False):
         super().__init__(cx, cy)
         self.log = logging.getLogger('Undo')
         self._a = a
@@ -2845,10 +2860,21 @@ class Undo(Icon, Drawable, Interactable, FuncConnected):
 
     @logged()
     def setup(self):
-        pass
+        ...
 
     def update(self):
-        pass
+        # long press logic:
+        if self._cycle_breaker:
+            self._ticks += 1
+            if self._ticks >= self.TICKS_THRESHOLD:
+                self._func[0]()
+                if self._interactive_incr <= self.THRESHOLD:
+                    self._interactive_incr += self.DELTA
+        else:  # 36 366 98 989
+            if self._interactive_incr > 0:
+                self._interactive_incr -= self.DELTA
+            else:
+                self._interactive_incr = 0
 
     def draw(self):
         start_angle, end_angle = self.angles
@@ -2860,11 +2886,43 @@ class Undo(Icon, Drawable, Interactable, FuncConnected):
                                 2 * self.line_w)
         arcade.draw_line(self._cx - self.multiplier * self._r, self._cy,
                          self._cx - self.multiplier * (self._r + self._dh), self._cy, arcade.color.BLACK, self.line_w)
+
+        x_shift = self.multiplier * self._interactive_incr
+
         vs = self._vertices = [
-            (self._cx - self.multiplier * self._a * math.sqrt(3) / 2, self._cy + self._r + self._dh / 2),
-            (self._cx, self._cy + self._r + self._dh / 2 + self._a / 2),
-            (self._cx, self._cy + self._r + self._dh / 2 - self._a / 2)
+            (
+                self._cx - self.multiplier * self._a * math.sqrt(3) / 2 - x_shift,
+                self._cy + self._r + self._dh / 2
+            ),
+            (
+                self._cx - x_shift,
+                self._cy + self._r + self._dh / 2 + self._a / 2
+            ),
+            (
+                self._cx - x_shift,
+                self._cy + self._r + self._dh / 2 - self._a / 2
+            )
         ]
+
+        if self._interactive_incr > 0:
+            # upper_line:
+            arcade.draw_line(
+                self._cx,
+                self._cy + self._r + self._dh,
+                self._cx - x_shift,
+                self._cy + self._r + self._dh,
+                arcade.color.BLACK,
+                self.line_w
+            )
+            # lower line:
+            arcade.draw_line(
+                self._cx,
+                self._cy + self._r,
+                self._cx - x_shift,
+                self._cy + self._r,
+                arcade.color.BLACK,
+                self.line_w
+            )
 
         if self._inter_type == InterType.PRESSED:
             arcade.draw_triangle_filled(vs[0][0], vs[0][1], vs[1][0], vs[1][1], vs[2][0], vs[2][1], arcade.color.RED)
@@ -2884,9 +2942,14 @@ class Undo(Icon, Drawable, Interactable, FuncConnected):
         if DrawLib.is_point_in_circle(self._cx, self._cy, self._r + self._dh, x, y) or arcade.is_point_in_polygon(x, y,
                                                                                                                   self._vertices):
             self._inter_type = InterType.PRESSED
+            if not Lastar.is_in_interaction():
+                self._cycle_breaker = True
+                self._func[0]()
 
     def on_release(self, x, y):
         self._inter_type = InterType.NONE
+        self._cycle_breaker = False
+        self._ticks = 0
 
     def on_key_press(self):
         pass
@@ -3596,3 +3659,7 @@ def main():
 # start:
 if __name__ == "__main__":
     main()
+
+
+# TODO: LAYERS OF DRAWING
+# TODO: LOGGING OF MOUSE MOVEMENT, KEYS

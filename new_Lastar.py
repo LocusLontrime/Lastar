@@ -81,6 +81,7 @@ def lock(func):
 # logs non-recursive methods:
 def logged(is_debug: bool = True, is_used: bool = True):
     """decorator-constructor for loggers"""
+
     # inner decorator
     def core(func):
         @functools.wraps(func)
@@ -108,8 +109,11 @@ def logged(is_debug: bool = True, is_used: bool = True):
 def class_logged(is_debug: bool = True):
     def core(cls):
         """logging all the methods in class, excluding the dunder ones:"""
-        cls_method_list = [cls.__dict__[key] for key in cls.__dict__.keys() if
-                           callable(getattr(cls, key)) and not key.startswith("__")]
+        cls_method_list = [
+            cls.__dict__[key] for key in cls.__dict__.keys() if
+            callable(getattr(cls, key)) and not key.startswith("__")
+            and key not in ['update', 'draw', 'on_draw']
+        ]
         for method in cls_method_list:
             logged_method = logged(is_debug)(method)
             setattr(cls, method.__name__, logged_method)
@@ -340,7 +344,7 @@ class Lastar(arcade.Window):
         self._play_button.connect_to_func(self.play_button_func)
         self._step_button_right = StepButton(1785 + 6 + 50, 50, 24, 16, 2)
         self._step_button_right.connect_to_func(self.up, self.another_ornament)
-        self._step_button_left = StepButton(1786 + 6 - 50, 50, 24, 16, 2, False)     #
+        self._step_button_left = StepButton(1786 + 6 - 50, 50, 24, 16, 2, False)  #
         self._step_button_left.connect_to_func(self.down, self.another_ornament)
         self._eraser = Eraser(1785 + 6, 125, 16, 32, 8, 2)
         self._eraser.connect_to_func(self._grid.clear_grid)
@@ -474,7 +478,12 @@ class Lastar(arcade.Window):
         self._guide_arrows_area.draw()
         self._show_mode_area.draw()
         # NODE CHOSEN:
-        ...
+        nc = self._grid.node_chosen
+        if nc:
+            cx, cy, dh, _ = nc.get_center_n_sizes(self._grid)
+            arcade.draw_rectangle_outline(cx, cy, dh, dh,
+                                          arcade.color.YELLOW if nc.type != NodeType.EMPTY else arcade.color.DARK_ORANGE,
+                                          self._grid.line_width * 2)  # self._grid.tile_size - 2
         # MANAGE ICONS:
         for manage_icon in self._manage_icons_dict.values():
             manage_icon.draw()
@@ -2833,7 +2842,7 @@ class Undo(Icon, Drawable, Interactable, FuncConnected):
      redoing -->> is_right = True"""
 
     DELTA = 0.5
-    THRESHOLD = 12
+    THRESHOLD = 12 - 1
     TICKS_THRESHOLD = 12
     MAGNITUDE = 3
 
@@ -3659,7 +3668,6 @@ def main():
 # start:
 if __name__ == "__main__":
     main()
-
 
 # TODO: LAYERS OF DRAWING
 # TODO: LOGGING OF MOUSE MOVEMENT, KEYS

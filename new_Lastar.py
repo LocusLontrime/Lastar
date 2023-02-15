@@ -353,7 +353,7 @@ class Lastar(arcade.Window):
         self._redo_button = Undo(1785 + 6 + 75, 125, 24, 8, 12, 2, True)
         self._redo_button.connect_to_func(self._grid.redo)
         # HINTS:
-        self._mode_info = Info(100, SCREEN_HEIGHT - 30, 26)
+        self._mode_info = Info(5 + 26 / 4 - self._grid.line_width, SCREEN_HEIGHT - 30, 26)
         self._mode_info.connect_to_func(self.get_mode_info)
 
     def get_mode_info(self):
@@ -3568,36 +3568,39 @@ class Info(Drawable, FuncConnected):
 
     @logged()
     def setup(self):
-        self._text = arcade.Text('', self._cx - self._width / 2 + self._height // 4,
-                                 self._cy - self._height / 2 + self._height // 4, arcade.color.BLACK,
-                                 self._height / 2, italic=True, bold=True)
+        self._text = arcade.Text(
+            '',
+            self._cx + self._height // 4,
+            self._cy - self._height // 4,
+            arcade.color.BLACK,
+            self._height / 2,
+            italic=True, bold=True
+        )
 
     def update(self):
         # text updating per frame:
         self._text.text = self._func[0]()
         self._width = self._text.content_width + self._height / 2
-        self._text.x = self._cx - self._width / 2 + self._height // 4
-        self._text.y = self._cy - self._height / 2 + self._height // 4
 
     def draw(self):
         self._text.draw()
         arcade.draw_rectangle_outline(
-            self._cx, self._cy,
+            self._cx + self._width / 2, self._cy,
             self._width, self._height,
             arcade.color.BLACK, self._line_w
         )
 
         arcade.draw_rectangle_outline(
-            self._cx, self._cy,
+            self._cx + self._width / 2, self._cy,
             self._width + 4 * self._line_w, self._height + 4 * self._line_w,
             arcade.color.BLACK, self._line_w
         )
 
         for j, i in [(1, 1), (-1, 1), (-1, -1), (1, -1)]:
             arcade.draw_line(
-                self._cx + j * self._width / 2,
+                self._cx + self._width / 2 + j * self._width / 2,
                 self._cy + i * self._height / 2,
-                self._cx + j * (self._width / 2 + 2 * self._line_w),
+                self._cx + self._width / 2 + j * (self._width / 2 + 2 * self._line_w),
                 self._cy + i * (self._height / 2 + 2 * self._line_w),
                 arcade.color.BLACK, self._line_w
             )

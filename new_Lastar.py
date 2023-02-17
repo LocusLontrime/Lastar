@@ -1019,6 +1019,11 @@ class Grid(Drawable, FuncConnected):
         self._grid = [[Node(j, i, 1, NodeType.EMPTY) for i in range(self._hor_tiles_q)] for j in range(self._tiles_q)]
 
     @logged()
+    def can_start(self):
+        """checks if start and end nodes are chosen"""
+        return self._start_node is not None and self._end_node is not None
+
+    @logged()
     def clear_redo_memo(self):
         """clears redo memo list to the right from the current point if some action has been done
          while still there is some possibility of redoing"""
@@ -1671,6 +1676,8 @@ class Algorithm(Connected):
             if node.type not in [NodeType.START_NODE, NodeType.END_NODE]:
                 node.type = NodeType.PATH_NODE
                 node.update_sprite_colour()
+            if node.arrow_shape is not None:
+                node.remove_arrow(self._obj)
             if i + 1 < len(self.path):
                 p = -self.path[i + 1].x + self.path[i].x, \
                     -self.path[i + 1].y + self.path[i].y
@@ -1975,10 +1982,10 @@ class Astar(Algorithm, FuncConnected):
         while self._nodes_to_be_visited:
             self._iterations += 1
             curr_node = hq.heappop(self._nodes_to_be_visited)
-            if curr_node not in [self._obj.start_node, self._obj.end_node]:
-                curr_node.type = NodeType.VISITED_NODE
-                curr_node.update_sprite_colour()
             curr_node.times_visited += 1
+            if curr_node not in [self._obj.start_node, self._obj.end_node]:
+                curr_node.type = NodeType.TWICE_VISITED if curr_node.times_visited > 1 else NodeType.VISITED_NODE
+                curr_node.update_sprite_colour()
             self._max_times_visited = max(self._max_times_visited, curr_node.times_visited)
             self._nodes_visited[curr_node] = 1
             # base case of finding the shortest path:
@@ -1994,7 +2001,19 @@ class Astar(Algorithm, FuncConnected):
                                                                                               self._obj.end_node,
                                                                                               neigh)
                     neigh.previously_visited_node = curr_node
+                    if neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:
+                        arrow = DrawLib.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y),
+                                                          self._obj)
+                        # here the arrow rotates (re-estimating of neigh g-cost):
+                        if neigh.arrow_shape is not None:
+                            neigh.remove_arrow(self._obj)
+                        neigh.arrow_shape = arrow
+                        neigh.append_arrow(self._obj)
                     hq.heappush(self._nodes_to_be_visited, neigh)
+        # for all neighs that left in the heap we must define the nodetype:
+        for neigh in self._nodes_to_be_visited:
+            neigh.type = NodeType.NEIGH
+            neigh.update_sprite_colour()
 
 
 class WaveLee(Algorithm):
@@ -3674,3 +3693,6 @@ if __name__ == "__main__":
 
 # TODO: LAYERS OF DRAWING
 # TODO: LOGGING OF MOUSE MOVEMENT, KEYS
+# TODO: BETTER VISUALIZATION FOR FULL ALGO!!!
+# TODO: GUIDING ARROWS OPTION FOR FULL ALGO!!!
+# TODO: TRY SOMETHING WITH GETATTR OVERRIDING...

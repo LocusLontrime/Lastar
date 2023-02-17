@@ -359,7 +359,6 @@ class Lastar(arcade.Window):
     def get_mode_info(self):
         return f'Mode: {self._grid.mode_names[self._grid.mode]}'
 
-    @logged()
     def set_interactive_ind(self, ind: int or None):
         """sets interactive_ind to ind's value"""
         self._interactive_ind = ind
@@ -382,7 +381,7 @@ class Lastar(arcade.Window):
         self._grid.clear_grid()
         self._current_algo = self._bfs_dfs
 
-    @logged()
+    @logged(is_used=logic_math_logging)
     def aux_clearing(self):
         """auxiliary clearing method, clears interactive pars, current_algo pars and unlocks all the lockers"""
         # Lastar clearing:
@@ -488,6 +487,7 @@ class Lastar(arcade.Window):
         for manage_icon in self._manage_icons_dict.values():
             manage_icon.draw()
 
+    @logged(is_used=pressing_motion_logging)
     def play_button_func(self, is_pressed: bool = False):
         """function-connector for play_button_icon"""
         self.log.debug('.play_button_func() call')
@@ -498,7 +498,7 @@ class Lastar(arcade.Window):
             self.log.debug('.start_algo() call')
             self.start_algo()
 
-    @logged()
+    @logged(is_used=logic_math_logging)
     def start_algo(self):
         """starts and prepares the current algorithm for the further using"""
         if not self._grid.loading:
@@ -522,7 +522,7 @@ class Lastar(arcade.Window):
                     # path's drawing for all three algos cores:
                     self._current_algo.visualize_path()
 
-    @logged()
+    @logged(is_used=logic_math_logging)
     def up(self):
         """function-connector for right step_button_icon,
         steps up during the algo or path-restoring phase"""
@@ -531,7 +531,7 @@ class Lastar(arcade.Window):
         else:
             self._current_algo.path_up()
 
-    @logged()
+    @logged(is_used=logic_math_logging)
     def down(self):
         """function-connector for left step_button_icon,
         steps down during the algo or path-restoring phase"""
@@ -540,12 +540,12 @@ class Lastar(arcade.Window):
         else:
             self._current_algo.path_down()
 
-    @logged()
     def another_ornament(self, is_next: bool):
         """switches the current walls-ornament during the loading"""
         return self._grid.change_wall_ornament(is_next)
 
     # KEYBOARD:
+    @logged(is_debug=False, is_used=pressing_motion_logging)
     def on_key_press(self, symbol: int, modifiers: int):
         """main key-pressing method"""
         # is called when user press the symbol key:
@@ -584,6 +584,7 @@ class Lastar(arcade.Window):
                     self.log.info('key.L -> load() for _walls call')
                     self._grid.load()
 
+    @logged(is_debug=False, is_used=pressing_motion_logging)
     def on_key_release(self, symbol: int, modifiers: int):
         """main key-releasing method"""
         # long press ending:
@@ -610,6 +611,7 @@ class Lastar(arcade.Window):
         # building and erasing walls:
         self._grid.build_or_erase(x, y)
 
+    @logged(is_used=pressing_motion_logging)
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int):
         """main mouse-pressing method"""
         for icon in self._icons_dict.values():
@@ -630,6 +632,7 @@ class Lastar(arcade.Window):
         self._grid.press(x, y, button)
         self.log.debug('.on_mouse_press() successfully -> all .on_press() is processing')
 
+    @logged(is_used=pressing_motion_logging)
     def on_mouse_release(self, x: int, y: int, button: int, modifiers: int):
         """main mouse-releasing method"""
         self._grid.building_walls_flag = False
@@ -638,12 +641,13 @@ class Lastar(arcade.Window):
             manage_icon.on_release(x, y)
 
     # game mode switching by scrolling the mouse wheel:
+    @logged(is_used=pressing_motion_logging)
     def on_mouse_scroll(self, x: int, y: int, scroll_x: int, scroll_y: int):
         """main mouse-scrolling method"""
         self.log.debug('_grid.scroll.scroll() call')
         self._grid.scroll()
 
-    @logged()
+    @logged(is_used=graphic_logging)
     def clear_icons_inter_types(self, icon_chosen: 'Icon'):
         """clear the inter_types of settings and algo icons"""
         for icon in self._icons_dict.values():
@@ -818,7 +822,7 @@ class Grid(Drawable, FuncConnected):
         self._loading_ind = 0
 
     # INITIALIZATION AUX:
-    @logged()
+    @logged(is_used=logic_math_logging)
     def get_pars(self):
         """calculating grid visualization pars for vertical tiles number given"""
         self._Y, self._X = SCREEN_HEIGHT - 60, SCREEN_WIDTH - 250
@@ -829,22 +833,19 @@ class Grid(Drawable, FuncConnected):
         self._Y, self._X = self.tiles_q * tile_size, hor_tiles_q * tile_size
         return tile_size, hor_tiles_q
 
-    @logged()
     def get_hor_tiles(self, i):
         return (SCREEN_WIDTH - 250) // (
                 (SCREEN_HEIGHT - 30) // self._scale_names[i])  # TODO: ELIMINATE THE DEVIATION IN Y coordinates!!!
 
-    @logged()
     def set_scale(self, ind: int):
         self._scale = ind
         self.rebuild_map()
 
-    @logged()
     def set_guide_arrows_ind(self, ind: int):
         self._guide_arrows_ind = ind
 
     # AUX:
-    @logged()
+    @logged(is_used=logic_math_logging)
     def get_triangle(self, node: 'Node', point: tuple[int, int]):
         """triangle points getting"""
         scaled_point = point[0] * (self._tile_size // 2 - 2), point[1] * (self._tile_size // 2 - 2)
@@ -862,23 +863,21 @@ class Grid(Drawable, FuncConnected):
                  5 + node.y * self._tile_size + self._tile_size / 2
         return (cx, cy), (cx + deltas[0][0], cy + deltas[0][1]), (cx + deltas[1][0], cy + deltas[1][1])
 
-    @logged()
     def number_repr(self, node: 'Node'):
         """gets the number representation for the node"""
         return node.y * self._hor_tiles_q + node.x
 
-    @logged()
+    @logged(is_used=logic_math_logging)
     def coords(self, number: int):
         """gets node's coordinates for its number representation"""
         return divmod(number, self._hor_tiles_q)
 
-    @logged()
     def node(self, num: int) -> 'Node':
         """gets the node itself for its number representation"""
         y, x = self.coords(num)
         return self._grid[y][x]
 
-    @logged()
+    @logged(is_used=logic_math_logging)
     def get_node(self, mouse_x, mouse_y):
         """gets the node from the current mouse coordinates"""
         x_, y_ = mouse_x - 5, mouse_y - 5
@@ -1013,19 +1012,17 @@ class Grid(Drawable, FuncConnected):
     def loading(self):
         return self._loading
 
-    @logged()
     def initialize(self):
         """initializes all the nodes for _tiles_q par"""
         self._grid = [[Node(j, i, 1, NodeType.EMPTY) for i in range(self._hor_tiles_q)] for j in range(self._tiles_q)]
 
-    @logged()
+    @logged(is_used=logic_math_logging)
     def clear_redo_memo(self):
         """clears redo memo list to the right from the current point if some action has been done
          while still there is some possibility of redoing"""
         if self._walls_index < len(self._walls_built_erased) - 1:
             self._walls_built_erased = self._walls_built_erased[:self._walls_index + 1]
 
-    @logged()
     # make a node the chosen one:
     def choose_node(self, node: 'Node'):
         """chooses a node for info display"""
@@ -1062,7 +1059,6 @@ class Grid(Drawable, FuncConnected):
         if self._triangle_shape_list:
             self._triangle_shape_list.draw()
 
-    @logged()
     # creates sprites for all the nodes:
     def get_sprites(self):  # batch -->
         """nodes' sprites initialization for fast further batch-drawing"""
@@ -1071,7 +1067,7 @@ class Grid(Drawable, FuncConnected):
                 node.get_solid_colour_sprite(self)
         self.log.info(f"{self._tiles_q * self._hor_tiles_q} grid nodes' sprites initialization")
 
-    @logged()
+    @logged(is_used=graphic_logging)
     def make_grid_lines(self):
         """creates a shape element list of grid lines for fast further batch-drawing"""
         for j in range(self.tiles_q + 1):
@@ -1090,7 +1086,6 @@ class Grid(Drawable, FuncConnected):
 
     # WALLS MANAGER:
     # EMPTIES -->> WALLS and BACK:
-    @logged()
     def change_nodes_type(self, node_type: 'NodeType', walls_set: set or list):
         for node_num in walls_set:
             y, x = self.coords(node_num)
@@ -1098,7 +1093,7 @@ class Grid(Drawable, FuncConnected):
             self.grid[y][x].update_sprite_colour()
         self.log.info(f"{len(walls_set)} grid nodes changing their type")
 
-    @logged()
+    @logged(is_used=pressing_motion_logging)
     def press(self, x, y, button):
         # MODES OF DRAWING LOGIC:
         if self._mode == 0:
@@ -1153,7 +1148,7 @@ class Grid(Drawable, FuncConnected):
                     self._node_chosen = n
 
     # builds/erases walls:
-    @logged()
+    @logged(is_used=graphic_logging)
     def build_or_erase(self, x, y):
         """builds or erases a wall depending on the self._build_or_erase flag"""
         if self._building_walls_flag and self._mode == 0:
@@ -1165,6 +1160,7 @@ class Grid(Drawable, FuncConnected):
                     self.log.debug(f'.erase_wall({x},{y})')
                     self.erase_wall(x, y)
 
+    @logged(is_debug=False, is_used=graphic_logging)
     def build_wall(self, x, y):
         # now building the walls:
         n = self.get_node(x, y)
@@ -1180,6 +1176,7 @@ class Grid(Drawable, FuncConnected):
             self._walls_index += 1
             self.log.info(f'The wall successfully built')
 
+    @logged(is_used=graphic_logging)
     def erase_wall(self, x, y):
         # now erasing the walls:
         n = self.get_node(x, y)
@@ -1197,7 +1194,7 @@ class Grid(Drawable, FuncConnected):
 
     # erases all nodes, that are connected vertically, horizontally or diagonally to a chosen one,
     # then nodes connected to them the same way and so on recursively...
-    @logged()
+    @logged(is_used=graphic_logging)
     def erase_all_linked_nodes(self, node: 'Node'):  # TODO: PROCESS AND LOG THIS RECURSIVE METHOD VERY CAREFULLY!!!
         @counted
         def _erase_all_linked_nodes(curr_node: 'Node'):
@@ -1231,7 +1228,7 @@ class Grid(Drawable, FuncConnected):
         self._walls = set()
         self.setup()
 
-    @logged()
+    @logged(is_used=graphic_logging)
     def clear_empty_nodes(self):
         """clears all the nodes except start, end and walls"""
         # clearing the every empty node:
@@ -1244,7 +1241,7 @@ class Grid(Drawable, FuncConnected):
         # clearing the nodes-relating pars of the game:
         self.aux_clear()
 
-    @logged()
+    @logged(is_used=graphic_logging)
     @lock
     def clear_grid(self):
         """entirely clears the grid"""
@@ -1259,7 +1256,6 @@ class Grid(Drawable, FuncConnected):
         # memoization for possible undoing:
         ...
 
-    @logged()
     def aux_clear(self):
         # grid's pars clearing:
         self._triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
@@ -1272,7 +1268,7 @@ class Grid(Drawable, FuncConnected):
         # aux clearing from Lastar:
         self._func[0]()
 
-    @logged()
+    @logged(is_used=graphic_logging)
     def undo(self):
         """undo manager: cancels the action with the wall"""
         if not self._loading:
@@ -1287,7 +1283,7 @@ class Grid(Drawable, FuncConnected):
                         self._walls.add(self.number_repr(node))
                 self._walls_index -= 1
 
-    @logged()
+    @logged(is_used=graphic_logging)
     def redo(self):
         """redo manager: redo an action with a wall"""
         if not self._loading:
@@ -1310,7 +1306,7 @@ class Grid(Drawable, FuncConnected):
             index = len(shelf)
             shelf[f'ornament {index}'] = self._walls
 
-    @logged()
+    @logged(is_used=graphic_logging)
     def load(self):
         if self._loading:
             self._loading = False
@@ -1332,7 +1328,7 @@ class Grid(Drawable, FuncConnected):
                     self._walls_index += 1
                     self._walls = dict(shelf)
 
-    @logged()
+    @logged(is_used=graphic_logging)
     def change_wall_ornament(self, is_next=True):
         if self._loading:
             delta = 1 if is_next else -1
@@ -1386,7 +1382,6 @@ class Node:
         Node.is_greedy = False if greedy_ind is None else True
 
     # COPYING/RESTORING:
-    @logged()
     def aux_copy(self):
         """makes an auxiliary copy for a node, it is needed for a_star interactive"""
         copied_node = Node(self.y, self.x, self.type, self.val)
@@ -1397,7 +1392,6 @@ class Node:
         copied_node.previously_visited_node = self.previously_visited_node
         return copied_node
 
-    @logged()
     def restore(self, copied_node: 'Node'):
         """restore the node from its auxiliary copy"""
         self.g = copied_node.g
@@ -1426,7 +1420,7 @@ class Node:
             other.__dict__[attribute] = self.__getattribute__(attribute)
 
     # TYPE/SPRITE CHANGE/INIT:
-    @logged(is_used=graphic_logging)  # TODO: DANGEROUS TO LOG!!!
+    # TODO: DANGEROUS TO LOG!!!
     def get_solid_colour_sprite(self, grid: Grid):
         """makes a solid colour sprite for a node"""
         cx, cy, size, colour = self.get_center_n_sizes(grid)
@@ -1486,7 +1480,6 @@ class Node:
 
     # CLEARING:
     # TODO: DANGEROUS TO LOG!!!
-    # @logged()
     def clear(self):
         """entirely clears the node, returning it to the initial state it came from"""
         self.heur_clear()
@@ -1495,7 +1488,6 @@ class Node:
         self.arrow_shape = None
 
     # TODO: DANGEROUS TO LOG!!!
-    # @logged()
     def heur_clear(self):
         """clears the node heuristically"""
         self.g = np.Infinity
@@ -1536,7 +1528,6 @@ class Node:
 
     # NEIGHS:
     # TODO: DANGEROUS TO LOG!!!
-    # @logged()
     def get_neighs(self, grid: Grid, forbidden_node_types: list['NodeType']):  # has become smarter
         """gets neighs of the node, now can be set up"""
         for dy, dx in self.walk:
@@ -1547,7 +1538,6 @@ class Node:
                     yield grid.grid[ny][nx]
 
     # TODO: DANGEROUS TO LOG!!!
-    # @logged()
     def get_extended_neighs(self, grid: Grid) -> list['Node']:
         """gets extended neighs (with diagonal ones) of the node, generator"""
         for dy, dx in self.extended_walk:
@@ -1629,7 +1619,7 @@ class Algorithm(Connected):
         """returns the important details (like heur, val and so on) for the node chosen"""
         ...
 
-    @logged()
+    @logged(is_used=logic_math_logging)
     def path_up(self):
         if self._path_index < len(self.path) - 1:
             if (path_node := self._path[self._path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
@@ -1651,7 +1641,7 @@ class Algorithm(Connected):
             # index's step up:
             self._path_index += 1
 
-    @logged()
+    @logged(is_used=logic_math_logging)
     def recover_path(self):
         """path-recovering process for interactive a_star"""
         # start point of path restoration (here we begin from the end node of the shortest path found):
@@ -1665,7 +1655,7 @@ class Algorithm(Connected):
         # returns the result:
         self._path = shortest_path
 
-    @logged()
+    @logged(is_used=graphic_logging)
     def visualize_path(self):
         for i, node in enumerate(self._path):
             if node.type not in [NodeType.START_NODE, NodeType.END_NODE]:
@@ -1680,7 +1670,7 @@ class Algorithm(Connected):
                     [arcade.color.WHITE, arcade.color.RED, arcade.color.RED])
                 self._obj.triangle_shape_list.append(triangle_shape)
 
-    @logged()
+    @logged(is_used=graphic_logging)
     def path_down(self):
         if self._path_index > 0:
             if (path_node := self._path[self._path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
@@ -1789,6 +1779,7 @@ class Astar(Algorithm, FuncConnected):
         # arrows list renewal:
         self._obj.arrow_shape_list = arcade.ShapeElementList()
 
+    @logged(is_debug=False, is_used=logic_math_logging)
     def algo_up(self):
         if self._iterations == 0:
             self._nodes_to_be_visited = [self._obj.start_node]
@@ -1858,6 +1849,7 @@ class Astar(Algorithm, FuncConnected):
         # incrementation:
         self._iterations += 1
 
+    @logged(is_debug=False, is_used=logic_math_logging)
     def algo_down(self):
         # getting the previous current node from memo table:
         curr_node = self._curr_node_dict[self._iterations]
@@ -1963,6 +1955,7 @@ class Astar(Algorithm, FuncConnected):
         Astar.siftdown(heap, start_pos, pos)
 
     @timer
+    @logged(is_debug=False, is_used=logic_math_logging)
     def full_algo(self):
         # False if game.greedy_ind is None else True
         # transmitting the greedy flag to the Node class: TODO: fix this strange doing <<--
@@ -2035,6 +2028,7 @@ class WaveLee(Algorithm):
         self._fronts_dict = {}
         self._nodes_visited_q = 0
 
+    @logged(is_debug=False, is_used=logic_math_logging)
     def algo_up(self):
         self._iterations += 1
         self._front_wave_lee = self._next_wave_lee[:]
@@ -2069,6 +2063,7 @@ class WaveLee(Algorithm):
         print(f'iteration: {self._iterations}, CURRENT FRONT: {self._front_wave_lee}')
         self.log.debug(f'iteration: {self._iterations}, CURRENT FRONT: {self._front_wave_lee}')
 
+    @logged(is_debug=False, is_used=logic_math_logging)
     def algo_down(self):
         # possibility check of wave_lee's stepping back:
         if self._iterations > 0:
@@ -2100,6 +2095,7 @@ class WaveLee(Algorithm):
             self.log.debug(f'iteration: {self._iterations}, CURRENT FRONT: {self._front_wave_lee}')
 
     @timer
+    @logged(is_debug=False, is_used=logic_math_logging)
     def full_algo(self):
         # other.get_neighs(game)  # Why is it necessary???
         front_wave = {self._obj.start_node}
@@ -2170,6 +2166,7 @@ class BfsDfs(Algorithm):
         # dicts:
         self._curr_node_dict = {0: None}
 
+    @logged(is_debug=False, is_used=logic_math_logging)
     def algo_up(self):
         # one bfs step up:
         self._iterations += 0
@@ -2211,6 +2208,7 @@ class BfsDfs(Algorithm):
                 self._queue.append(neigh)
         self._iterations += 1
 
+    @logged(is_debug=False, is_used=logic_math_logging)
     def algo_down(self):
         if self._iterations > 0:
             # now the neighs of current node should become EMPTY ones:
@@ -2260,6 +2258,7 @@ class BfsDfs(Algorithm):
             self._iterations -= 1
 
     @timer
+    @logged(is_debug=False, is_used=logic_math_logging)
     def full_algo(self):
         queue = deque()
         queue.append(self._obj.start_node)
@@ -2437,7 +2436,7 @@ class Area(Drawable, Interactable, FuncConnected):
     def on_motion(self, x, y):
         pass
 
-    @logged()
+    @logged(is_used=pressing_motion_logging)
     def on_press(self, x, y):
         for i in range(len(self._fields)):
             if not self._is_locked and DrawLib.is_point_in_square(
@@ -2515,7 +2514,6 @@ class PlayButton(Icon, Drawable, Interactable, FuncConnected):
         self._line_w = line_w
         self._multiplier = 1
 
-    @logged()
     def setup(self):
         pass
 
@@ -2529,7 +2527,6 @@ class PlayButton(Icon, Drawable, Interactable, FuncConnected):
                 if 0 <= self._incrementer[0]:
                     self._incrementer[0] -= self.DELTAS[0]
         else:
-            self.log.debug('HOVERED play button')
             if 0 <= self._incrementer[0]:
                 self._incrementer[0] -= self.DELTAS[0]
 
@@ -2608,7 +2605,7 @@ class PlayButton(Icon, Drawable, Interactable, FuncConnected):
         pass
 
 
-@class_logged()
+# @class_logged() ToDo слишком сильно раздувает файл - логирует draw b update
 @long_pressable
 class StepButton(Icon, Drawable, Interactable, FuncConnected):
     DELTAS = [0.15, 0.1, 0.05]
@@ -2627,7 +2624,6 @@ class StepButton(Icon, Drawable, Interactable, FuncConnected):
         self._is_right = is_right
         # self._cycle_breaker = False  # TODO: SHOULD BE REWORKED!!! HOW SHOULD THE ALGO KNOW IF IT IS CHANGED???
 
-    # @logged()
     def setup(self):
         pass
 
@@ -3243,7 +3239,7 @@ class Arrow(Icon, Drawable, Interactable):  # part of an arrow menu
             else:
                 self._inter_type = InterType.NONE
 
-    @logged()
+    @logged(is_used=pressing_motion_logging)
     def on_press(self, x, y):
         if arcade.is_point_in_polygon(x, y, self._vertices):
             if self._inter_type == InterType.HOVERED:
@@ -3295,7 +3291,7 @@ class ArrowReset(Icon, Drawable, Interactable):
         else:
             self._inter_type = InterType.NONE
 
-    @logged()
+    @logged(is_used=pressing_motion_logging)
     def on_press(self, x, y):
         if DrawLib.is_point_in_square(self._cx, self._cy, self._arrow_height, x, y):
             ArrowsMenu.choosing_arrows = True

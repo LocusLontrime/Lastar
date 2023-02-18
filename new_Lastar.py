@@ -796,6 +796,8 @@ class Grid(Drawable, FuncConnected):
         # algo steps visualization:
         self._triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
         self._arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
+        # guiding arrows presets:
+        self._preset_arrows = []
         # sizes:
         self._X, self._Y = SCREEN_HEIGHT - 60, SCREEN_WIDTH - 250
         # scaling:  TODO: add AI to calculate the sizes for every resolution possible:
@@ -818,6 +820,16 @@ class Grid(Drawable, FuncConnected):
         self._loading_ind = 0
 
     # INITIALIZATION AUX:
+    @logged()
+    def initialize_guiding_arrows(self):
+        self._preset_arrows = []
+        for y in range(self._tiles_q):
+            self._preset_arrows.append([])
+            for x in range(self._hor_tiles_q):
+                self._preset_arrows[y].append(dict())
+                for delta in [(0, 1), (1, 0), (0, -1), (-1, 0)]:  # (x, y)
+                    self._preset_arrows[y][x][delta] = DrawLib.create_line_arrow(self._grid[y][x], delta, self)
+
     @logged()
     def get_pars(self):
         """calculating grid visualization pars for vertical tiles number given"""
@@ -1041,6 +1053,7 @@ class Grid(Drawable, FuncConnected):
     def setup(self):
         # initialization:
         self.initialize()
+        self.initialize_guiding_arrows()
         # sprites, shapes and etc...
         # blocks:
         self.get_sprites()
@@ -1352,6 +1365,10 @@ class Grid(Drawable, FuncConnected):
     @property
     def mode(self):
         return self._mode
+
+    @property
+    def preset_arrows(self):
+        return self._preset_arrows
 
 
 # class for a node representation:
@@ -2001,19 +2018,36 @@ class Astar(Algorithm, FuncConnected):
                                                                                               self._obj.end_node,
                                                                                               neigh)
                     neigh.previously_visited_node = curr_node
+
+                    # if neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:
+                    #     arrow = DrawLib.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y),
+                    #                                       self._obj)
+                    #     # here the arrow rotates (re-estimating of neigh g-cost):
+                    #     if neigh.arrow_shape is not None:
+                    #         neigh.remove_arrow(self._obj)
+                    #     neigh.arrow_shape = arrow
+                    #     neigh.append_arrow(self._obj)
+
+                    # shape = arcade.create_triangles_filled_with_colors(
+                    #     [(9, 98), (98, 989), (989, 98989)],
+                    #     [arcade.color.BLACK, arcade.color.BLACK, arcade.color.BLACK]
+                    # )
+
                     if neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:
-                        arrow = DrawLib.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y),
-                                                          self._obj)
+                        y, x = neigh.y, neigh.x
+                        arrow = self._obj.preset_arrows[y][x][(neigh.x - curr_node.x, neigh.y - curr_node.y)]
                         # here the arrow rotates (re-estimating of neigh g-cost):
-                        if neigh.arrow_shape is not None:
-                            neigh.remove_arrow(self._obj)
                         neigh.arrow_shape = arrow
-                        neigh.append_arrow(self._obj)
+
                     hq.heappush(self._nodes_to_be_visited, neigh)
         # for all neighs that left in the heap we must define the nodetype:
         for neigh in self._nodes_to_be_visited:
             neigh.type = NodeType.NEIGH
             neigh.update_sprite_colour()
+        # now adding the guiding arrow shapes to the Shape list:
+        for neigh in self._nodes_visited.keys() | self._nodes_to_be_visited:
+            if neigh.arrow_shape is not None:
+                neigh.append_arrow(self._obj)
 
 
 class WaveLee(Algorithm):
@@ -2365,7 +2399,7 @@ class Menu(Drawable, Interactable, FuncConnected):
         pass
 
     def on_key_release(self):
-        pass
+        pass                                                                                 
 
 
 class Area(Drawable, Interactable, FuncConnected):
@@ -3696,3 +3730,5 @@ if __name__ == "__main__":
 # TODO: BETTER VISUALIZATION FOR FULL ALGO!!!
 # TODO: GUIDING ARROWS OPTION FOR FULL ALGO!!!
 # TODO: TRY SOMETHING WITH GETATTR OVERRIDING...
+# TODO: PRESETS FOR ARROWS
+# TODO: MULTIPROCESSING FOR GUIDING ARROWS INITIALIZATION

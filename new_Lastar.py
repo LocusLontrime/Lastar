@@ -112,7 +112,7 @@ def class_logged(is_debug: bool = True):
         cls_method_list = [
             cls.__dict__[key] for key in cls.__dict__.keys() if
             callable(getattr(cls, key)) and not key.startswith("__")
-            and key not in ['update', 'draw', 'on_draw']
+            and key not in ['update', 'draw', 'on_draw', 'on_motion']
         ]
         for method in cls_method_list:
             logged_method = logged(is_debug)(method)
@@ -2576,7 +2576,6 @@ class PlayButton(Icon, Drawable, Interactable, FuncConnected):
                 if 0 <= self._incrementer[0]:
                     self._incrementer[0] -= self.DELTAS[0]
         else:
-            self.log.debug('HOVERED play button')
             if 0 <= self._incrementer[0]:
                 self._incrementer[0] -= self.DELTAS[0]
 

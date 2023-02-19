@@ -83,7 +83,7 @@ def logged(is_debug: bool = True, is_used: bool = True):
     """decorator-constructor for loggers"""
 
     # inner decorator
-    def core(func):
+    def core(func):  # 36 366 98 989
         @functools.wraps(func)
         def _wrapper(*args, **kwargs):
             obj = args[0]  # <<-- self
@@ -487,6 +487,10 @@ class Lastar(arcade.Window):
         # MANAGE ICONS:
         for manage_icon in self._manage_icons_dict.values():
             manage_icon.draw()
+        # AUX:
+        # sprite = arcade.Sprite('right-arrow-black-triangle.png', 0.125,  center_x=1000, center_y=500)
+        # sprite.angle = 90
+        # sprite.draw()
 
     def play_button_func(self, is_pressed: bool = False):
         """function-connector for play_button_icon"""
@@ -3732,3 +3736,5 @@ if __name__ == "__main__":
 # TODO: TRY SOMETHING WITH GETATTR OVERRIDING...
 # TODO: PRESETS FOR ARROWS
 # TODO: MULTIPROCESSING FOR GUIDING ARROWS INITIALIZATION
+# TODO: SPRITE-GUIDING_ARROWS AND THEIR FURTHER ROTATION/DRAWING
+# TODO: BACKGROUND SAVING DAEMON PROCESS, BACKGROUND INITIALIZATION

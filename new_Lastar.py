@@ -112,7 +112,7 @@ def class_logged(is_debug: bool = True):
         cls_method_list = [
             cls.__dict__[key] for key in cls.__dict__.keys() if
             callable(getattr(cls, key)) and not key.startswith("__")
-            and key not in ['update', 'draw', 'on_draw']
+            and key not in ['update', 'draw', 'on_draw', 'on_motion']
         ]
         for method in cls_method_list:
             logged_method = logged(is_debug)(method)
@@ -1120,20 +1120,20 @@ class Grid(Drawable, FuncConnected):
             self.grid[y][x].update_sprite_colour()
         self.log.info(f"{len(walls_set)} grid nodes changing their type")
 
-    @logged()
+    @logged(is_debug=False)
     def press(self, x, y, button):
         # MODES OF DRAWING LOGIC:
         if self._mode == 0:
-            self.log.debug(f'selected mode {self._mode_names[0]}')
+            self.log.info(f'selected mode {self._mode_names[0]}')
             self._building_walls_flag = True
             if button == arcade.MOUSE_BUTTON_LEFT:
-                self.log.debug('MOUSE_BUTTON_LEFT -> build the walls')
+                self.log.info('MOUSE_BUTTON_LEFT -> build the walls')
                 self._build_or_erase = True
             elif button == arcade.MOUSE_BUTTON_RIGHT:
-                self.log.debug('MOUSE_BUTTON_RIGHT -> erase the walls')
+                self.log.info('MOUSE_BUTTON_RIGHT -> erase the walls')
                 self._build_or_erase = False
             elif button == arcade.MOUSE_BUTTON_MIDDLE:
-                self.log.debug('MOUSE_BUTTON_MIDDLE -> erase all linked nodes')
+                self.log.info('MOUSE_BUTTON_MIDDLE -> erase all linked nodes')
                 self._build_or_erase = None
                 n = self.get_node(x, y)
                 if n:
@@ -1144,9 +1144,9 @@ class Grid(Drawable, FuncConnected):
                     self._walls_index += 1
                     self.erase_all_linked_nodes(n)
         elif self._mode == 1:
-            self.log.debug(f'selected mode {self._mode_names[1]}')
+            self.log.info(f'selected mode {self._mode_names[1]}')
             if button == arcade.MOUSE_BUTTON_LEFT:
-                self.log.debug('MOUSE_BUTTON_LEFT -> set START_NODE')
+                self.log.info('MOUSE_BUTTON_LEFT -> set START_NODE')
                 sn = self.get_node(x, y)
                 if sn:
                     if self._start_node:
@@ -1156,7 +1156,7 @@ class Grid(Drawable, FuncConnected):
                     self._start_node = sn
                     self._start_node.update_sprite_colour()
             elif button == arcade.MOUSE_BUTTON_RIGHT:
-                self.log.debug('MOUSE_BUTTON_RIGHT -> set END_NODE')
+                self.log.info('MOUSE_BUTTON_RIGHT -> set END_NODE')
                 en = self.get_node(x, y)
                 if en:
                     if self._end_node:
@@ -1166,7 +1166,7 @@ class Grid(Drawable, FuncConnected):
                     self._end_node = en
                     self._end_node.update_sprite_colour()
         elif self._mode == 2:  # a_star interactive -->> info getting:
-            self.log.debug(f'selected mode {self._mode_names[2]}')
+            self.log.info(f'selected mode {self._mode_names[2]}')
             n = self.get_node(x, y)
             if n:
                 if self._node_chosen == n:
@@ -1562,7 +1562,6 @@ class Node:
 
     # NEIGHS:
     # TODO: DANGEROUS TO LOG!!!
-    # @logged()
     def get_neighs(self, grid: Grid, forbidden_node_types: list['NodeType']):  # has become smarter
         """gets neighs of the node, now can be set up"""
         for dy, dx in self.walk:
@@ -1573,7 +1572,6 @@ class Node:
                     yield grid.grid[ny][nx]
 
     # TODO: DANGEROUS TO LOG!!!
-    # @logged()
     def get_extended_neighs(self, grid: Grid) -> list['Node']:
         """gets extended neighs (with diagonal ones) of the node, generator"""
         for dy, dx in self.extended_walk:
@@ -2260,11 +2258,9 @@ class BfsDfs(Algorithm):
             neigh.previously_visited_node = curr_node
             # BFS:
             if self._is_bfs:
-                self.log.debug('mode bfs')
                 self._queue.appendleft(neigh)
             # DFS:
             else:
-                self.log.debug('mode dfs')
                 self._queue.append(neigh)
         self._iterations += 1
 
@@ -2293,11 +2289,9 @@ class BfsDfs(Algorithm):
                     # deque changing:
                     # BFS:
                     if self._is_bfs:
-                        self.log.debug('mode bfs')
                         self._queue.popleft()
                     # DFS:
                     else:
-                        self.log.debug('mode dfs')
                         self._queue.pop()
             # current node has become the NEIGH:
             curr_node = self._curr_node_dict[self._iterations]
@@ -2403,7 +2397,7 @@ class Menu(Drawable, Interactable, FuncConnected):
         pass
 
     def on_key_release(self):
-        pass                                                                                 
+        pass
 
 
 class Area(Drawable, Interactable, FuncConnected):
@@ -2586,7 +2580,6 @@ class PlayButton(Icon, Drawable, Interactable, FuncConnected):
                 if 0 <= self._incrementer[0]:
                     self._incrementer[0] -= self.DELTAS[0]
         else:
-            self.log.debug('HOVERED play button')
             if 0 <= self._incrementer[0]:
                 self._incrementer[0] -= self.DELTAS[0]
 
@@ -3461,6 +3454,7 @@ class AstarIcon(Icon, Drawable, Interactable, FuncConnected):
             else:
                 self._inter_type = InterType.NONE
 
+    @logged()
     def on_press(self, x, y):
         if arcade.is_point_in_polygon(x, y, self._vertices[0]):
             if self._inter_type != InterType.PRESSED:
@@ -3514,6 +3508,7 @@ class Waves(Icon, Drawable, Interactable, FuncConnected):
             else:
                 self._inter_type = InterType.NONE
 
+    @logged()
     def on_press(self, x, y):
         if DrawLib.is_point_in_circle(self._cx, self._cy, self._size, x, y):
             if self._inter_type != InterType.PRESSED:
@@ -3594,6 +3589,7 @@ class BfsDfsIcon(Icon, Drawable, Interactable, FuncConnected):
             else:
                 self._inter_type = InterType.NONE
 
+    @logged()
     def on_press(self, x, y):
         if DrawLib.is_point_in_square(self._cx, self._cy, self._size, x, y):
             if self._inter_type != InterType.PRESSED:

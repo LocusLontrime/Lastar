@@ -811,6 +811,9 @@ class Grid(Drawable, FuncConnected):
         self._scale = 0
         self._scale_names = {0: 10, 1: 15, 2: 22, 3: 33, 4: 45, 5: 66, 6: 90,
                              7: 110}  # {0: 5, 1: 10, 2: 15, 3: 22, 4: 33, 5: 45, 6: 66, 7: 90, 8: 110, 9: 165, 10: 198}  # factors of 990 num
+        # guiding arrows dict:
+        self._arrows_names = {i: f'Arrows/Arrow_{(q := self._scale_names[i])}x{self.get_hor_tiles(q)}.png' for i in range(len(self._scale_names))}
+        # self.a = arcade.Sprite('Arrows/Arrow_5x3.png')
         # pars:
         self._tiles_q = None
         self._line_width = None

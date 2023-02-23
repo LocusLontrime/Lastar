@@ -1747,7 +1747,7 @@ class Algorithm(Connected):
             if node.type not in [NodeType.START_NODE, NodeType.END_NODE]:
                 node.type = NodeType.PATH_NODE
                 node.update_sprite_colour()
-            if node.guiding_arrow_sprite is not None:  # TODO: remove this condition, it is not NECESSARY!
+            if node.guiding_arrow_sprite in self._obj.arrow_sprite_list:  # TODO: remove this condition, it is not NECESSARY!
                 node.remove_arrow_from_sprite_list(self._obj)
             if i + 1 < len(self.path):
                 p = -self.path[i + 1].x + self.path[i].x, \
@@ -1818,6 +1818,7 @@ class Astar(Algorithm, FuncConnected):
         self._max_times_visited_dict = {0: 0}
         self._neighs_added_to_heap_dict = {}
         self._max_times_visited = 0
+        self._secret_dict = dict()
 
     def get_nodes_visited_q(self):
         return len(self._nodes_visited)
@@ -1976,10 +1977,16 @@ class Astar(Algorithm, FuncConnected):
                     ]
                 )
                 # operations with arrows:
-                if node.type not in [NodeType.START_NODE, NodeType.END_NODE, NodeType.NEIGH]:
+                print(f"node's type: {node.type}")
+                if node.type == NodeType.EMPTY:  # not in [NodeType.START_NODE, NodeType.END_NODE]
                     if node.guiding_arrow_sprite in self._obj.arrow_sprite_list:
                         node.remove_arrow_from_sprite_list(self._obj)
-                if node.type in [NodeType.NEIGH, NodeType.VISITED_NODE, NodeType.TWICE_VISITED]:  # TODO: decide if all of the types are really NEEDED?
+                if node.type == NodeType.NEIGH:  # NodeType.VISITED_NODE, NodeType.TWICE_VISITED]:  # TODO: decide if all of the types are really NEEDED?
+                    if node.type in self._secret_dict.keys():
+                        self._secret_dict[node.type] += 1
+                    else:
+                        self._secret_dict[node.type] = 1
+                    print(f'dict: {self._secret_dict}')
                     # here the arrow rotates backwards:
                     node.rotate_arrow(
                         (node.x - node.previously_visited_node.x, node.y - node.previously_visited_node.y))
@@ -2157,13 +2164,8 @@ class WaveLee(Algorithm):
                         if neigh != self._obj.end_node:
                             neigh.type = NodeType.NEIGH
                             neigh.update_sprite_colour()
-                            arrow = DrawLib.create_line_arrow(
-                                neigh,
-                                (neigh.x - curr_node.x, neigh.y - curr_node.y),
-                                self._obj
-
-                            )
-                            neigh.arrow_shape = arrow
+                            # here the arrow rotates:
+                            neigh.rotate_arrow((neigh.x - curr_node.x, neigh.y - curr_node.y))
                             neigh.append_arrow(self._obj)
                         self._next_wave_lee.append(neigh)
                         neigh.previously_visited_node = curr_node
@@ -2180,7 +2182,7 @@ class WaveLee(Algorithm):
                 if neigh not in [self._obj.start_node, self._obj.end_node]:
                     neigh.type = NodeType.EMPTY
                     neigh.update_sprite_colour()
-                    neigh.remove_arrow(self._obj)
+                    neigh.remove_arrow_from_sprite_list(self._obj)
             if self._iterations != 0:
                 # the front nodes have become NEIGHS:
                 for node in self._front_wave_lee:
@@ -2222,7 +2224,11 @@ class WaveLee(Algorithm):
                         [NodeType.START_NODE, NodeType.VISITED_NODE, NodeType.WALL]):
                     if front_neigh not in new_front_wave:
                         front_neigh.previously_visited_node = front_node
+                        # here the arrow rotates:
+                        front_neigh.rotate_arrow((front_neigh.x - front_node.x, front_neigh.y - front_node.y))
+                        front_neigh.append_arrow(self._obj)
                         new_front_wave.add(front_neigh)
+
             front_wave = set() | new_front_wave
 
 
@@ -2295,12 +2301,10 @@ class BfsDfs(Algorithm):
                 # then changing neigh's pars:
                 neigh.type = NodeType.NEIGH
                 neigh.update_sprite_colour()
-                arrow = DrawLib.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y),
-                                                  self._obj)
-                if neigh.arrow_shape is not None:
-                    neigh.remove_arrow(self._obj)
-                neigh.arrow_shape = arrow
-                neigh.append_arrow(self._obj)
+                # here the arrow rotates:
+                neigh.rotate_arrow((neigh.x - curr_node.x, neigh.y - curr_node.y))
+                if neigh.guiding_arrow_sprite not in self._obj.arrow_sprite_list:
+                    neigh.append_arrow(self._obj)
             neigh.previously_visited_node = curr_node
             # BFS:
             if self._is_bfs:
@@ -2319,18 +2323,15 @@ class BfsDfs(Algorithm):
                 node = self._obj.grid[y][x]
                 node.restore(neigh)
                 if node not in [self._obj.start_node, self._obj.end_node]:
-                    node.remove_arrow(self._obj)
+                    node.remove_arrow_from_sprite_list(self._obj)
                 if node.type == NodeType.NEIGH:
                     # here the arrow rotates backwards:
-                    arrow = DrawLib.create_line_arrow(
-                        node,
+                    node.rotate_arrow(
                         (
                             node.x - self._curr_node_dict[self._iterations].x,
                             node.y - self._curr_node_dict[self._iterations].y
-                        ),
-                        self._obj
+                        )
                     )
-                    node.arrow_shape = arrow
                     node.append_arrow(self._obj)
                     # deque changing:
                     # BFS:
@@ -2375,6 +2376,9 @@ class BfsDfs(Algorithm):
                 if neigh.type != NodeType.END_NODE:
                     neigh.type = NodeType.NEIGH
                     neigh.update_sprite_colour()
+                    neigh.rotate_arrow((neigh.x - current_node.x, neigh.y - current_node.y))
+                    if neigh.guiding_arrow_sprite not in self._obj.arrow_sprite_list:
+                        neigh.append_arrow(self._obj)
                 neigh.previously_visited_node = current_node
                 # BFS:
                 if self._is_bfs:
@@ -3780,3 +3784,4 @@ if __name__ == "__main__":
 # TODO: MULTIPROCESSING FOR GUIDING ARROWS INITIALIZATION
 # TODO: SPRITE-GUIDING_ARROWS AND THEIR FURTHER ROTATION/DRAWING
 # TODO: BACKGROUND SAVING DAEMON PROCESS, BACKGROUND INITIALIZATION
+# TODO: SPEED UP BFS&DFS full algo methods!!!

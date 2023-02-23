@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
 
+# sys:
+from pathlib import Path
+
 # functools:
 import functools
 from functools import reduce
 
 # math:
 import math
+from typing import Any
+
 import numpy as np
 
 # logging
@@ -27,6 +32,12 @@ import heapq as hq
 # graphics:
 import arcade
 import arcade.gui
+from arcade import load_texture
+
+# image/drawing:
+import PIL.Image
+import PIL.ImageOps
+import PIL.ImageDraw
 
 # windows:
 import pyglet
@@ -47,7 +58,7 @@ def timer(func):
     def _wrapper(*args, **kwargs):
         start = time.perf_counter()
         f = func(*args, **kwargs)
-        runtime = round(1000 * (time.perf_counter() - start), 2)
+        runtime = 1000 * (time.perf_counter() - start)
         args[0].time_elapsed += runtime
         return f
 
@@ -369,21 +380,18 @@ class Lastar(arcade.Window):
         """chooses a_star as current_algo"""
         self._grid.clear_grid()
         self._current_algo = self._astar
-        self._current_algo.nodes_init()
 
     @logged()
     def choose_wave_lee(self):
         """chooses wave_lee as current_algo"""
         self._grid.clear_grid()
         self._current_algo = self._wave_lee
-        self._current_algo.nodes_init()
 
     @logged()
     def choose_bfs_dfs(self):
         """chooses bfs_dfs as current_algo"""
         self._grid.clear_grid()
         self._current_algo = self._bfs_dfs
-        self._current_algo.nodes_init()
 
     @logged()
     def aux_clearing(self):
@@ -493,6 +501,15 @@ class Lastar(arcade.Window):
         # AUX:
         # sprite = arcade.Sprite('right-arrow-black-triangle.png', 0.125,  center_x=1000, center_y=500)
         # sprite.angle = 90
+        # sprite.draw()
+
+        # sprite = SpriteTriangle(98, arcade.color.BLACK)
+        # sprite.center_x, sprite.center_y = 1000 + 25, 500 + 25
+        # # sprite.angle = 90
+        # sprite.draw()
+
+        # sprite = arcade.SpriteCircle(100, arcade.color.PURPLE)
+        # sprite.center_x, sprite.center_y = 1000, 500
         # sprite.draw()
 
     def play_button_func(self, is_pressed: bool = False):
@@ -802,9 +819,9 @@ class Grid(Drawable, FuncConnected):
         self._grid_line_shapes = arcade.ShapeElementList()
         # algo steps visualization:
         self._triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
-        self._arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
+        self._arrow_sprite_list = arcade.SpriteList()  # <<-- for more comprehensive algorithm's visualization
         # guiding arrows presets:
-        self._preset_arrows = dict()
+        self._preset_arrows = []
         # sizes:
         self._X, self._Y = SCREEN_HEIGHT - 60, SCREEN_WIDTH - 250
         # scaling:  TODO: add AI to calculate the sizes for every resolution possible:
@@ -827,16 +844,6 @@ class Grid(Drawable, FuncConnected):
         self._loading_ind = 0
 
     # INITIALIZATION AUX:
-    @logged()
-    def initialize_guiding_arrows(self):
-        self._preset_arrows = dict()
-        for y in range(self._tiles_q):
-            # self._preset_arrows.append([])
-            for x in range(self._hor_tiles_q):
-                # self._preset_arrows[y].append(dict())
-                for delta in [(0, 1), (1, 0), (0, -1), (-1, 0)]:  # (x, y)
-                    self._preset_arrows[(y, x, delta)] = DrawLib.create_line_arrow(self._grid[y][x], delta, self)
-
     @logged()
     def get_pars(self):
         """calculating grid visualization pars for vertical tiles number given"""
@@ -961,12 +968,12 @@ class Grid(Drawable, FuncConnected):
         return self._line_width
 
     @property
-    def arrow_shape_list(self):
-        return self._arrow_shape_list
+    def arrow_sprite_list(self):
+        return self._arrow_sprite_list
 
-    @arrow_shape_list.setter
-    def arrow_shape_list(self, arrow_shape_list):
-        self._arrow_shape_list = arrow_shape_list
+    @arrow_sprite_list.setter
+    def arrow_sprite_list(self, arrow_sprite_list):
+        self._arrow_sprite_list = arrow_sprite_list
 
     @property
     def triangle_shape_list(self):
@@ -1060,7 +1067,6 @@ class Grid(Drawable, FuncConnected):
     def setup(self):
         # initialization:
         self.initialize()
-        self.initialize_guiding_arrows()
         # sprites, shapes and etc...
         # blocks:
         self.get_sprites()
@@ -1081,8 +1087,8 @@ class Grid(Drawable, FuncConnected):
         self._node_sprite_list.draw()
         # arrows:
         if self._guide_arrows_ind is not None:
-            if len(self.arrow_shape_list) > 0:
-                self.arrow_shape_list.draw()
+            if len(self.arrow_sprite_list) > 0:
+                self.arrow_sprite_list.draw()
         # path arrows:
         if self._triangle_shape_list:
             self._triangle_shape_list.draw()
@@ -1090,10 +1096,13 @@ class Grid(Drawable, FuncConnected):
     @logged()
     # creates sprites for all the nodes:
     def get_sprites(self):  # batch -->
-        """nodes' sprites initialization for fast further batch-drawing"""
+        """nodes' and guiding arrows' sprites initialization for fast further batch-drawing"""
         for row in self.grid:
             for node in row:
+                # creates a node's sprite:
                 node.get_solid_colour_sprite(self)
+                # creates a guiding arrow:
+                node.get_guiding_arrow(self)
         self.log.info(f"{self._tiles_q * self._hor_tiles_q} grid nodes' sprites initialization")
 
     @logged()
@@ -1151,7 +1160,7 @@ class Grid(Drawable, FuncConnected):
             if button == arcade.MOUSE_BUTTON_LEFT:
                 self.log.info('MOUSE_BUTTON_LEFT -> set START_NODE')
                 sn = self.get_node(x, y)
-                if sn and sn != self.end_node:
+                if sn:
                     if self._start_node:
                         self._start_node.type = NodeType.EMPTY
                         self._start_node.update_sprite_colour()
@@ -1161,7 +1170,7 @@ class Grid(Drawable, FuncConnected):
             elif button == arcade.MOUSE_BUTTON_RIGHT:
                 self.log.info('MOUSE_BUTTON_RIGHT -> set END_NODE')
                 en = self.get_node(x, y)
-                if en and en != self.start_node:
+                if en:
                     if self._end_node:
                         self._end_node.type = NodeType.EMPTY
                         self._end_node.update_sprite_colour()
@@ -1193,7 +1202,7 @@ class Grid(Drawable, FuncConnected):
     def build_wall(self, x, y):
         # now building the walls:
         n = self.get_node(x, y)
-        if n and n.type == NodeType.EMPTY:
+        if n and n.type != NodeType.WALL:
             self.log.info(f'Building a wall')
             n.type = NodeType.WALL
             self._walls.add(self.number_repr(n))
@@ -1252,6 +1261,7 @@ class Grid(Drawable, FuncConnected):
         self._end_node = None
         self._node_chosen = None
         self._node_sprite_list = arcade.SpriteList()
+        self._arrow_sprite_list = arcade.SpriteList()
         self._grid_line_shapes = arcade.ShapeElementList()
         self._walls = set()
         self.setup()
@@ -1276,12 +1286,9 @@ class Grid(Drawable, FuncConnected):
         # clearing the every node:
         for row in self._grid:
             for node in row:
-                if node.type not in [NodeType.START_NODE, NodeType.END_NODE]:
-                    node.clear()
-                elif node.type in [NodeType.START_NODE, NodeType.END_NODE]:
-                    node.heur_clear()
+                node.clear()
         # clearing the nodes-relating pars of the game:
-        # self._start_node, self._end_node = None, None
+        self._start_node, self._end_node = None, None
         self.aux_clear()
         self._walls = set()
         # memoization for possible undoing:
@@ -1291,7 +1298,7 @@ class Grid(Drawable, FuncConnected):
     def aux_clear(self):
         # grid's pars clearing:
         self._triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
-        self._arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
+        self._arrow_sprite_list = arcade.SpriteList()  # <<-- for more comprehensive algorithm's visualization
         # builder clearing:
         self._walls_built_erased = [([], True)]
         self._walls_index = 0
@@ -1389,15 +1396,16 @@ class Node:
     extended_walk = [(dy, dx) for dx in range(-1, 2) for dy in range(-1, 2) if (dy, dx) != (0, 0)]
     # for a_star (accurate removing from heap):
     aux_equal_flag = False
+    # guiding arrow dirs dict:
+    dirs_to_angles = {(1, 0): 0, (0, 1): 90, (-1, 0): 180, (0, -1): 270}
 
     def __init__(self, y, x, val, node_type: 'NodeType'):
         # logger
         self.log = logging.getLogger('Node')
-        # type and sprite:
+        # type and sprites:
         self.type = node_type
         self.sprite = None
-        # arrow shape:
-        self.arrow_shape = None  # for more comprehensive visualization, consist of three line shapes
+        self.guiding_arrow_sprite = None  # for more comprehensive visualization
         # important pars:
         self.y, self.x = y, x
         self.val = val
@@ -1413,21 +1421,12 @@ class Node:
                            3: self.no_heuristic}
         self.tiebreakers = {0: self.vector_cross_product_deviation, 1: self.coordinates_pair}
 
-    # TODO: HOW TO MAKE THESE PROPERTIES?
-    # @property
-    # def cx(self):
-    #     return 5 + node.x * grid.tile_size + grid.tile_size / 2
-    #
-    # @property
-    # def cy(self):
-    #     return 5 + node.y * grid.tile_size + grid.tile_size / 2
-
     @staticmethod
     def set_greedy(greedy_ind: int):
         Node.is_greedy = False if greedy_ind is None else True
 
     # COPYING/RESTORING:
-    @logged()
+    @logged(is_used=False)
     def aux_copy(self):
         """makes an auxiliary copy for a node, it is needed for a_star interactive"""
         copied_node = Node(self.y, self.x, self.type, self.val)
@@ -1438,7 +1437,7 @@ class Node:
         copied_node.previously_visited_node = self.previously_visited_node
         return copied_node
 
-    @logged()
+    @logged(is_used=False)
     def restore(self, copied_node: 'Node'):
         """restore the node from its auxiliary copy"""
         self.g = copied_node.g
@@ -1449,25 +1448,25 @@ class Node:
         self.previously_visited_node = copied_node.previously_visited_node
 
     # SMART COPYING/RESTORING:
-    @logged()
+    @logged(is_used=False)
     def smart_copy(self, attributes: list[str]):
         copied_node = Node(self.y, self.x, self.type, self.val)
         self.smart_core(copied_node, attributes)
         return copied_node
 
-    @logged()
+    @logged(is_used=False)
     def smart_restore(self, other: 'Node', attributes: list[str]):
         other.smart_core(self, attributes)
         if 'type' in attributes:
             self.update_sprite_colour()
 
-    @logged()
+    @logged(is_used=False)
     def smart_core(self, other: 'Node', attributes: list[str]):
         for attribute in attributes:
             other.__dict__[attribute] = self.__getattribute__(attribute)
 
     # TYPE/SPRITE CHANGE/INIT:
-    @logged(is_used=graphic_logging)  # TODO: DANGEROUS TO LOG!!!
+    # @logged(is_used=graphic_logging)  # TODO: DANGEROUS TO LOG!!!
     def get_solid_colour_sprite(self, grid: Grid):
         """makes a solid colour sprite for a node"""
         cx, cy, size, colour = self.get_center_n_sizes(grid)
@@ -1487,18 +1486,43 @@ class Node:
         """updates the sprite's color (calls after node's type switching)"""
         self.sprite.color = self.type.value
 
+    # GUIDING ARROWS CHANGE/INIT:
+    def get_guiding_arrow(self, grid: Grid):
+        """makes a guiding arrow sprite for a node"""
+        cx, cy = 5 + grid.tile_size * self.x + grid.tile_size / 2, 5 + grid.tile_size * self.y + grid.tile_size / 2
+        size = 2 * grid.tile_size // 3
+        color = arcade.color.BLACK
+        self.guiding_arrow_sprite = SpriteTriangle(size, color)
+        self.guiding_arrow_sprite.center_x, self.guiding_arrow_sprite.center_y = cx, cy
+        # self.guiding_arrow_sprite.angle = 0
+        # print(f'arrow type: {type(self.guiding_arrow_sprite)}')
+
+    def rotate_arrow(self, delta: tuple[int, int]):
+        """
+        rotates the guiding arrow to the direction given
+
+        :param tuple[int, int] delta: tuple of (dx, dy) that defines
+        the direction the guiding arrow is pointed to
+
+        """
+
+        # here the arrow rotates:
+        self.guiding_arrow_sprite.angle = self.dirs_to_angles[delta]
+
     def append_arrow(self, grid: Grid):
-        grid.arrow_shape_list.append(self.arrow_shape)
+        grid.arrow_sprite_list.append(self.guiding_arrow_sprite)
 
     # TODO: DANGEROUS TO LOG!!!
-    # removes the arrow shape of the node from the arrow_shape_list in Astar class
     def remove_arrow(self, grid: Grid):
-        grid.arrow_shape_list.remove(self.arrow_shape)
-        self.arrow_shape = None
+        """removes the guiding arrow sprite of the node from the arrow_sprite_list"""
+        grid.arrow_sprite_list.remove(self.guiding_arrow_sprite)
+        self.guiding_arrow_sprite = None
 
     # TODO: DANGEROUS TO LOG!!!
     def remove_arrow_from_shape_list(self, grid: Grid):
-        grid.arrow_shape_list.remove(self.arrow_shape)
+        grid.arrow_sprite_list.remove(self.guiding_arrow_sprite)
+
+    # str and repr DUNDERS:
 
     def __str__(self):
         return f'{self.y, self.x} -->> {self.val}'
@@ -1506,7 +1530,7 @@ class Node:
     def __repr__(self):
         return str(self)
 
-    # DUNDERS:
+    # other important DUNDERS:
     def __eq__(self, other):
         if type(self) != type(other):
             return False
@@ -1533,7 +1557,7 @@ class Node:
         self.heur_clear()
         self.type = NodeType.EMPTY
         self.update_sprite_colour()
-        self.arrow_shape = None
+        # self.guiding_arrow_sprite = None
 
     # TODO: DANGEROUS TO LOG!!!
     # @logged()
@@ -1613,7 +1637,6 @@ class Algorithm(Connected):
 
     def connect(self, grid: Grid):
         self._obj = grid
-        # important nodes initialization:
 
     @property
     def path(self):
@@ -1642,7 +1665,7 @@ class Algorithm(Connected):
     def base_clear(self):
         # visualization:
         self._obj.triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
-        self._obj.arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
+        self._obj.arrow_sprite_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
         # path:
         self._path = None
         self._path_index = 0
@@ -1653,15 +1676,6 @@ class Algorithm(Connected):
     @abstractmethod
     def clear(self):
         ...
-
-    def nodes_init(self):
-        # start and end nodes:
-        self._obj.start_node = self._obj.grid[self._obj.tiles_q - 1][0]
-        self._obj.start_node.type = NodeType.START_NODE
-        self._obj.start_node.update_sprite_colour()
-        self._obj.end_node = self._obj.grid[0][self._obj.hor_tiles_q - 1]
-        self._obj.end_node.type = NodeType.END_NODE
-        self._obj.end_node.update_sprite_colour()                                # 98
 
     @abstractmethod
     def prepare(self):
@@ -1838,7 +1852,7 @@ class Astar(Algorithm, FuncConnected):
         self._path = None
         # SETTINGS menu should be closed during the algo's interactive phase!!!
         # arrows list renewal:
-        self._obj.arrow_shape_list = arcade.ShapeElementList()
+        self._obj.arrow_sprite_list = arcade.SpriteList()
 
     def algo_up(self):
         if self._iterations == 0:
@@ -1897,13 +1911,13 @@ class Astar(Algorithm, FuncConnected):
                 if neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:  # neigh not in self.nodes_visited and
                     neigh.type = NodeType.NEIGH
                     neigh.update_sprite_colour()
-                    arrow = DrawLib.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y),
-                                                      self._obj)
+                    # operations with arrows:
+                    print(f'neigh: {neigh}, arrow type: {neigh.guiding_arrow_sprite}')
+                    neigh.rotate_arrow((neigh.x - curr_node.x, neigh.y - curr_node.y))
+                    # arrow = DrawLib.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y), self._obj)
                     # here the arrow rotates (re-estimating of neigh g-cost):
-                    if neigh.arrow_shape is not None:
-                        neigh.remove_arrow(self._obj)
-                    neigh.arrow_shape = arrow
-                    neigh.append_arrow(self._obj)
+                    if neigh.guiding_arrow_sprite not in self._obj.arrow_sprite_list:
+                        neigh.append_arrow(self._obj)
                 # adding all the valid neighs to the priority heap:
                 hq.heappush(self._nodes_to_be_visited, neigh)
         # incrementation:
@@ -1951,15 +1965,18 @@ class Astar(Algorithm, FuncConnected):
                         'previously_visited_node'
                     ]
                 )
-                if node.type not in [NodeType.START_NODE, NodeType.END_NODE]:
-                    if node.arrow_shape is not None:
-                        node.remove_arrow(self._obj)
+                # operations with arrows:
+                if node.type not in [NodeType.START_NODE, NodeType.END_NODE, NodeType.NEIGH]:
+                    if node.guiding_arrow_sprite in self._obj.arrow_sprite_list:
+                        node.remove_arrow_from_shape_list(self._obj)
                 if node.type == NodeType.NEIGH:
                     # here the arrow rotates backwards:
-                    arrow = DrawLib.create_line_arrow(node, (
-                        node.x - node.previously_visited_node.x, node.y - node.previously_visited_node.y), self._obj)
-                    node.arrow_shape = arrow
-                    node.append_arrow(self._obj)
+                    node.rotate_arrow(
+                        (node.x - node.previously_visited_node.x, node.y - node.previously_visited_node.y))
+                    # arrow = DrawLib.create_line_arrow(node, (
+                    #     node.x - node.previously_visited_node.x, node.y - node.previously_visited_node.y), self._obj)
+                    # node.arrow_shape = arrow
+                    # node.append_arrow(self._obj)
             # adding current node (popped out at the current iteration) to the heap:
             hq.heappush(self._nodes_to_be_visited, curr_node)
             # iteration steps back:
@@ -2062,7 +2079,7 @@ class Astar(Algorithm, FuncConnected):
 
                     if neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:
                         y, x = neigh.y, neigh.x
-                        arrow = self._obj.preset_arrows[y, x, (neigh.x - curr_node.x, neigh.y - curr_node.y)]
+                        arrow = self._obj.preset_arrows[y][x][(neigh.x - curr_node.x, neigh.y - curr_node.y)]
                         # here the arrow rotates (re-estimating of neigh g-cost):
                         neigh.arrow_shape = arrow
 
@@ -3686,6 +3703,7 @@ class Info(Drawable, FuncConnected):
 
 # LEVI GIN AREA:
 class MessageBox(Drawable, Interactable):
+    # TODO: to implement after UI
 
     def setup(self):
         pass
@@ -3710,6 +3728,68 @@ class MessageBox(Drawable, Interactable):
 
     def on_key_release(self):
         pass
+
+
+class SpriteTriangle(arcade.Sprite):
+    """
+    This sprite is just a triangle sprite of one solid color. No need to
+    use an image file.
+
+
+    :param float size: base size of the triangle
+    :param Color color: Color of the triangle
+
+    """
+
+    def __init__(self, size: int, color: arcade.Color):
+        super().__init__()
+
+        # determine the texture's cache name
+        cache_name = self._build_cache_name("triangle_texture", size, color[0], color[1], color[2])
+
+        # use the named texture if it was already made
+        if cache_name in load_texture.texture_cache:  # type: ignore
+            texture = load_texture.texture_cache[cache_name]  # type: ignore
+
+        # generate the texture if it's not in the cache
+        else:
+            texture = self._make_triangle_texture(size, color, name=cache_name)
+            load_texture.texture_cache[cache_name] = texture  # type: ignore
+
+        # apply results to the new sprite
+        self.texture = texture
+        self._points = self.texture.hit_box_points
+
+    def _build_cache_name(*args: Any, separator: str = "-") -> str:
+        """
+        Generate cache names from the given parameters
+
+        This is mostly useful when generating textures with many parameters
+
+        :param args: params to format
+        :param separator: separator character or string between params
+
+        :return: Formatted cache string representing passed parameters
+        """
+        return separator.join([f"{arg}" for arg in args])
+
+    def _make_triangle_texture(self, base: int, color: arcade.Color = arcade.color.BLACK,
+                               name: str = None) -> arcade.Texture:
+        # name for cashing:
+        name = name or self._build_cache_name("triangle_texture", base, color[0], color[1], color[2])
+        # img creating:
+        bg_color = (0, 0, 0, 0)  # fully transparent
+        img = PIL.Image.new("RGBA", (base, base), bg_color)
+        draw = PIL.ImageDraw.Draw(img)
+        # 3 sides for triangle:
+        b = base - 1
+        _h = b // 6
+        # TODO: regular polygon -->> polygon (triangle must be right for correct visualization)...
+        # draw.regular_polygon((r, r, r), n_sides=3, fill=color)
+        draw.polygon(((5 * _h, 3 * _h), (2 * _h, 0), (2 * _h, 6 * _h)), fill=color)
+        # draw.ellipse((0, 0, diameter - 1, diameter - 1), fill=color)
+        # new Texture returning:
+        return arcade.Texture(name, img)
 
 
 # enum for node type:

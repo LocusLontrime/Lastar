@@ -802,7 +802,7 @@ class Grid(Drawable, FuncConnected):
         self._grid_line_shapes = arcade.ShapeElementList()
         # algo steps visualization:
         self._triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
-        self._arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
+        self._arrow_sprite_list = arcade.SpriteList()  # <<-- for more comprehensive algorithm's visualization
         # guiding arrows presets:
         self._preset_arrows = dict()
         # sizes:
@@ -812,7 +812,8 @@ class Grid(Drawable, FuncConnected):
         self._scale_names = {0: 10, 1: 15, 2: 22, 3: 33, 4: 45, 5: 66, 6: 90,
                              7: 110}  # {0: 5, 1: 10, 2: 15, 3: 22, 4: 33, 5: 45, 6: 66, 7: 90, 8: 110, 9: 165, 10: 198}  # factors of 990 num
         # guiding arrows dict:
-        self._arrows_names = {i: f'Arrows/Arrow_{(q := self._scale_names[i])}x{self.get_hor_tiles(q)}.png' for i in range(len(self._scale_names))}
+        self._arrows_names = {i: f'Arrows/Arrow_{self._scale_names[i]}x{self.get_hor_tiles(i)}.png' for i in
+                              range(len(self._scale_names))}
         # self.a = arcade.Sprite('Arrows/Arrow_5x3.png')
         # pars:
         self._tiles_q = None
@@ -832,13 +833,9 @@ class Grid(Drawable, FuncConnected):
     # INITIALIZATION AUX:
     @logged()
     def initialize_guiding_arrows(self):
-        self._preset_arrows = dict()
         for y in range(self._tiles_q):
-            # self._preset_arrows.append([])
             for x in range(self._hor_tiles_q):
-                # self._preset_arrows[y].append(dict())
-                for delta in [(0, 1), (1, 0), (0, -1), (-1, 0)]:  # (x, y)
-                    self._preset_arrows[(y, x, delta)] = DrawLib.create_line_arrow(self._grid[y][x], delta, self)
+                self._grid[y][x].get_guiding_arrow(self)
 
     @logged()
     def get_pars(self):
@@ -908,6 +905,14 @@ class Grid(Drawable, FuncConnected):
         return self.grid[y][x] if 0 <= x < self._hor_tiles_q and 0 <= y < self.tiles_q else None
 
     @property
+    def arrows_names(self):
+        return self._arrows_names
+
+    @property
+    def scale(self):
+        return self._scale
+
+    @property
     def grid(self):
         return self._grid
 
@@ -964,12 +969,12 @@ class Grid(Drawable, FuncConnected):
         return self._line_width
 
     @property
-    def arrow_shape_list(self):
-        return self._arrow_shape_list
+    def arrow_sprite_list(self):
+        return self._arrow_sprite_list
 
-    @arrow_shape_list.setter
-    def arrow_shape_list(self, arrow_shape_list):
-        self._arrow_shape_list = arrow_shape_list
+    @arrow_sprite_list.setter
+    def arrow_sprite_list(self, arrow_sprite_list):
+        self._arrow_sprite_list = arrow_sprite_list
 
     @property
     def triangle_shape_list(self):
@@ -1084,8 +1089,8 @@ class Grid(Drawable, FuncConnected):
         self._node_sprite_list.draw()
         # arrows:
         if self._guide_arrows_ind is not None:
-            if len(self.arrow_shape_list) > 0:
-                self.arrow_shape_list.draw()
+            if len(self.arrow_sprite_list) > 0:
+                self.arrow_sprite_list.draw()
         # path arrows:
         if self._triangle_shape_list:
             self._triangle_shape_list.draw()
@@ -1294,7 +1299,7 @@ class Grid(Drawable, FuncConnected):
     def aux_clear(self):
         # grid's pars clearing:
         self._triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
-        self._arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
+        self._arrow_sprite_list = arcade.SpriteList()  # <<-- for more comprehensive algorithm's visualization
         # builder clearing:
         self._walls_built_erased = [([], True)]
         self._walls_index = 0
@@ -1379,10 +1384,6 @@ class Grid(Drawable, FuncConnected):
     def mode(self):
         return self._mode
 
-    @property
-    def preset_arrows(self):
-        return self._preset_arrows
-
 
 # class for a node representation:
 class Node:
@@ -1392,6 +1393,8 @@ class Node:
     extended_walk = [(dy, dx) for dx in range(-1, 2) for dy in range(-1, 2) if (dy, dx) != (0, 0)]
     # for a_star (accurate removing from heap):
     aux_equal_flag = False
+    # guiding arrow dirs dict:
+    dirs_to_angles = {(1, 0): 0, (0, 1): 90, (-1, 0): 180, (0, -1): 270}
 
     def __init__(self, y, x, val, node_type: 'NodeType'):
         # logger
@@ -1399,8 +1402,7 @@ class Node:
         # type and sprite:
         self.type = node_type
         self.sprite = None
-        # arrow shape:
-        self.arrow_shape = None  # for more comprehensive visualization, consist of three line shapes
+        self.guiding_arrow_sprite = None  # for more comprehensive visualization, consist of three line shapes
         # important pars:
         self.y, self.x = y, x
         self.val = val
@@ -1490,18 +1492,41 @@ class Node:
         """updates the sprite's color (calls after node's type switching)"""
         self.sprite.color = self.type.value
 
+    # GUIDING ARROWS CHANGE/INIT:
+    def get_guiding_arrow(self, grid: Grid):
+        """makes a guiding arrow sprite for a node"""
+        cx, cy = 5 + grid.tile_size * self.x + grid.tile_size / 2, 5 + grid.tile_size * self.y + grid.tile_size / 2
+        # size = 2 * grid.tile_size // 3
+        # color = arcade.color.BLACK
+        self.guiding_arrow_sprite = arcade.Sprite(grid.arrows_names[grid.scale], 1, center_x=cx, center_y=cy)
+        self.guiding_arrow_sprite.center_x, self.guiding_arrow_sprite.center_y = cx, cy
+        # self.guiding_arrow_sprite.angle = 0
+        # print(f'arrow type: {type(self.guiding_arrow_sprite)}')
+
+    def rotate_arrow(self, delta: tuple[int, int]):
+        """
+        rotates the guiding arrow to the direction given
+
+        :param tuple[int, int] delta: tuple of (dx, dy) that defines
+        the direction the guiding arrow is pointed to
+
+        """
+
+        # here the arrow rotates:
+        self.guiding_arrow_sprite.angle = self.dirs_to_angles[delta]
+
     def append_arrow(self, grid: Grid):
-        grid.arrow_shape_list.append(self.arrow_shape)
+        grid.arrow_sprite_list.append(self.guiding_arrow_sprite)
 
     # TODO: DANGEROUS TO LOG!!!
-    # removes the arrow shape of the node from the arrow_shape_list in Astar class
     def remove_arrow(self, grid: Grid):
-        grid.arrow_shape_list.remove(self.arrow_shape)
-        self.arrow_shape = None
+        """removes the guiding arrow sprite of the node from the arrow_sprite_list"""
+        grid.arrow_sprite_list.remove(self.guiding_arrow_sprite)
+        self.guiding_arrow_sprite = None
 
     # TODO: DANGEROUS TO LOG!!!
-    def remove_arrow_from_shape_list(self, grid: Grid):
-        grid.arrow_shape_list.remove(self.arrow_shape)
+    def remove_arrow_from_sprite_list(self, grid: Grid):
+        grid.arrow_sprite_list.remove(self.guiding_arrow_sprite)
 
     def __str__(self):
         return f'{self.y, self.x} -->> {self.val}'
@@ -1536,7 +1561,6 @@ class Node:
         self.heur_clear()
         self.type = NodeType.EMPTY
         self.update_sprite_colour()
-        self.arrow_shape = None
 
     # TODO: DANGEROUS TO LOG!!!
     # @logged()
@@ -1645,7 +1669,7 @@ class Algorithm(Connected):
     def base_clear(self):
         # visualization:
         self._obj.triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
-        self._obj.arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
+        self._obj.arrow_sprite_list = arcade.SpriteList()  # <<-- for more comprehensive algorithm's visualization
         # path:
         self._path = None
         self._path_index = 0
@@ -1664,7 +1688,7 @@ class Algorithm(Connected):
         self._obj.start_node.update_sprite_colour()
         self._obj.end_node = self._obj.grid[0][self._obj.hor_tiles_q - 1]
         self._obj.end_node.type = NodeType.END_NODE
-        self._obj.end_node.update_sprite_colour()                                # 98
+        self._obj.end_node.update_sprite_colour()  # 98
 
     @abstractmethod
     def prepare(self):
@@ -1699,7 +1723,7 @@ class Algorithm(Connected):
             node = self._path[self._path_index + 1]
             # if self.inter_types[2] == InterType.PRESSED:
             if node not in [self._obj.start_node, self._obj.end_node]:
-                node.remove_arrow_from_shape_list(self._obj)
+                node.remove_arrow_from_sprite_list(self._obj)
             # index's step up:
             self._path_index += 1
 
@@ -1723,8 +1747,8 @@ class Algorithm(Connected):
             if node.type not in [NodeType.START_NODE, NodeType.END_NODE]:
                 node.type = NodeType.PATH_NODE
                 node.update_sprite_colour()
-            if node.arrow_shape is not None:
-                node.remove_arrow(self._obj)
+            if node.guiding_arrow_sprite is not None:  # TODO: remove this condition, it is not NECESSARY!
+                node.remove_arrow_from_sprite_list(self._obj)
             if i + 1 < len(self.path):
                 p = -self.path[i + 1].x + self.path[i].x, \
                     -self.path[i + 1].y + self.path[i].y
@@ -1841,7 +1865,7 @@ class Astar(Algorithm, FuncConnected):
         self._path = None
         # SETTINGS menu should be closed during the algo's interactive phase!!!
         # arrows list renewal:
-        self._obj.arrow_shape_list = arcade.ShapeElementList()
+        self._obj.arrow_sprite_list = arcade.SpriteList()
 
     def algo_up(self):
         if self._iterations == 0:
@@ -1900,13 +1924,10 @@ class Astar(Algorithm, FuncConnected):
                 if neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:  # neigh not in self.nodes_visited and
                     neigh.type = NodeType.NEIGH
                     neigh.update_sprite_colour()
-                    arrow = DrawLib.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y),
-                                                      self._obj)
                     # here the arrow rotates (re-estimating of neigh g-cost):
-                    if neigh.arrow_shape is not None:
-                        neigh.remove_arrow(self._obj)
-                    neigh.arrow_shape = arrow
-                    neigh.append_arrow(self._obj)
+                    neigh.rotate_arrow((neigh.x - curr_node.x, neigh.y - curr_node.y))
+                    if neigh.guiding_arrow_sprite not in self._obj.arrow_sprite_list:
+                        neigh.append_arrow(self._obj)
                 # adding all the valid neighs to the priority heap:
                 hq.heappush(self._nodes_to_be_visited, neigh)
         # incrementation:
@@ -1954,15 +1975,14 @@ class Astar(Algorithm, FuncConnected):
                         'previously_visited_node'
                     ]
                 )
-                if node.type not in [NodeType.START_NODE, NodeType.END_NODE]:
-                    if node.arrow_shape is not None:
-                        node.remove_arrow(self._obj)
-                if node.type == NodeType.NEIGH:
+                # operations with arrows:
+                if node.type not in [NodeType.START_NODE, NodeType.END_NODE, NodeType.NEIGH]:
+                    if node.guiding_arrow_sprite in self._obj.arrow_sprite_list:
+                        node.remove_arrow_from_sprite_list(self._obj)
+                if node.type in [NodeType.NEIGH, NodeType.VISITED_NODE, NodeType.TWICE_VISITED]:  # TODO: decide if all of the types are really NEEDED?
                     # here the arrow rotates backwards:
-                    arrow = DrawLib.create_line_arrow(node, (
-                        node.x - node.previously_visited_node.x, node.y - node.previously_visited_node.y), self._obj)
-                    node.arrow_shape = arrow
-                    node.append_arrow(self._obj)
+                    node.rotate_arrow(
+                        (node.x - node.previously_visited_node.x, node.y - node.previously_visited_node.y))
             # adding current node (popped out at the current iteration) to the heap:
             hq.heappush(self._nodes_to_be_visited, curr_node)
             # iteration steps back:
@@ -2064,11 +2084,8 @@ class Astar(Algorithm, FuncConnected):
                     # )
 
                     if neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:
-                        y, x = neigh.y, neigh.x
-                        arrow = self._obj.preset_arrows[y, x, (neigh.x - curr_node.x, neigh.y - curr_node.y)]
                         # here the arrow rotates (re-estimating of neigh g-cost):
-                        neigh.arrow_shape = arrow
-
+                        neigh.rotate_arrow((neigh.x - curr_node.x, neigh.y - curr_node.y))
                     hq.heappush(self._nodes_to_be_visited, neigh)
         # for all neighs that left in the heap we must define the nodetype:
         for neigh in self._nodes_to_be_visited:
@@ -2076,7 +2093,7 @@ class Astar(Algorithm, FuncConnected):
             neigh.update_sprite_colour()
         # now adding the guiding arrow shapes to the Shape list:
         for neigh in self._nodes_visited.keys() | self._nodes_to_be_visited:
-            if neigh.arrow_shape is not None:
+            if neigh.guiding_arrow_sprite is not None:
                 neigh.append_arrow(self._obj)
 
 
@@ -2144,6 +2161,7 @@ class WaveLee(Algorithm):
                                 neigh,
                                 (neigh.x - curr_node.x, neigh.y - curr_node.y),
                                 self._obj
+
                             )
                             neigh.arrow_shape = arrow
                             neigh.append_arrow(self._obj)

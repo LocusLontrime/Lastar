@@ -1427,6 +1427,11 @@ class Node:
     # def cy(self):
     #     return 5 + node.y * grid.tile_size + grid.tile_size / 2
 
+    @property
+    def coords(self):
+        """returns a tuple of node's coordinates: (x, y)"""
+        return self.x, self.y
+
     @staticmethod
     def set_greedy(greedy_ind: int):
         Node.is_greedy = False if greedy_ind is None else True
@@ -2076,20 +2081,6 @@ class Astar(Algorithm, FuncConnected):
                                                                                               neigh)
                     neigh.previously_visited_node = curr_node
 
-                    # if neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:
-                    #     arrow = DrawLib.create_line_arrow(neigh, (neigh.x - curr_node.x, neigh.y - curr_node.y),
-                    #                                       self._obj)
-                    #     # here the arrow rotates (re-estimating of neigh g-cost):
-                    #     if neigh.arrow_shape is not None:
-                    #         neigh.remove_arrow(self._obj)
-                    #     neigh.arrow_shape = arrow
-                    #     neigh.append_arrow(self._obj)
-
-                    # shape = arcade.create_triangles_filled_with_colors(
-                    #     [(9, 98), (98, 989), (989, 98989)],
-                    #     [arcade.color.BLACK, arcade.color.BLACK, arcade.color.BLACK]
-                    # )
-
                     if neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:
                         # here the arrow rotates (re-estimating of neigh g-cost):
                         neigh.rotate_arrow((neigh.x - curr_node.x, neigh.y - curr_node.y))
@@ -2169,7 +2160,7 @@ class WaveLee(Algorithm):
                             neigh.append_arrow(self._obj)
                         self._next_wave_lee.append(neigh)
                         neigh.previously_visited_node = curr_node
-        print(f'iteration: {self._iterations}, CURRENT FRONT: {self._front_wave_lee}')
+        # print(f'iteration: {self._iterations}, CURRENT FRONT: {self._front_wave_lee}')
         self.log.debug(f'iteration: {self._iterations}, CURRENT FRONT: {self._front_wave_lee}')
 
     def algo_down(self):
@@ -2256,7 +2247,7 @@ class BfsDfs(Algorithm):
         self.base_clear()
         # important algo's attributes:
         self._queue = None
-        self._is_bfs = True
+        # self._is_bfs = True
         # dicts:
         self._curr_node_dict = {}
         self._neighs_added_to_heap_dict = {}
@@ -2361,6 +2352,8 @@ class BfsDfs(Algorithm):
     def full_algo(self):
         queue = deque()
         queue.append(self._obj.start_node)
+        # dict of how many times the every current node has become a neigh:
+        times_of_becoming_a_neigh = dict()
         while queue:
             self._iterations += 1
             current_node = queue.pop()
@@ -2375,9 +2368,14 @@ class BfsDfs(Algorithm):
                                                          [NodeType.NEIGH] if self._is_bfs else [])):
                 if neigh.type != NodeType.END_NODE:
                     neigh.type = NodeType.NEIGH
+                    if neigh.coords in times_of_becoming_a_neigh.keys():
+                        times_of_becoming_a_neigh[neigh.coords] += 1
+                    else:
+                        times_of_becoming_a_neigh[neigh.coords] = 1
                     neigh.update_sprite_colour()
                     neigh.rotate_arrow((neigh.x - current_node.x, neigh.y - current_node.y))
-                    if neigh.guiding_arrow_sprite not in self._obj.arrow_sprite_list:
+                    # if neigh.guiding_arrow_sprite not in self._obj.arrow_sprite_list:
+                    if times_of_becoming_a_neigh[neigh.coords] == 0:
                         neigh.append_arrow(self._obj)
                 neigh.previously_visited_node = current_node
                 # BFS:
@@ -3777,12 +3775,13 @@ if __name__ == "__main__":
 
 # TODO: LAYERS OF DRAWING
 # TODO: LOGGING OF MOUSE MOVEMENT, KEYS
-# TODO: BETTER VISUALIZATION FOR FULL ALGO!!!
-# TODO: GUIDING ARROWS OPTION FOR FULL ALGO!!!
+# TODO: BETTER VISUALIZATION FOR FULL ALGO!!! +
+# TODO: GUIDING ARROWS OPTION FOR FULL ALGO!!! +
 # TODO: TRY SOMETHING WITH GETATTR OVERRIDING...
-# TODO: PRESETS FOR ARROWS
 # TODO: MULTIPROCESSING FOR GUIDING ARROWS INITIALIZATION
-# TODO: SPRITE-GUIDING_ARROWS AND THEIR FURTHER ROTATION/DRAWING
+# TODO: SPRITE-GUIDING_ARROWS AND THEIR FURTHER ROTATION/DRAWING +
 # TODO: BACKGROUND SAVING DAEMON PROCESS, BACKGROUND INITIALIZATION
 # TODO: SPEED UP BFS&DFS full algo methods!!!
 # TODO: FIX THE ROTATING of Arrow_90x151!
+# TODO: PATH ARROWS DRAWING OPTIMIZING!!!
+# TODO: DFS INTERACTIVE LOCK

@@ -79,7 +79,7 @@ def lock(func):
 
 
 # logs non-recursive methods:
-def logged(is_debug: bool = True, is_used: bool = True):
+def logged(is_debug: bool = True, is_used: bool = False):
     """decorator-constructor for loggers"""
 
     # inner decorator
@@ -180,8 +180,8 @@ class Lastar(arcade.Window):
         super().__init__(width, height)
         arcade.set_background_color(arcade.color.DUTCH_WHITE)
         self.log = logging.getLogger('Lastar')
-        self.set_update_rate(1 / 60)
-        # sounds:
+        # self.set_update_rate(1 / 60)
+        # sounds:   ы
         self._player = pyglet.media.player.Player()
         # self._source = pyglet.media.load("", streaming=False)
         # self._player.queue(self._source)
@@ -466,10 +466,13 @@ class Lastar(arcade.Window):
         self._mode_info.draw()
         if self._current_algo is not None:
             arcade.Text(self._current_algo.get_current_state(), 225, SCREEN_HEIGHT - 35, arcade.color.BROWN,
-                        bold=True).draw()
+                        bold=True, italic=True).draw()
             if self._grid.node_chosen is not None:
-                arcade.Text(self._current_algo.get_details(), 1050, SCREEN_HEIGHT - 35, arcade.color.BROWN,
-                            bold=True).draw()
+                arcade.Text(
+                    self._current_algo.get_details() + f", type: {str(self._grid.node_chosen.type).replace('NodeType.', '')}",
+                    850, SCREEN_HEIGHT - 35, arcade.color.DARK_BLUE,
+                    bold=True, italic=True).draw()
+
         ...
         # ICONS and MENUS:
         for icon in self._icons_dict.values():
@@ -1089,8 +1092,8 @@ class Grid(Drawable, FuncConnected):
         self._node_sprite_list.draw()
         # arrows:
         if self._guide_arrows_ind is not None:
-            if len(self.arrow_sprite_list) > 0:
-                self.arrow_sprite_list.draw()
+            # if len(self.arrow_sprite_list) > 0:
+            self.arrow_sprite_list.draw()
         # path arrows:
         if self._triangle_shape_list:
             self._triangle_shape_list.draw()
@@ -1702,8 +1705,8 @@ class Algorithm(Connected):
     def get_current_state(self):
         """returns the important pars of the current algo state as f-string"""
         return f"{self._name}'s iters: {self._iterations}, path's length:" \
-               f" {len(self._path) if self._path else 'no path found still'}, " \
-               f"nodes visited: {self.get_nodes_visited_q()}, time elapsed: {self._time_elapsed} ms"
+               f" {len(self._path) if self._path else 'no path'}, " \
+               f"nodes visited: {self.get_nodes_visited_q()}, time elapsed: {self._time_elapsed} ms"  # found still
 
     @abstractmethod
     def get_details(self):
@@ -3659,13 +3662,14 @@ class BfsDfsIcon(Icon, Drawable, Interactable, FuncConnected):
 class Info(Drawable, FuncConnected):
     """displays some information like heuristical and other important node's pars and so on"""
 
-    def __init__(self, cx, cy, height, line_w=2):  # (cx, cy) -->> left bottom vertex
+    def __init__(self, cx, cy, height, line_w=2, double_frame=True):  # (cx, cy) -->> left bottom vertex
         super().__init__()
         self.log = logging.getLogger('Info')
         self._cx, self._cy = cx, cy
         self._width, self._height = 0, height
         self._line_w = line_w
         self._text = None
+        self._double_frame = double_frame
 
     @logged()
     def setup(self):
@@ -3685,26 +3689,29 @@ class Info(Drawable, FuncConnected):
 
     def draw(self):
         self._text.draw()
+
         arcade.draw_rectangle_outline(
             self._cx + self._width / 2, self._cy,
             self._width, self._height,
             arcade.color.BLACK, self._line_w
         )
 
-        arcade.draw_rectangle_outline(
-            self._cx + self._width / 2, self._cy,
-            self._width + 4 * self._line_w, self._height + 4 * self._line_w,
-            arcade.color.BLACK, self._line_w
-        )
+        if self._double_frame:
 
-        for j, i in [(1, 1), (-1, 1), (-1, -1), (1, -1)]:
-            arcade.draw_line(
-                self._cx + self._width / 2 + j * self._width / 2,
-                self._cy + i * self._height / 2,
-                self._cx + self._width / 2 + j * (self._width / 2 + 2 * self._line_w),
-                self._cy + i * (self._height / 2 + 2 * self._line_w),
+            arcade.draw_rectangle_outline(
+                self._cx + self._width / 2, self._cy,
+                self._width + 4 * self._line_w, self._height + 4 * self._line_w,
                 arcade.color.BLACK, self._line_w
             )
+
+            for j, i in [(1, 1), (-1, 1), (-1, -1), (1, -1)]:
+                arcade.draw_line(
+                    self._cx + self._width / 2 + j * self._width / 2,
+                    self._cy + i * self._height / 2,
+                    self._cx + self._width / 2 + j * (self._width / 2 + 2 * self._line_w),
+                    self._cy + i * (self._height / 2 + 2 * self._line_w),
+                    arcade.color.BLACK, self._line_w
+                )
 
 
 # LEVI GIN AREA:
@@ -3785,3 +3792,4 @@ if __name__ == "__main__":
 # TODO: FIX THE ROTATING of Arrow_90x151!
 # TODO: PATH ARROWS DRAWING OPTIMIZING!!!
 # TODO: DFS INTERACTIVE LOCK
+# TODO: INFO BLOCK MUST BE ONLY ONE: ALGO or NODE!!!

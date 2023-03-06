@@ -79,7 +79,7 @@ def lock(func):
 
 
 # logs non-recursive methods:
-def logged(is_debug: bool = True, is_used: bool = False):
+def logged(is_debug: bool = True, is_used: bool = True):
     """decorator-constructor for loggers"""
 
     # inner decorator
@@ -180,7 +180,7 @@ class Lastar(arcade.Window):
         super().__init__(width, height)
         arcade.set_background_color(arcade.color.DUTCH_WHITE)
         self.log = logging.getLogger('Lastar')
-        # self.set_update_rate(1 / 60)
+        self.set_update_rate(1 / 60)
         # sounds:   ы
         self._player = pyglet.media.player.Player()
         # self._source = pyglet.media.load("", streaming=False)
@@ -405,6 +405,8 @@ class Lastar(arcade.Window):
 
     # PRESETS:
     def setup(self):
+        arcade.enable_timings(100)
+        ...
         self.log.debug('.setup() main class call')
         """main set up method, that is called only ones"""
         # algos' menus/icons:
@@ -541,6 +543,8 @@ class Lastar(arcade.Window):
         else:
             self._current_algo.path_up()
 
+        print(f'fps: {arcade.get_fps(30)}')
+
     @logged()
     def down(self):
         """function-connector for left step_button_icon,
@@ -549,6 +553,8 @@ class Lastar(arcade.Window):
             self._current_algo.algo_down()
         else:
             self._current_algo.path_down()
+
+        print(f'fps: {arcade.get_fps(30)}')
 
     @logged()
     def another_ornament(self, is_next: bool):
@@ -1987,7 +1993,7 @@ class Astar(Algorithm, FuncConnected):
                     ]
                 )
                 # operations with arrows:
-                print(f"node's type: {node.type}")
+                # print(f"node's type: {node.type}")
                 if node.type == NodeType.EMPTY:  # not in [NodeType.START_NODE, NodeType.END_NODE]
                     if node.guiding_arrow_sprite in self._obj.arrow_sprite_list:
                         node.remove_arrow_from_sprite_list(self._obj)
@@ -1996,7 +2002,7 @@ class Astar(Algorithm, FuncConnected):
                         self._secret_dict[node.type] += 1
                     else:
                         self._secret_dict[node.type] = 1
-                    print(f'dict: {self._secret_dict}')
+                    # print(f'dict: {self._secret_dict}')
                     # here the arrow rotates backwards:
                     node.rotate_arrow(
                         (node.x - node.previously_visited_node.x, node.y - node.previously_visited_node.y))
@@ -3878,3 +3884,5 @@ if __name__ == "__main__":
 # TODO: PATH ARROWS DRAWING OPTIMIZING!!!
 # TODO: DFS INTERACTIVE LOCK
 # TODO: INFO BLOCK MUST BE ONLY ONE: ALGO or NODE!!!
+# TODO: FIX BUG WITH SCALING ON INTEGRATED VIDEO-CARD
+# TODO: CACHED PROPERTIES!!!

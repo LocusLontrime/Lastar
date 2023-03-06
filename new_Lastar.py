@@ -1420,6 +1420,8 @@ class Node:
         self.heuristics = {0: self.manhattan_distance, 1: self.euclidian_distance, 2: self.max_delta,
                            3: self.no_heuristic}
         self.tiebreakers = {0: self.vector_cross_product_deviation, 1: self.coordinates_pair}
+        # for BellmanFord
+        self.neighs = None
 
     # TODO: HOW TO MAKE THESE PROPERTIES?
     # @property
@@ -2394,99 +2396,82 @@ class BellmanFord(Algorithm):
     def __init__(self):
         super().__init__('BellmanFord')
         self.flag = True
-        self.distance = 1
-        self.iteration_x = None
-        self.iteration_y = None
-        # dicts:
-        self._curr_node_list = []
+        self.negative = False
+        self._global_iterations = None
 
     def clear(self):
         self.base_clear()
-        # dicts:
-        self._curr_node_list = []
 
     def get_details(self):
         node_chosen = self._obj.node_chosen
         return f"Node: {node_chosen.y, node_chosen.x}, val: {node_chosen.val}, " \
                f"times visited: {node_chosen.times_visited}, type: {node_chosen.type}"
 
+    def get_current_state(self):
+        """returns the important pars of the current algo state as f-string"""
+        if not self.negative:
+            return f"{self._name}'s iters: {self._iterations}," \
+                   f"number of full passes: {self._global_iterations} path's length:" \
+                   f" {len(self._path) if self._path else 'no path'}, " \
+                   f"nodes visited: {self.get_nodes_visited_q()}, time elapsed: {self._time_elapsed} ms"  # found still
+        else:
+            return f"{self._name}'s iters: {self._iterations}, number of full passes: {self._global_iterations}, " \
+                   f"no path, negative cycle detected"
+
     def get_nodes_visited_q(self):
-        return len(self._curr_node_list)
+        ...
 
     def prepare(self):
         self._obj.start_node.g = 0
         self._iterations = 0
-        self.iteration_x = 0
-        self.iteration_y = 0
-        # dicts:
-        self._curr_node_list = []
+        self._global_iterations = 0
 
     def algo_up(self):
-        if self.flag:
-            if self.iteration_y < self._obj.tiles_q:
-                if self.iteration_x < self._obj.hor_tiles_q:
-                    curr_node = self._obj.get_node(self.iteration_x, self.iteration_y)
-                    self._curr_node_list.append(curr_node)
-                    if curr_node.type != NodeType.WALL:
-                        curr_node.type = NodeType.VISITED_NODE
-                        curr_node.update_sprite_colour()
-                        for neigh in curr_node.get_neighs(self._obj, [NodeType.WALL]):
-                            neigh.type = NodeType.NEIGH
-                            neigh.update_sprite_colour()
-                            if curr_node.g != np.Infinity and curr_node.g + self.distance < neigh.g:
-                                neigh.g = curr_node.g + self.distance
-                                if neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:
-                                    neigh.type = NodeType.UPDATE_NODE
-                                    neigh.update_sprite_colour()
-                                neigh.previously_visited_node = curr_node
-                                curr_node.times_visited += 1
-                                self.flag = True
-                    self.iteration_x += 1
-                else:
-                    self.iteration_y += 1
-                    self.iteration_x += 0
-            else:
-                self.iteration_y += 0
-                self.iteration_x += 0
-            self._iterations += 1
-        else:
-            self.recover_path()
+        ...
 
     def algo_down(self):
-        pass
+        ...
 
-    # алгоритм проходит по всем нодам по несколько раз, м.б. за посещённые обозначать только те, в
-    # которых меняется дистанция?
-    # Пока посещённые отмечаю так: все ноды, которые посещаются в расках основного цикла + те ноды из соседей,
-    # у которых изменяется дистанция
-
-    # #добавил цвет для этой цели
     def full_algo(self):
-        for i in range(self._obj.tiles_q * self._obj.hor_tiles_q - 1):
-            self._iterations += 1
+        # from зарезервировано
+        def perform_edge_relaxation(out: Node, to: Node):
+            to.g = out.g + out.val
+            if to.type not in [NodeType.START_NODE, NodeType.END_NODE]:
+                if to.times_visited == 0:
+                    to.type = NodeType.VISITED_NODE
+                    to.update_sprite_colour()
+                else:
+                    to.type = NodeType.TWICE_VISITED
+                    to.update_sprite_colour()
+            to.previously_visited_node = out
+            to.times_visited += 1
+
+        for node in self._obj.grid:
+            node.neighs.append(node.get_neighs(self._obj, [NodeType.WALL]))
+        for i in range(self._obj.tiles_q * self._obj.hor_tiles_q):
+            self._global_iterations += 1
             self.flag = False
-            for y in range(self._obj.tiles_q):
-                for x in range(self._obj.hor_tiles_q):
-                    current_node = self._obj.get_node(x, y)
-                    if current_node.type != NodeType.WALL:
-                        current_node.type = NodeType.VISITED_NODE
-                        current_node.update_sprite_colour()
-                        for neigh in current_node.get_neighs(self._obj, [NodeType.WALL]):
-                            neigh.type = NodeType.NEIGH
-                            neigh.update_sprite_colour()
-                            if current_node.g != np.Infinity and current_node.g + self.distance < neigh.g:
-                                neigh.g = current_node.g + self.distance
-                                if neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:
-                                    neigh.type = NodeType.UPDATE_NODE
-                                    neigh.update_sprite_colour()
-                                neigh.previously_visited_node = current_node
-                                current_node.times_visited += 1
-                                self.flag = True
-                    else:
-                        continue
+            for current_node in self._obj.grid:
+                self._iterations += 1
+                if current_node.type != NodeType.WALL:
+                    current_node.type = NodeType.VISITED_NODE
+                    current_node.update_sprite_colour()
+                    for neigh in current_node.neighs:
+                        neigh.type = NodeType.NEIGH
+                        neigh.update_sprite_colour()
+                        if current_node.g != np.Infinity and current_node.g + current_node.val < neigh.g:
+                            perform_edge_relaxation(current_node, neigh)
+                            self.flag = True
+                else:
+                    continue
             if not self.flag:
                 self.recover_path()
                 break
+
+        # если к этому моменту цикл завершился, а флаг так и меняестся на True, то либо ещё одна проверка с прогоном
+        # всех нод -> там также будет изменение -> выдаем сообщение, либо сразу выдавать сообщение (пока сделал так,
+        # сразу добавив во внешний цикл эту проверку)
+        self.negative = True
 
 
 class Menu(Drawable, Interactable, FuncConnected):
@@ -3853,7 +3838,6 @@ class NodeType(Enum):
     END_NODE = (75, 150, 0)
     PATH_NODE = arcade.color.RED
     TWICE_VISITED = arcade.color.PURPLE
-    UPDATE_NODE = arcade.color.ORANGE
 
 
 class InterType(Enum):

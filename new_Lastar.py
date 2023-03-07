@@ -1436,6 +1436,8 @@ class Node:
         self.heuristics = {0: self.manhattan_distance, 1: self.euclidian_distance, 2: self.max_delta,
                            3: self.no_heuristic}
         self.tiebreakers = {0: self.vector_cross_product_deviation, 1: self.coordinates_pair}
+        # for BellmanFord
+        self.neighs = None
 
     # TODO: HOW TO MAKE THESE PROPERTIES?
     # @property
@@ -2410,6 +2412,8 @@ class BellmanFord(Algorithm):
     def __init__(self):
         super().__init__('BellmanFord')
         self.flag = True
+        self.negative = False
+        self._global_iterations = None
 
     def clear(self):
         self.base_clear()
@@ -2419,23 +2423,78 @@ class BellmanFord(Algorithm):
         return f"Node: {node_chosen.y, node_chosen.x}, val: {node_chosen.val}, " \
                f"times visited: {node_chosen.times_visited}, type: {node_chosen.type}"
 
+    def get_current_state(self):
+        """returns the important pars of the current algo state as f-string"""
+        if not self.negative:
+            return f"{self._name}'s iters: {self._iterations}," \
+                   f"number of full passes: {self._global_iterations} path's length:" \
+                   f" {len(self._path) if self._path else 'no path'}, " \
+                   f"nodes visited: {self.get_nodes_visited_q()}, time elapsed: {self._time_elapsed} ms"  # found still
+        else:
+            return f"{self._name}'s iters: {self._iterations}, number of full passes: {self._global_iterations}, " \
+                   f"no path, negative cycle detected"
+
     def get_nodes_visited_q(self):
         # this algo visited all the EMPTY nodes (not the WALLS) at least once:
         return self._obj.tiles_q * self._obj.hor_tiles_q - len(self._obj.walls)
 
+
     def prepare(self):
         self._obj.start_node.g = 0
         self._iterations = 0
+        self._global_iterations = 0
 
     def algo_up(self):
         ...
 
     def algo_down(self):
+        ...
+
+    def full_algo(self):
+        # from зарезервировано
+        def perform_edge_relaxation(out: Node, to: Node):
+            to.g = out.g + out.val
+            if to.type not in [NodeType.START_NODE, NodeType.END_NODE]:
+                if to.times_visited == 0:
+                    to.type = NodeType.VISITED_NODE
+                    to.update_sprite_colour()
+                else:
+                    to.type = NodeType.TWICE_VISITED
+                    to.update_sprite_colour()
+            to.previously_visited_node = out
+            to.times_visited += 1
+
+        for node in self._obj.grid:
+            node.neighs.append(node.get_neighs(self._obj, [NodeType.WALL]))
+        for i in range(self._obj.tiles_q * self._obj.hor_tiles_q):
+            self._global_iterations += 1
+            self.flag = False
+            for current_node in self._obj.grid:
+                self._iterations += 1
+                if current_node.type != NodeType.WALL:
+                    current_node.type = NodeType.VISITED_NODE
+                    current_node.update_sprite_colour()
+                    for neigh in current_node.neighs:
+                        neigh.type = NodeType.NEIGH
+                        neigh.update_sprite_colour()
+                        if current_node.g != np.Infinity and current_node.g + current_node.val < neigh.g:
+                            perform_edge_relaxation(current_node, neigh)
+                            self.flag = True
+                else:
+                    continue
+            if not self.flag:
+                self.recover_path()
+                break
         pass
 
     @timer
     def full_algo(self):
         ...
+
+        # если к этому моменту цикл завершился, а флаг так и меняестся на True, то либо ещё одна проверка с прогоном
+        # всех нод -> там также будет изменение -> выдаем сообщение, либо сразу выдавать сообщение (пока сделал так,
+        # сразу добавив во внешний цикл эту проверку)
+        self.negative = True
 
 
 class Menu(Drawable, Interactable, FuncConnected):

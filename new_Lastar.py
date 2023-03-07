@@ -204,6 +204,7 @@ class Lastar(arcade.Window):
         self._astar = None
         self._wave_lee = None
         self._bfs_dfs = None
+        self._bellman_ford = None
         # current_algo:
         self._current_algo = None
         # self._current_icon ???
@@ -211,10 +212,12 @@ class Lastar(arcade.Window):
         self._astar_icon = None
         self._wave_lee_icon = None
         self._bfs_dfs_icon = None
+        self.bellman_ford_icon = None
         # algos' menus:
         self._wave_lee_menu = None
         self._astar_menu = None
         self._bfs_dfs_menu = None
+        self._bellman_ford_menu = None
         # settings icon:
         self._gear_wheel = None
         # settings menu and arrows menu:
@@ -273,6 +276,8 @@ class Lastar(arcade.Window):
         self._wave_lee.connect(self._grid)
         self._bfs_dfs = BfsDfs()
         self._bfs_dfs.connect(self._grid)
+        self._bellman_ford = BellmanFord()
+        self._bellman_ford.connect(self._grid)
         # pars:
         sq_size, line_w = 18, 2
         delta = 2 * (sq_size + line_w)
@@ -355,6 +360,9 @@ class Lastar(arcade.Window):
         # HINTS:
         self._mode_info = Info(5 + 26 / 4 - self._grid.line_width, SCREEN_HEIGHT - 30, 26)
         self._mode_info.connect_to_func(self.get_mode_info)
+
+        # test:
+        self._current_algo = self._bellman_ford
 
     def get_mode_info(self):
         return f'Mode: {self._grid.mode_names[self._grid.mode]}'
@@ -483,6 +491,7 @@ class Lastar(arcade.Window):
             if menu is not None:
                 menu.draw()
         self._arrows_menu.draw()
+        # if not self._gear_wheel.is_pressed():
         self._guide_arrows_area.draw()
         self._show_mode_area.draw()
         # NODE CHOSEN:
@@ -493,6 +502,7 @@ class Lastar(arcade.Window):
                                           arcade.color.YELLOW if nc.type != NodeType.EMPTY else arcade.color.DARK_ORANGE,
                                           self._grid.line_width * 2)  # self._grid.tile_size - 2
         # MANAGE ICONS:
+        # if not self._gear_wheel.is_pressed():
         for manage_icon in self._manage_icons_dict.values():
             manage_icon.draw()
         # AUX:
@@ -2425,7 +2435,9 @@ class BellmanFord(Algorithm):
                    f"no path, negative cycle detected"
 
     def get_nodes_visited_q(self):
-        ...
+        # this algo visited all the EMPTY nodes (not the WALLS) at least once:
+        return self._obj.tiles_q * self._obj.hor_tiles_q - len(self._obj.walls)
+
 
     def prepare(self):
         self._obj.start_node.g = 0
@@ -2473,6 +2485,11 @@ class BellmanFord(Algorithm):
             if not self.flag:
                 self.recover_path()
                 break
+        pass
+
+    @timer
+    def full_algo(self):
+        ...
 
         # если к этому моменту цикл завершился, а флаг так и меняестся на True, то либо ещё одна проверка с прогоном
         # всех нод -> там также будет изменение -> выдаем сообщение, либо сразу выдавать сообщение (пока сделал так,
@@ -3749,6 +3766,37 @@ class BfsDfsIcon(Icon, Drawable, Interactable, FuncConnected):
         pass
 
 
+class BellmanFordIcon(Icon, Drawable, Interactable, FuncConnected):
+
+    def __init__(self):
+        super().__init__()
+        ...
+
+    def setup(self):
+        pass
+
+    def update(self):
+        pass
+
+    def draw(self):
+        pass
+
+    def on_motion(self, x, y):
+        pass
+
+    def on_press(self, x, y):
+        pass
+
+    def on_release(self, x, y):
+        pass
+
+    def on_key_press(self):
+        pass
+
+    def on_key_release(self):
+        pass
+
+
 # INFO CLASSES:
 class Info(Drawable, FuncConnected):
     """displays some information like heuristical and other important node's pars and so on"""
@@ -3844,6 +3892,7 @@ class NodeType(Enum):
     END_NODE = (75, 150, 0)
     PATH_NODE = arcade.color.RED
     TWICE_VISITED = arcade.color.PURPLE
+    UPDATE_NODE = arcade.color.ORANGE  # Witch Doctor's idea for Bellman-Ford algo...
 
 
 class InterType(Enum):

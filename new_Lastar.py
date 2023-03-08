@@ -2407,13 +2407,15 @@ class BfsDfs(Algorithm):
                     queue.append(neigh)
 
 
+# Witch Doctor's algo (Maxim Vedernikov):
 class BellmanFord(Algorithm):
 
     def __init__(self):
         super().__init__('BellmanFord')
-        self.flag = True
-        self.negative = False
+        self._flag = True
+        self._negative = False
         self._global_iterations = None
+        self._iter_dict = dict()
 
     def clear(self):
         self.base_clear()
@@ -2425,8 +2427,8 @@ class BellmanFord(Algorithm):
 
     def get_current_state(self):
         """returns the important pars of the current algo state as f-string"""
-        if not self.negative:
-            return f"{self._name}'s iters: {self._iterations}," \
+        if not self._negative:
+            return f"{self._name}'s iters: {sum(self._iter_dict.values())}," \
                    f"number of full passes: {self._global_iterations} path's length:" \
                    f" {len(self._path) if self._path else 'no path'}, " \
                    f"nodes visited: {self.get_nodes_visited_q()}, time elapsed: {self._time_elapsed} ms"  # found still
@@ -2435,9 +2437,9 @@ class BellmanFord(Algorithm):
                    f"no path, negative cycle detected"
 
     def get_nodes_visited_q(self):
-        # this algo visited all the EMPTY nodes (not the WALLS) at least once:
+        """Bellman-Ford algorithm visits all the EMPTY nodes (not the WALLS) at least once,
+        therefore nodes visited quantity equals the number of empty nodes on the grid"""
         return self._obj.tiles_q * self._obj.hor_tiles_q - len(self._obj.walls)
-
 
     def prepare(self):
         self._obj.start_node.g = 0
@@ -2450,51 +2452,61 @@ class BellmanFord(Algorithm):
     def algo_down(self):
         ...
 
-    def full_algo(self):
-        # from зарезервировано
-        def perform_edge_relaxation(out: Node, to: Node):
-            to.g = out.g + out.val
-            if to.type not in [NodeType.START_NODE, NodeType.END_NODE]:
-                if to.times_visited == 0:
-                    to.type = NodeType.VISITED_NODE
-                    to.update_sprite_colour()
-                else:
-                    to.type = NodeType.TWICE_VISITED
-                    to.update_sprite_colour()
-            to.previously_visited_node = out
-            to.times_visited += 1
-
-        for node in self._obj.grid:
-            node.neighs.append(node.get_neighs(self._obj, [NodeType.WALL]))
-        for i in range(self._obj.tiles_q * self._obj.hor_tiles_q):
-            self._global_iterations += 1
-            self.flag = False
-            for current_node in self._obj.grid:
-                self._iterations += 1
-                if current_node.type != NodeType.WALL:
-                    current_node.type = NodeType.VISITED_NODE
-                    current_node.update_sprite_colour()
-                    for neigh in current_node.neighs:
-                        neigh.type = NodeType.NEIGH
-                        neigh.update_sprite_colour()
-                        if current_node.g != np.Infinity and current_node.g + current_node.val < neigh.g:
-                            perform_edge_relaxation(current_node, neigh)
-                            self.flag = True
-                else:
-                    continue
-            if not self.flag:
-                self.recover_path()
-                break
-        pass
-
     @timer
     def full_algo(self):
+        def perform_edge_relaxation(from_: Node, to: Node):
+            """relaxes an edge on the grid in the direction from 'from_' node to 'to' node"""
+            to.g = from_.g + from_.val
+            if to.type not in [NodeType.START_NODE, NodeType.END_NODE]:
+                to.type = NodeType.VISITED_NODE if to.times_visited == 0 else NodeType.TWICE_VISITED
+                to.update_sprite_colour()
+            to.previously_visited_node = from_
+            to.times_visited += 1
+            self._iterations += 1
+        # preparation:
+        self._global_iterations = 0
+        self._obj.start_node.g = 0
+        # neighs' initialization:
+        for row in self._obj.grid:
+            for node in row:
+                node.neighs = list(node.get_neighs(self._obj, [NodeType.WALL]))
+        # here the dynamical programming starts, DP[from_node, to_node, curr_path_length]
+        # main (outer) cycle (global iterations, upper DP steps by curr_path_length var)
+        for i in range(self._obj.tiles_q * self._obj.hor_tiles_q):
+            self._iterations = 0
+            self._global_iterations += 1
+            self._flag = False
+            # inner cycle (iterations, lower DP steps by node vars)
+            for row in self._obj.grid:
+                for current_node in row:
+                    if current_node.type != NodeType.WALL:
+                        # relaxing all the edges linked to the current node:
+                        for neigh in current_node.neighs:
+                            # print(f'LALA')
+                            # TODO: ??? optimization ???
+                            current_node.type = NodeType.VISITED_NODE
+                            current_node.update_sprite_colour()
+                            # necessary condition for the edge relaxation:
+                            if current_node.g != np.Infinity and current_node.g + current_node.val < neigh.g:
+                                perform_edge_relaxation(current_node, neigh)
+                                # if at least one edge relaxation has been performed -> we can proceed to the next global iteration
+                                # after the inner cycle has been completed:
+                                self._flag = True
+            self._iter_dict[self._global_iterations] = self._iterations
+            if not self._flag:
+                self.recover_path()
+                print(f'dict: ')
+                for key, val in self._iter_dict.items():
+                    print(f'outer_iteration, inner_iterations {key, val}')
+                return
+
+        # negative cycle check:
         ...
 
-        # если к этому моменту цикл завершился, а флаг так и меняестся на True, то либо ещё одна проверка с прогоном
+        # если к этому моменту цикл завершился, а флаг так и меняется на True, то либо ещё одна проверка с прогоном
         # всех нод -> там также будет изменение -> выдаем сообщение, либо сразу выдавать сообщение (пока сделал так,
         # сразу добавив во внешний цикл эту проверку)
-        self.negative = True
+        self._negative = True
 
 
 class Menu(Drawable, Interactable, FuncConnected):

@@ -797,6 +797,48 @@ class FuncConnected(ABC):
         self._func = func
 
 
+class Structure(ABC):
+    """parental class for different kinds of structures like graph, grid and so on"""
+    def __init__(self):
+        ...
+
+    @abstractmethod
+    def get_neighs(self):
+        # TODO: exclude .get_neighs(...) method from Node class and implement it in all Structures
+        ...
+
+    @abstractmethod
+    def initialize_all_the_arrows(self):
+        ...
+
+    # something, rotating the guiding arrows if such ones exist
+    ...
+
+    # something, removing the guiding arrows from the SpriteList
+    ...
+
+
+class Link(Drawable):
+    """represents an edge, connecting two nodes, in a Graph, can be directed or undirected"""
+    def __init__(self, node1: 'Node', node2: 'Node'):
+        # segment line:
+        self.link_shape = arcade.create_line(node1.x, node1.y, node2.x, node2.y, arcade.color.BLACK, line_width=2)
+        # directional arrow:
+        self.link_arrow_shape = None  # node1->node2 arrow and visa versa
+
+    def locate_directional_arrow(self):
+        ...
+
+    def setup(self):
+        pass
+
+    def update(self):
+        pass
+
+    def draw(self):
+        pass
+
+
 class Grid(Drawable, FuncConnected):
     """core class for grid lines, nodes and guiding arrows display, start/end nodes and walls building and erasing,
     node choosing for info getting and saving/loading of wall-ornaments"""
@@ -1404,8 +1446,89 @@ class Grid(Drawable, FuncConnected):
         return self._mode
 
 
-# class for a node representation:
+# TODO: DECIDE IF IT IS REALLY NEEDED!!!
+class Constructable(ABC):
+    """parental class for structures, that can be shaped during the program runtime"""
+    def __init__(self):
+        ...
+
+
+class Graph(Drawable, FuncConnected):
+    """represents a graph of nodes"""
+
+    def __init__(self):
+        super().__init__()
+        self.log = logging.getLogger('Graph')
+        # the graph itself:
+        self._graph = None
+        # important nodes:
+        self._start_node = None
+        self._end_node = None
+        # game mode:
+        self._mode = 0  # 0 for building the walls and erasing them afterwards, 1 for a start and end nodes choosing and 2 for info getting for every node
+        self._mode_names = {0: 'BUILDING', 1: 'START&END', 2: 'DETAILS'}
+        # the current node chosen (for getting info):
+        self._node_chosen = None
+        # guide arrows ON/OFF:
+        self._guide_arrows_ind = None
+        # visualization:
+        self._node_sprite_list = arcade.SpriteList()
+        self._link_sprite_list = arcade.SpriteList()
+        # algo steps visualization:
+        self._path_arrows = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
+        # pars:
+        self._line_width = None
+        # memoization for undo/redo area:
+        ...
+
+    def choose_node(self):
+        ...
+
+    def move_node(self):
+        ...
+
+    def add_node(self):
+        ...
+
+    def erase_node(self):
+        ...
+
+    def append_link(self):
+        ...
+
+    def remove_link(self):
+        ...
+
+    def clear_empty_nodes(self):
+        """clear the graph from the algo's visualization"""
+        ...
+
+    def clear_graph(self):
+        """entirely removes the graph"""
+        ...
+
+    def initialize(self):
+        self._graph = dict()
+
+    def get_sprites(self):
+        ...
+
+    def setup(self):
+        # initialization:
+        self.initialize()
+        # sprites, shapes and etc...
+        # blocks:
+        self.get_sprites()
+
+    def update(self):
+        pass
+
+    def draw(self):
+        pass
+
+
 class Node:
+    """represents a node for a graph or a grid:"""
     is_greedy = False
     # horizontal and vertical up and down moves:
     walk = [(dy, dx) for dx in range(-1, 2) for dy in range(-1, 2) if dy * dx == 0 and (dy, dx) != (0, 0)]
@@ -1631,6 +1754,8 @@ class Node:
     # NEIGHS:
     # TODO: DANGEROUS TO LOG!!!
     def get_neighs(self, grid: Grid, forbidden_node_types: list['NodeType']):  # has become smarter
+        # TODO: DELETE THIS METHOD FROM NODE CLASS ANF IMPLEMENT IT IN ALL THE STRUCTURE CLASSES,
+        #  COZ ITS LOGIC STRONGLY DEPENDS ON THEIR SIGNATURE!!!
         """gets neighs of the node, now can be set up"""
         for dy, dx in self.walk:
             ny, nx = self.y + dy, self.x + dx
@@ -1641,6 +1766,8 @@ class Node:
 
     # TODO: DANGEROUS TO LOG!!!
     def get_extended_neighs(self, grid: Grid) -> list['Node']:
+        # TODO: DELETE THIS METHOD FROM NODE CLASS ANF IMPLEMENT IT IN ALL THE STRUCTURE CLASSES,
+        #  COZ ITS LOGIC STRONGLY DEPENDS ON THEIR SIGNATURE!!!
         """gets extended neighs (with diagonal ones) of the node, generator"""
         for dy, dx in self.extended_walk:
             ny, nx = self.y + dy, self.x + dx
@@ -3923,6 +4050,12 @@ class MenuType(Enum):
     BFS_DFS = 2
     A_STAR = 3
     WAVE_LEE = 4
+
+
+class LinkType(Enum):
+    _1to2 = 1
+    _2to1 = 2
+    UNDIRECTED = 3
 
 
 # the main method for a game run:

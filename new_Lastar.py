@@ -172,7 +172,7 @@ def counted(func):
 
 
 class Lastar(arcade.Window):
-    logging.config.fileConfig('log.conf', disable_existing_loggers=True)
+    logging.config.fileConfig('log.conf', disable_existing_loggers=True)  # LL 36 366 98 989
     # base interaction par:
     _in_interaction = False
 
@@ -1675,6 +1675,7 @@ class Node:
 
     # TODO: DANGEROUS TO LOG!!!
     def remove_arrow_from_sprite_list(self, grid: Grid):
+        # if self.guiding_arrow_sprite is not None and self.guiding_arrow_sprite in grid.arrow_sprite_list:
         grid.arrow_sprite_list.remove(self.guiding_arrow_sprite)
 
     def __str__(self):
@@ -2543,7 +2544,6 @@ class BellmanFord(Algorithm):
         self._negative = False
         self._global_iterations = None
         self._iter_dict = dict()
-        self._mini_iterations = None
 
     def clear(self):
         self.base_clear()
@@ -2570,43 +2570,75 @@ class BellmanFord(Algorithm):
         return self._obj.tiles_q * self._obj.hor_tiles_q - len(self._obj.walls)
 
     def prepare(self):
+        # algo pars:
         self._obj.start_node.g = 0
+        # iters counters:
+        self._iterations = 0
+        self._global_iterations = 0
+        # neighs initialization:
+        self.initialize_neighs()
 
-        # ToDo их prepare в full. Надо ли?
-        # self._iterations = 0
-        # self._global_iterations = 0
-        # self._mini_iterations = 0
+    def perform_edge_relaxation(self, from_: Node, to: Node):
+        """relaxes an edge on the grid in the direction from 'from_' node to 'to' node"""
+        print(f'relaxes the edge of {from_, to}')
+        to.g = from_.g + from_.val
+        if to.type not in [NodeType.START_NODE, NodeType.END_NODE]:
+            to.type = NodeType.VISITED_NODE if to.times_visited == 0 else NodeType.TWICE_VISITED
+            to.update_sprite_colour()
+        to.previously_visited_node = from_
+        to.times_visited += 1
+        self._iterations += 1
+
+    def initialize_neighs(self):
+        for row in self._obj.grid:
+            for node in row:
+                node.neighs = list(node.get_neighs(self._obj, [NodeType.WALL]))
 
     def algo_up(self):
-        # one global iteration = a step up...
-        ...
+        # one global iteration = a step-up (upper DP steps by curr_path_length var)...
+        self._iterations = 0
+        self._global_iterations += 1
+        self._flag = False
+        # inner cycle (iterations, lower DP steps by node vars)
+        for row in self._obj.grid:
+            for current_node in row:
+                if current_node.type != NodeType.WALL:
+                    # relaxing all the edges linked to the current node:
+                    for neigh in current_node.neighs:
+                        self._iterations += 1
+                        # TODO: ??? optimization ???
+                        # necessary condition for the edge relaxation:
+                        if current_node.g != np.Infinity and current_node.g + current_node.val < neigh.g:
+                            self.perform_edge_relaxation(current_node, neigh)
+                            # if at least one edge relaxation has been performed -> we can proceed to the next global iteration
+                            # after the inner cycle has been completed:
+                            self._flag = True
+        self._iter_dict[self._global_iterations] = self._iterations
+        if not self._flag:
+            self.recover_path()
+            print(f'dict: ')
+            for key, val in self._iter_dict.items():
+                print(f'outer_iteration, inner_iterations {key, val}')
+            print(f'self._mini_iterations: {self._iterations}')
 
     def algo_down(self):
         # one global iteration down...
+        self._iterations = 0
+        self._global_iterations -= 1
+        # TODO: difficult to implement, is this worth it?..
         ...
 
     # APPROVED!!!
     @timer
     def full_algo(self):
-        def perform_edge_relaxation(from_: Node, to: Node):
-            """relaxes an edge on the grid in the direction from 'from_' node to 'to' node"""
-            print(f'relaxes the edge of {from_, to}')
-            to.g = from_.g + from_.val
-            if to.type not in [NodeType.START_NODE, NodeType.END_NODE]:
-                to.type = NodeType.VISITED_NODE if to.times_visited == 0 else NodeType.TWICE_VISITED
-                to.update_sprite_colour()
-            to.previously_visited_node = from_
-            to.times_visited += 1
-            self._iterations += 1
 
         # preparation:
-        self._global_iterations = 0
         self._obj.start_node.g = 0
-        self._mini_iterations = 0
+
+        self._global_iterations = 0
+        self._iterations = 0
         # neighs' initialization:
-        for row in self._obj.grid:
-            for node in row:
-                node.neighs = list(node.get_neighs(self._obj, [NodeType.WALL]))
+        self.initialize_neighs()
         # here the dynamical programming starts, DP[from_node, to_node, curr_path_length]
         # main (outer) cycle (global iterations, upper DP steps by curr_path_length var)
         for i in range(self._obj.tiles_q * self._obj.hor_tiles_q):
@@ -2620,12 +2652,12 @@ class BellmanFord(Algorithm):
                     if current_node.type != NodeType.WALL:
                         # relaxing all the edges linked to the current node:
                         for neigh in current_node.neighs:
-                            self._mini_iterations += 1
+                            self._iterations += 1
                             # print(f'LALA')
                             # TODO: ??? optimization ???
                             # necessary condition for the edge relaxation:
                             if current_node.g != np.Infinity and current_node.g + current_node.val < neigh.g:
-                                perform_edge_relaxation(current_node, neigh)
+                                self.perform_edge_relaxation(current_node, neigh)
                                 # if at least one edge relaxation has been performed -> we can proceed to the next global iteration
                                 # after the inner cycle has been completed:
                                 self._flag = True
@@ -2635,7 +2667,7 @@ class BellmanFord(Algorithm):
                 print(f'dict: ')
                 for key, val in self._iter_dict.items():
                     print(f'outer_iteration, inner_iterations {key, val}')
-                print(f'self._mini_iterations: {self._mini_iterations}')
+                print(f'self._mini_iterations: {self._iterations}')
                 return
 
         # negative cycle check:
@@ -2729,9 +2761,9 @@ class FloydWarshall(Algorithm):
                 for neighs in node:
                     self.adjacency_matrix[node.g][neighs.g] = neighs.val
 
-        # работа алгоритма по поиску и релаксации расстояний:
-        ## это тоже та ещё дичь, O(n3)...
-        ### когда мой ноут представляет, что в цикле будет 22000^3 значений, у него потеют ладошки
+        #  Работа алгоритма по поиску и релаксации расстояний:
+        #  это тоже та ещё дичь, O(n3)...
+        #  когда мой ноут представляет, что в цикле будет 22000^3 значений, у него потеют ладошки
         for n in range(self.size_matrix):
             self._global_iterations += 1
             self._iterations = 0

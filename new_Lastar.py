@@ -22,7 +22,7 @@ from abc import ABC, abstractmethod
 
 # queues:
 from collections import deque
-import heapq as hq
+# BinHeap
 
 # graphics:
 import arcade
@@ -171,6 +171,110 @@ def counted(func):
     return _wrapper
 
 
+class BinHeap:  # approved...
+
+    def __init__(self, arr=None):
+        self._heap = [] if arr is None else arr
+        self._dict = None
+        self._build_indices_dict()
+        self._heapify()
+
+    def _build_indices_dict(self):
+        """Builds an auxiliary mapping to store the indices of elements in the heap"""
+        self._dict = {el: i for i, el in enumerate(self._heap)}
+
+    def __getitem__(self, index: int):
+        """returns heap's element under the index given"""
+        return self._heap[index]
+
+    def index(self, el):
+        """returns the index of the element given"""
+        return self._dict[el]
+
+    def remove(self, el):
+        """removes the element given from the heap"""
+        self._remove_from_heapq(self.index(el))
+
+    def _remove_from_heapq(self, ind: int):
+        """inner remove method"""
+        self._dict.pop(self._heap[ind])
+        self._heap[ind] = self._heap[-1]
+        if ind != len(self._dict):
+            self._dict[self._heap[ind]] = ind
+        self._heap.pop()
+        if ind < len(self._heap):
+            self._siftup(ind)
+            self._siftdown(0, ind)
+
+    # source code from: https://github.com/python/cpython/blob/main/Lib/heapq.py
+    def heappush(self, item):
+        """Push item onto heap, maintaining the heap invariant."""
+        self._heap.append(item)
+        self._dict[item] = (l_ := len(self._heap) - 1)
+        self._siftdown(0, l_)
+
+    def heappop(self):
+        """Pop the smallest item off the heap, maintaining the heap invariant."""
+        self._dict.pop(self._heap[0])
+        last_elt = self._heap.pop()  # raises appropriate IndexError if heap is empty
+        if self._heap:
+            return_item = self._heap[0]
+            self._heap[0] = last_elt
+            self._dict[last_elt] = 0
+            self._siftup(0)
+            return return_item
+        return last_elt
+
+    def _heapify(self):
+        """Transform list into a heap, in-place, in O(len(arr)) time."""
+        n = len(self._heap)
+        # Transform bottom-up.  The largest index there's any point to looking at
+        # is the largest with a child index in-range, so must have 2*i + 1 < n,
+        # or i < (n-1)/2.  If n is even = 2*j, this is (2*j-1)/2 = j-1/2 so
+        # j-1 is the largest, which is n//2 - 1.  If n is odd = 2*j+1, this is
+        # (2*j+1-1)/2 = j so j-1 is the largest, and that's again n//2-1.
+        for i in reversed(range(n // 2)):
+            self._siftup(i)
+
+    def _siftdown(self, start_pos, pos):
+        new_item = self._heap[pos]
+        # Follow the path to the root, moving parents down until finding a place
+        # new_item fits.
+        while pos > start_pos:
+            parent_pos = (pos - 1) >> 1
+            parent = self._heap[parent_pos]
+            if new_item < parent:
+                self._heap[pos] = parent
+                self._dict[parent] = pos
+                pos = parent_pos
+                continue
+            break
+        self._heap[pos] = new_item
+        self._dict[new_item] = pos
+
+    def _siftup(self, pos):
+        end_pos = len(self._heap)
+        start_pos = pos
+        new_item = self._heap[pos]
+        # Bubble up the smaller child until hitting a leaf.
+        child_pos = 2 * pos + 1  # leftmost child position
+        while child_pos < end_pos:
+            # Set child_pos to index of smaller child.
+            right_pos = child_pos + 1
+            if right_pos < end_pos and not self._heap[child_pos] < self._heap[right_pos]:
+                child_pos = right_pos
+            # Move the smaller child up.
+            el_ = self._heap[pos] = self._heap[child_pos]
+            self._dict[el_] = pos
+            pos = child_pos
+            child_pos = 2 * pos + 1
+        # The leaf at pos is empty now.  Put new_item there, and bubble it up
+        # to its final resting place (by sifting its parents down).
+        self._heap[pos] = new_item
+        self._dict[new_item] = pos
+        self._siftdown(start_pos, pos)
+
+
 class Lastar(arcade.Window):
     logging.config.fileConfig('log.conf', disable_existing_loggers=True)  # LL 36 366 98 989
     # base interaction par:
@@ -181,7 +285,7 @@ class Lastar(arcade.Window):
         arcade.set_background_color(arcade.color.DUTCH_WHITE)
         self.log = logging.getLogger('Lastar')
         self.set_update_rate(1 / 60)
-        # sounds:   ы
+        # sounds:
         self._player = pyglet.media.player.Player()
         # self._source = pyglet.media.load("", streaming=False)
         # self._player.queue(self._source)
@@ -799,6 +903,7 @@ class FuncConnected(ABC):
 
 class Structure(ABC):
     """parental class for different kinds of structures like graph, grid and so on"""
+
     def __init__(self):
         ...
 
@@ -820,6 +925,7 @@ class Structure(ABC):
 
 class Link(Drawable):
     """represents an edge, connecting two nodes, in a Graph, can be directed or undirected"""
+
     def __init__(self, node1: 'Node', node2: 'Node'):
         # segment line:
         self.link_shape = arcade.create_line(node1.x, node1.y, node2.x, node2.y, arcade.color.BLACK, line_width=2)
@@ -1449,12 +1555,13 @@ class Grid(Drawable, FuncConnected):
 # TODO: DECIDE IF IT IS REALLY NEEDED!!!
 class Constructable(ABC):
     """parental class for structures, that can be shaped during the program runtime"""
+
     def __init__(self):
         ...
 
 
 class Graph(Drawable, FuncConnected):
-    """represents a graph of nodes"""
+    """represents a graph of nodes -->> POSTPONED"""
 
     def __init__(self):
         super().__init__()
@@ -1533,8 +1640,6 @@ class Node:
     # horizontal and vertical up and down moves:
     walk = [(dy, dx) for dx in range(-1, 2) for dy in range(-1, 2) if dy * dx == 0 and (dy, dx) != (0, 0)]
     extended_walk = [(dy, dx) for dx in range(-1, 2) for dy in range(-1, 2) if (dy, dx) != (0, 0)]
-    # for a_star (accurate removing from heap):
-    aux_equal_flag = False
     # guiding arrow dirs dict:
     dirs_to_angles = {(1, 0): 0, (0, 1): 90, (-1, 0): 180, (0, -1): 270}
 
@@ -1550,6 +1655,7 @@ class Node:
         self.val = val
         self.previously_visited_node = None  # for building the shortest path of Nodes from the starting point to the ending one
         self.times_visited = 0
+        self.times_neighbourized = 0
         # cost and heuristic vars:
         self.g = np.Infinity  # aggregated cost of moving from start to the current Node, Infinity chosen for convenience and algorithm's logic
         self.h = 0  # approximated cost evaluated by heuristic for path starting from the current node and ending at the exit Node
@@ -1561,6 +1667,9 @@ class Node:
         self.tiebreakers = {0: self.vector_cross_product_deviation, 1: self.coordinates_pair}
         # for BellmanFord and FloydWarshall
         self.neighs = None
+
+        # BIST AVL options:
+        ...
 
     # TODO: HOW TO MAKE THESE PROPERTIES?
     # @property
@@ -1679,7 +1788,7 @@ class Node:
         grid.arrow_sprite_list.remove(self.guiding_arrow_sprite)
 
     def __str__(self):
-        return f'{self.y, self.x} -->> {self.val}'
+        return f'{self.y, self.x}({self.g, self.h, self.g + self.h})[{hash(self)}] -->> {self.val}'
 
     def __repr__(self):
         return str(self)
@@ -1688,8 +1797,6 @@ class Node:
     def __eq__(self, other):
         if type(self) != type(other):
             return False
-        if Node.aux_equal_flag:
-            return (self.y, self.x, self.g, self.h) == (other.y, other.x, other.g, other.h)  # .tiebreaker???
         else:
             return (self.y, self.x) == (other.y, other.x)
 
@@ -1721,6 +1828,7 @@ class Node:
         self.tiebreaker = None
         self.previously_visited_node = None
         self.times_visited = 0
+        self.times_neighbourized = 0
         # wave lee:
         self.val = 1
 
@@ -1943,8 +2051,18 @@ class Algorithm(Connected):
 
 class Astar(Algorithm, FuncConnected):
 
+    FIELDS = [
+        'g',
+        'h',
+        'tiebreaker',
+        'type',
+        'previously_visited_node'
+    ]
+
     def __init__(self):
         super().__init__('Astar')
+        # heap:
+        self.bin_heap: BinHeap = None
         # logger
         self.log = logging.getLogger('Astar')
         # visualization (made in super __init__()):
@@ -1972,7 +2090,6 @@ class Astar(Algorithm, FuncConnected):
         self._max_times_visited_dict = {0: 0}
         self._neighs_added_to_heap_dict = {}
         self._max_times_visited = 0
-        self._secret_dict = dict()
 
     def get_nodes_visited_q(self):
         return len(self._nodes_visited)
@@ -1999,13 +2116,13 @@ class Astar(Algorithm, FuncConnected):
         node_chosen = self._obj.node_chosen
         return f"Node: {node_chosen.y, node_chosen.x}, val: {node_chosen.val}, g: {node_chosen.g}, h: {node_chosen.h}, " \
                f"f=g+h: {node_chosen.g + node_chosen.h}, t: {node_chosen.tiebreaker}, " \
-               f"times visited: {node_chosen.times_visited}"  # , type: {node_chosen.type}"
+               f"times visited: {node_chosen.times_visited}, times neighbourized: {node_chosen.times_neighbourized}"  # , type: {node_chosen.type}"
 
     @logged()
     def prepare(self):
         # heap:
         self._nodes_to_be_visited = [self._obj.start_node]
-        hq.heapify(self._nodes_to_be_visited)
+        self.bin_heap = BinHeap(self._nodes_to_be_visited)
         # heur/cost:
         self._obj.start_node.g = 0
         # transmitting the greedy flag to the Node class: TODO: fix this strange doing <<--
@@ -2027,7 +2144,8 @@ class Astar(Algorithm, FuncConnected):
             self._nodes_to_be_visited = [self._obj.start_node]
         self._neighs_added_to_heap_dict[self._iterations + 1] = []  # memoization
         # popping out the most priority node for a_star from the heap:
-        self._curr_node_dict[self._iterations + 1] = hq.heappop(self._nodes_to_be_visited)  # + memoization
+        self._curr_node_dict[
+            self._iterations + 1] = self.bin_heap.heappop()  # hq.heappop(self._nodes_to_be_visited)  # + memoization
         curr_node = self._curr_node_dict[self._iterations + 1]
         if self._iterations > 0 and curr_node != self._obj.end_node:
             curr_node.type = NodeType.CURRENT_NODE
@@ -2052,22 +2170,13 @@ class Astar(Algorithm, FuncConnected):
         if curr_node == self._obj.end_node:
             self.recover_path()
         # next step:
-        # we can search for neighs on the fly or use precalculated sets (outdated):
+        # we can search for neighs on the fly:
         for neigh in curr_node.get_neighs(self._obj, [NodeType.WALL]):  # getting all the neighs 'on the fly;
             if neigh.g > curr_node.g + neigh.val:
                 # memoization for further 'undoing':
-                self._neighs_added_to_heap_dict[self._iterations + 1].append(
-                    neigh.smart_copy(
-                        [
-                            'g',
-                            'h',
-                            'tiebreaker',
-                            'type',
-                            'previously_visited_node'
-                        ]
-                    )
-                )
+                self._neighs_added_to_heap_dict[self._iterations + 1].append(neigh.smart_copy(self.FIELDS))
                 # cost and heuristic computing:
+                temp_f = neigh.g + neigh.h
                 neigh.g = curr_node.g + neigh.val
                 neigh.h = neigh.heuristics[self._heuristic](neigh, self._obj.end_node)
                 # tie-breaking:
@@ -2077,14 +2186,30 @@ class Astar(Algorithm, FuncConnected):
                 # previous visited node memoization for further path-recovering process:
                 neigh.previously_visited_node = curr_node
                 if neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:  # neigh not in self.nodes_visited and
-                    neigh.type = NodeType.NEIGH
+                    # the node has been added as neigh into the heap again:
+                    neigh.times_neighbourized += 1
+                    if neigh.times_neighbourized > 1:
+                        neigh.type = NodeType.TWICE_NEIGHBOURIZED
+                    else:
+                        neigh.type = NodeType.NEIGH
                     neigh.update_sprite_colour()
                     # here the arrow rotates (re-estimating of neigh g-cost):
                     neigh.rotate_arrow((neigh.x - curr_node.x, neigh.y - curr_node.y))
                     if neigh.guiding_arrow_sprite not in self._obj.arrow_sprite_list:
                         neigh.append_arrow(self._obj)
                 # adding all the valid neighs to the priority heap:
-                hq.heappush(self._nodes_to_be_visited, neigh)
+                # print(f'self._nodes_visited.keys ({len(self._nodes_visited.keys())}): {self._nodes_visited.keys()}')
+                if neigh not in self.bin_heap._dict.keys():
+                    # the neigh is visited at the first time:
+                    self.bin_heap.heappush(neigh)
+                else:
+                    # the neigh became two or more times visited:
+                    if neigh.g + neigh.h > temp_f:
+                        # new value is greater:
+                        self.bin_heap._siftup(self.bin_heap.index(neigh))
+                    elif neigh.g + neigh.h < temp_f:
+                        # new value is lower:
+                        self.bin_heap._siftdown(0, self.bin_heap.index(neigh))
         # incrementation:
         self._iterations += 1
 
@@ -2102,6 +2227,12 @@ class Astar(Algorithm, FuncConnected):
                 curr_node.type = NodeType.VISITED_NODE
                 curr_node.update_sprite_colour()
             else:
+                # TODO: IMPORTANT -->>
+                #  if a node is reached by one path, removed from openSet, and subsequently reached by a cheaper path,
+                #  it will be added to openSet again. This is essential to guarantee that the path returned is optimal
+                #  if the heuristic function is admissible but not consistent. If the heuristic is consistent,
+                #  when a node is removed from openSet the path to it is guaranteed to be optimal so the test
+                #  ‘tentative_gScore < gScore[neighbor]’ will always fail if the node is reached again.
                 curr_node.type = NodeType.TWICE_VISITED
                 curr_node.update_sprite_colour()
             if self._iterations > 2:
@@ -2117,85 +2248,33 @@ class Astar(Algorithm, FuncConnected):
             for neigh in self._neighs_added_to_heap_dict[self._iterations]:
                 y, x = neigh.y, neigh.x
                 node = self._obj.grid[y][x]
-                Node.aux_equal_flag = True
-                self.remove_from_heapq(self._nodes_to_be_visited, self._nodes_to_be_visited.index(node))
-                Node.aux_equal_flag = False
-                node.smart_restore(
-                    neigh,
-                    [
-                        'g',
-                        'h',
-                        'tiebreaker',
-                        'type',
-                        'previously_visited_node'
-                    ]
-                )
+                _g, _h = node.g, node.h
+                node.smart_restore(neigh, self.FIELDS)
+                if _g == np.Infinity:
+                    self.bin_heap.remove(node)
+                else:
+                    # the neigh has already been two or more times visited:
+                    if neigh.g + neigh.h > _g + _h:
+                        # new value is greater:
+                        self.bin_heap._siftup(self.bin_heap.index(neigh))
+                    elif neigh.g + neigh.h < _g + _h:
+                        # new value is lower:
+                        self.bin_heap._siftdown(0, self.bin_heap.index(neigh))
                 # operations with arrows:
                 # print(f"node's type: {node.type}")
                 if node.type == NodeType.EMPTY:  # not in [NodeType.START_NODE, NodeType.END_NODE]
                     if node.guiding_arrow_sprite in self._obj.arrow_sprite_list:
                         node.remove_arrow_from_sprite_list(self._obj)
-                if node.type == NodeType.NEIGH:  # NodeType.VISITED_NODE, NodeType.TWICE_VISITED]:  # TODO: decide if all of the types are really NEEDED?
-                    if node.type in self._secret_dict.keys():
-                        self._secret_dict[node.type] += 1
-                    else:
-                        self._secret_dict[node.type] = 1
-                    # print(f'dict: {self._secret_dict}')
+                    node.times_neighbourized = 0
+                elif node.type in [NodeType.NEIGH, NodeType.TWICE_NEIGHBOURIZED]:
+                    node.times_neighbourized -= 1
                     # here the arrow rotates backwards:
                     node.rotate_arrow(
                         (node.x - node.previously_visited_node.x, node.y - node.previously_visited_node.y))
             # adding current node (popped out at the current iteration) to the heap:
-            hq.heappush(self._nodes_to_be_visited, curr_node)
+            self.bin_heap.heappush(curr_node)
             # iteration steps back:
             self._iterations -= 1
-
-    @staticmethod
-    def remove_from_heapq(heap, ind: int):
-        heap[ind] = heap[-1]
-        heap.pop()
-        if ind < len(heap):
-            # as far as it is known, possible to copy the source code from the heapq module... but how to do that?..
-            Astar.siftup(heap, ind)
-            Astar.siftdown(heap, 0, ind)
-
-    # source code from: https://github.com/python/cpython/blob/main/Lib/heapq.py
-
-    @staticmethod
-    def siftdown(heap, start_pos, pos):
-        new_item = heap[pos]
-        # Follow the path to the root, moving parents down until finding a place
-        # new item fits.
-        while pos > start_pos:
-            parent_pos = (pos - 1) >> 1
-            parent = heap[parent_pos]
-            if new_item < parent:
-                heap[pos] = parent
-                pos = parent_pos
-                continue
-            break
-        heap[pos] = new_item
-
-    # source code from: https://github.com/python/cpython/blob/main/Lib/heapq.py
-    @staticmethod
-    def siftup(heap, pos):
-        end_pos = len(heap)
-        start_pos = pos
-        new_item = heap[pos]
-        # Bubble up the smaller child until hitting a leaf.
-        child_pos = 2 * pos + 1  # leftmost child position
-        while child_pos < end_pos:
-            # Set child pos to index of smaller child.
-            right_pos = child_pos + 1
-            if right_pos < end_pos and not heap[child_pos] < heap[right_pos]:
-                child_pos = right_pos
-            # Move the smaller child up.
-            heap[pos] = heap[child_pos]
-            pos = child_pos
-            child_pos = 2 * pos + 1
-        # The leaf at pos is empty now. Put new item there, and bubble it up
-        # to its final resting place (by sifting its parents down).
-        heap[pos] = new_item
-        Astar.siftdown(heap, start_pos, pos)
 
     @timer
     def full_algo(self):
@@ -2204,12 +2283,12 @@ class Astar(Algorithm, FuncConnected):
         self._func[0](self._greedy_ind)
         self._nodes_to_be_visited = [self._obj.start_node]
         self._obj.start_node.g = 0
-        hq.heapify(self._nodes_to_be_visited)
+        self.bin_heap = BinHeap(self._nodes_to_be_visited)
         self._max_times_visited = 0
         # the main cycle:
         while self._nodes_to_be_visited:
             self._iterations += 1
-            curr_node = hq.heappop(self._nodes_to_be_visited)
+            curr_node = self.bin_heap.heappop()
             curr_node.times_visited += 1
             if curr_node not in [self._obj.start_node, self._obj.end_node]:
                 curr_node.type = NodeType.TWICE_VISITED if curr_node.times_visited > 1 else NodeType.VISITED_NODE
@@ -2233,7 +2312,7 @@ class Astar(Algorithm, FuncConnected):
                     if neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:
                         # here the arrow rotates (re-estimating of neigh g-cost):
                         neigh.rotate_arrow((neigh.x - curr_node.x, neigh.y - curr_node.y))
-                    hq.heappush(self._nodes_to_be_visited, neigh)
+                    self.bin_heap.heappush(neigh)
         # for all neighs that left in the heap we must define the nodetype:
         for neigh in self._nodes_to_be_visited:
             neigh.type = NodeType.NEIGH
@@ -4180,7 +4259,9 @@ class NodeType(Enum):
     START_NODE = arcade.color.GREEN
     END_NODE = (75, 150, 0)
     PATH_NODE = arcade.color.RED
-    TWICE_VISITED = arcade.color.PURPLE
+    TWICE_VISITED = arcade.color.BRONZE
+    TWICE_NEIGHBOURIZED = arcade.color.PURPLE
+    # in developing...
     UPDATE_NODE = arcade.color.ORANGE  # Witch Doctor's idea for Bellman-Ford algo...
 
 
@@ -4215,7 +4296,7 @@ def main():
 if __name__ == "__main__":
     main()
 
-# TODO: LAYERS OF DRAWING
+# TODO: LAYERS OF DRAWING ( ??? ) -
 # TODO: LOGGING OF MOUSE MOVEMENT, KEYS
 # TODO: BETTER VISUALIZATION FOR FULL ALGO!!! +
 # TODO: GUIDING ARROWS OPTION FOR FULL ALGO!!! +
@@ -4224,9 +4305,10 @@ if __name__ == "__main__":
 # TODO: SPRITE-GUIDING_ARROWS AND THEIR FURTHER ROTATION/DRAWING +
 # TODO: BACKGROUND SAVING DAEMON PROCESS, BACKGROUND INITIALIZATION
 # TODO: SPEED UP BFS&DFS full algo methods!!!
-# TODO: FIX THE ROTATING of Arrow_90x151!
+# TODO: FIX THE ROTATING of Arrow_90x151! +-
 # TODO: PATH ARROWS DRAWING OPTIMIZING!!!
 # TODO: DFS INTERACTIVE LOCK
 # TODO: INFO BLOCK MUST BE ONLY ONE: ALGO or NODE!!!
-# TODO: FIX BUG WITH SCALING ON INTEGRATED VIDEO-CARD
-# TODO: CACHED PROPERTIES!!!
+# TODO: FIX BUG WITH SCALING ON INTEGRATED VIDEO-CARD + (error with nvidia scaling 125% caught)
+# TODO: CACHED PROPERTIES!!! are they already cashed by default?
+# TODO: Binary heap with Indexation instead of heapq for performance upgrading (VERY HARD, VERY HARD) +

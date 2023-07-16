@@ -50,7 +50,7 @@ class Pathfinder(arcade.Window):
         for circle in self.circles:
             sprite = arcade.SpriteCircle(
                 int(Pathfinder.MULTIPLIER * circle.r),
-                arcade.color.BALL_BLUE,
+                arcade.color.BLUE_GRAY,
             )
             sprite.center_x = Pathfinder.MULTIPLIER * circle.ctr.x + Pathfinder.DELTA_X
             sprite.center_y = Pathfinder.MULTIPLIER * circle.ctr.y + Pathfinder.DELTA_Y

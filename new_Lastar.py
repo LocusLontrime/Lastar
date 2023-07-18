@@ -187,6 +187,25 @@ class BinHeap:  # approved...
         """returns heap's element under the index given"""
         return self._heap[index]
 
+    def __contains__(self, item):
+        return item in self._dict.keys()
+
+    def restore_heap_inv(self, neigh: 'Node', temp_f: int):
+        """restores the heap invariant after the neigh's priority change"""
+        if neigh.f > temp_f:
+            # new value is greater:
+            self._siftup(self.index(neigh))
+        elif neigh.f < temp_f:
+            # new value is lower:
+            self._siftdown(0, self.index(neigh))
+
+    @property
+    def heap(self):
+        return self._heap
+
+    def show(self):
+        print(f'heap: {self._heap}')
+
     def index(self, el):
         """returns the index of the element given"""
         return self._dict[el]
@@ -1685,6 +1704,10 @@ class Node:
         """returns a tuple of node's coordinates: (x, y)"""
         return self.x, self.y
 
+    @property
+    def f(self):
+        return self.g + self.h
+
     @staticmethod
     def set_greedy(greedy_ind: int):
         Node.is_greedy = False if greedy_ind is None else True
@@ -1848,6 +1871,10 @@ class Node:
     @staticmethod
     def no_heuristic(node1, node2: 'Node'):
         return 0
+
+    @staticmethod
+    def mult_heur(node1, node2: 'Node'):  # for testing... admissible and non-consistent heuristic.
+        return abs(node1.y - node2.y) * abs(node1.x - node2.x)
 
     # SELF * OTHER, TIEBREAKER:
     @staticmethod
@@ -2080,7 +2107,6 @@ class Astar(Algorithm, FuncConnected):
         self._tiebreaker = None
         self._greedy_ind = None  # is algorithm greedy?
         # 3. visiting:
-        self._nodes_to_be_visited = []
         self._nodes_visited = {}
         # 4. iterations and time (made in super __init__()):
         # self._iterations = 0
@@ -2121,8 +2147,7 @@ class Astar(Algorithm, FuncConnected):
     @logged()
     def prepare(self):
         # heap:
-        self._nodes_to_be_visited = [self._obj.start_node]
-        self.bin_heap = BinHeap(self._nodes_to_be_visited)
+        self.bin_heap = BinHeap([self._obj.start_node])
         # heur/cost:
         self._obj.start_node.g = 0
         # transmitting the greedy flag to the Node class: TODO: fix this strange doing <<--
@@ -2140,22 +2165,34 @@ class Astar(Algorithm, FuncConnected):
         self._obj.arrow_sprite_list = arcade.SpriteList()
 
     def algo_up(self):
-        if self._iterations == 0:
-            self._nodes_to_be_visited = [self._obj.start_node]
-        self._neighs_added_to_heap_dict[self._iterations + 1] = []  # memoization
+        # handling the old front-neighs:
+        for _front_neigh in self._neighs_added_to_heap_dict[self._iterations]:
+            _y, _x = _front_neigh.y, _front_neigh.x
+            _front_neigh = self._obj.grid[_y][_x]
+            if _front_neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:
+                if _front_neigh.times_neighbourized > 1:
+                    _front_neigh.type = NodeType.TWICE_NEIGHBOURIZED
+                else:
+                    _front_neigh.type = NodeType.NEIGH
+                _front_neigh.update_sprite_colour()
+        # memoization:
+        self._neighs_added_to_heap_dict[self._iterations + 1] = []
         # popping out the most priority node for a_star from the heap:
         self._curr_node_dict[
-            self._iterations + 1] = self.bin_heap.heappop()  # hq.heappop(self._nodes_to_be_visited)  # + memoization
+            self._iterations + 1] = self.bin_heap.heappop()
+        # current node:
         curr_node = self._curr_node_dict[self._iterations + 1]
         if self._iterations > 0 and curr_node != self._obj.end_node:
             curr_node.type = NodeType.CURRENT_NODE
             curr_node.update_sprite_colour()
         curr_node.times_visited += 1
+        # previous current node becomes the visited one:
         if self._iterations > 1:
             if (prev_node := self._curr_node_dict[self._iterations]).type not in [NodeType.END_NODE,
                                                                                   NodeType.TWICE_VISITED]:
                 prev_node.type = NodeType.VISITED_NODE
                 prev_node.update_sprite_colour()
+        # max visited counter:
         self._max_times_visited_dict[self._iterations + 1] = max(self._max_times_visited_dict[self._iterations],
                                                                  # memoization
                                                                  curr_node.times_visited)
@@ -2176,7 +2213,7 @@ class Astar(Algorithm, FuncConnected):
                 # memoization for further 'undoing':
                 self._neighs_added_to_heap_dict[self._iterations + 1].append(neigh.smart_copy(self.FIELDS))
                 # cost and heuristic computing:
-                temp_f = neigh.g + neigh.h
+                temp_f = neigh.f  # <<-- memoization of previous heuristic values for neigh
                 neigh.g = curr_node.g + neigh.val
                 neigh.h = neigh.heuristics[self._heuristic](neigh, self._obj.end_node)
                 # tie-breaking:
@@ -2188,28 +2225,21 @@ class Astar(Algorithm, FuncConnected):
                 if neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:  # neigh not in self.nodes_visited and
                     # the node has been added as neigh into the heap again:
                     neigh.times_neighbourized += 1
-                    if neigh.times_neighbourized > 1:
-                        neigh.type = NodeType.TWICE_NEIGHBOURIZED
-                    else:
-                        neigh.type = NodeType.NEIGH
+                    neigh.type = NodeType.FRONT_NEIGH
                     neigh.update_sprite_colour()
                     # here the arrow rotates (re-estimating of neigh g-cost):
                     neigh.rotate_arrow((neigh.x - curr_node.x, neigh.y - curr_node.y))
                     if neigh.guiding_arrow_sprite not in self._obj.arrow_sprite_list:
                         neigh.append_arrow(self._obj)
                 # adding all the valid neighs to the priority heap:
-                # print(f'self._nodes_visited.keys ({len(self._nodes_visited.keys())}): {self._nodes_visited.keys()}')
-                if neigh not in self.bin_heap._dict.keys():
+                if neigh not in self.bin_heap:
                     # the neigh is visited at the first time:
                     self.bin_heap.heappush(neigh)
                 else:
                     # the neigh became two or more times visited:
-                    if neigh.g + neigh.h > temp_f:
-                        # new value is greater:
-                        self.bin_heap._siftup(self.bin_heap.index(neigh))
-                    elif neigh.g + neigh.h < temp_f:
-                        # new value is lower:
-                        self.bin_heap._siftdown(0, self.bin_heap.index(neigh))
+                    self.bin_heap.restore_heap_inv(neigh, temp_f)
+        # showing info:
+        self.bin_heap.show()
         # incrementation:
         self._iterations += 1
 
@@ -2248,20 +2278,15 @@ class Astar(Algorithm, FuncConnected):
             for neigh in self._neighs_added_to_heap_dict[self._iterations]:
                 y, x = neigh.y, neigh.x
                 node = self._obj.grid[y][x]
-                _g, _h = node.g, node.h
+                _f = node.f
                 node.smart_restore(neigh, self.FIELDS)
-                if _g == np.Infinity:
+                # removing or returning node's heuristic values to their previous values:
+                if neigh.g == np.Infinity:
                     self.bin_heap.remove(node)
                 else:
                     # the neigh has already been two or more times visited:
-                    if neigh.g + neigh.h > _g + _h:
-                        # new value is greater:
-                        self.bin_heap._siftup(self.bin_heap.index(neigh))
-                    elif neigh.g + neigh.h < _g + _h:
-                        # new value is lower:
-                        self.bin_heap._siftdown(0, self.bin_heap.index(neigh))
+                    self.bin_heap.restore_heap_inv(neigh, _f)
                 # operations with arrows:
-                # print(f"node's type: {node.type}")
                 if node.type == NodeType.EMPTY:  # not in [NodeType.START_NODE, NodeType.END_NODE]
                     if node.guiding_arrow_sprite in self._obj.arrow_sprite_list:
                         node.remove_arrow_from_sprite_list(self._obj)
@@ -2271,22 +2296,30 @@ class Astar(Algorithm, FuncConnected):
                     # here the arrow rotates backwards:
                     node.rotate_arrow(
                         (node.x - node.previously_visited_node.x, node.y - node.previously_visited_node.y))
+            # neighs, added on the previous step becomes FRONT_NEIGHS:
+            if self._iterations - 1 >= 0:
+                for _front_neigh in self._neighs_added_to_heap_dict[self._iterations - 1]:
+                    _y, _x = _front_neigh.y, _front_neigh.x
+                    _front_neigh = self._obj.grid[_y][_x]
+                    if _front_neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:
+                        _front_neigh.type = NodeType.FRONT_NEIGH
+                        _front_neigh.update_sprite_colour()
             # adding current node (popped out at the current iteration) to the heap:
             self.bin_heap.heappush(curr_node)
+            # showing info:
+            self.bin_heap.show()
             # iteration steps back:
             self._iterations -= 1
 
     @timer
     def full_algo(self):
-        # False if game.greedy_ind is None else True
         # transmitting the greedy flag to the Node class: TODO: fix this strange doing <<--
         self._func[0](self._greedy_ind)
-        self._nodes_to_be_visited = [self._obj.start_node]
         self._obj.start_node.g = 0
-        self.bin_heap = BinHeap(self._nodes_to_be_visited)
+        self.bin_heap = BinHeap([self._obj.start_node])
         self._max_times_visited = 0
         # the main cycle:
-        while self._nodes_to_be_visited:
+        while self.bin_heap.heap:
             self._iterations += 1
             curr_node = self.bin_heap.heappop()
             curr_node.times_visited += 1
@@ -2301,6 +2334,7 @@ class Astar(Algorithm, FuncConnected):
             # next step:
             for neigh in curr_node.get_neighs(self._obj, [NodeType.WALL]):
                 if neigh.g > curr_node.g + neigh.val:
+                    temp_f = neigh.f
                     neigh.g = curr_node.g + neigh.val
                     neigh.h = neigh.heuristics[self._heuristic](neigh, self._obj.end_node)
                     if self._tiebreaker is not None:
@@ -2310,15 +2344,24 @@ class Astar(Algorithm, FuncConnected):
                     neigh.previously_visited_node = curr_node
 
                     if neigh.type not in [NodeType.START_NODE, NodeType.END_NODE]:
+                        # the node has been added as neigh into the heap again:
+                        neigh.times_neighbourized += 1
                         # here the arrow rotates (re-estimating of neigh g-cost):
                         neigh.rotate_arrow((neigh.x - curr_node.x, neigh.y - curr_node.y))
-                    self.bin_heap.heappush(neigh)
-        # for all neighs that left in the heap we must define the nodetype:
-        for neigh in self._nodes_to_be_visited:
+
+                    if neigh not in self.bin_heap:
+                        # the neigh is visited at the first time:
+                        self.bin_heap.heappush(neigh)
+                    else:
+                        # the neigh became two or more times visited:
+                        self.bin_heap.restore_heap_inv(neigh, temp_f)
+
+        # for all neighs that left in the heap we must define the node.type:
+        for neigh in self.bin_heap._heap:
             neigh.type = NodeType.NEIGH
             neigh.update_sprite_colour()
         # now adding the guiding arrow shapes to the Shape list:
-        for neigh in self._nodes_visited.keys() | self._nodes_to_be_visited:
+        for neigh in self._nodes_visited.keys() | self.bin_heap._heap:
             if neigh.guiding_arrow_sprite is not None:
                 neigh.append_arrow(self._obj)
 
@@ -4261,6 +4304,7 @@ class NodeType(Enum):
     PATH_NODE = arcade.color.RED
     TWICE_VISITED = arcade.color.BRONZE
     TWICE_NEIGHBOURIZED = arcade.color.PURPLE
+    FRONT_NEIGH = arcade.color.CYAN
     # in developing...
     UPDATE_NODE = arcade.color.ORANGE  # Witch Doctor's idea for Bellman-Ford algo...
 
@@ -4303,12 +4347,13 @@ if __name__ == "__main__":
 # TODO: TRY SOMETHING WITH GETATTR OVERRIDING...
 # TODO: MULTIPROCESSING FOR GUIDING ARROWS INITIALIZATION
 # TODO: SPRITE-GUIDING_ARROWS AND THEIR FURTHER ROTATION/DRAWING +
-# TODO: BACKGROUND SAVING DAEMON PROCESS, BACKGROUND INITIALIZATION
-# TODO: SPEED UP BFS&DFS full algo methods!!!
+# TODO: BACKGROUND SAVING DAEMON PROCESS, BACKGROUND INITIALIZATION ( ??? )
+# TODO: SPEED UP BFS&DFS full algo methods!!! ( ??? )
 # TODO: FIX THE ROTATING of Arrow_90x151! +-
-# TODO: PATH ARROWS DRAWING OPTIMIZING!!!
+# TODO: PATH ARROWS DRAWING OPTIMIZING!!! ( ??? )
 # TODO: DFS INTERACTIVE LOCK
-# TODO: INFO BLOCK MUST BE ONLY ONE: ALGO or NODE!!!
+# TODO: INFO BLOCK MUST BE ONLY ONE: ALGO or NODE!!! -->> may be not...
 # TODO: FIX BUG WITH SCALING ON INTEGRATED VIDEO-CARD + (error with nvidia scaling 125% caught)
 # TODO: CACHED PROPERTIES!!! are they already cashed by default?
 # TODO: Binary heap with Indexation instead of heapq for performance upgrading (VERY HARD, VERY HARD) +
+# TODO: TRY TO PREVENT CYCLING WITH HEAP AFTER DELETING (HARD, HARD) -

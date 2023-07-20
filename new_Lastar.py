@@ -1023,7 +1023,10 @@ class Grid(Drawable, FuncConnected):
         self._loading_ind = 0
         # sounds:
         self._player = pyglet.media.player.Player()
-        self._source = pyglet.media.load("clear.mp3", streaming=False)
+        self._source_clear = pyglet.media.load("clear.mp3", streaming=False)
+        self._source_build = pyglet.media.load("build_a_brick.mp3", streaming=False)
+        self._source_erase = pyglet.media.load("brick_hit.mp3", streaming=False)
+        self._source_erase_all = pyglet.media.load("brick_wall_falling.mp3", streaming=False)
 
     # INITIALIZATION AUX:
     @logged()
@@ -1407,6 +1410,9 @@ class Grid(Drawable, FuncConnected):
             self._walls_built_erased.append(([self.number_repr(n)], True))
             self._walls_index += 1
             self.log.info(f'The wall successfully built')
+            if not self._player.playing:
+                self._player.queue(self._source_build)
+                self._player.play()
 
     def erase_wall(self, x, y):
         # now erasing the walls:
@@ -1424,7 +1430,7 @@ class Grid(Drawable, FuncConnected):
             self.log.info(f'The wall successfully erased')
             # plays sound:
             if not self._player.playing:
-                self._player.queue(self._source)
+                self._player.queue(self._source_erase)
                 self._player.play()
 
     # erases all nodes, that are connected vertically, horizontally or diagonally to a chosen one,
@@ -1448,7 +1454,7 @@ class Grid(Drawable, FuncConnected):
             f'inner recursive method .{_erase_all_linked_nodes}() called {_erase_all_linked_nodes.rec_calls} times and has max depth of {_erase_all_linked_nodes.rec_depth}')
         # plays sound:
         if not self._player.playing:
-            self._player.queue(self._source)
+            self._player.queue(self._source_erase_all)
             self._player.play()
 
     # CLEARING/REBUILDING:
@@ -2261,7 +2267,7 @@ class Astar(Algorithm, FuncConnected):
                     # the neigh became two or more times visited:
                     self.bin_heap.restore_heap_inv(neigh, temp_f)
         # showing info:
-        self.bin_heap.show()
+        # self.bin_heap.show()
         # incrementation:
         self._iterations += 1
         # plays the sound:
@@ -2331,7 +2337,7 @@ class Astar(Algorithm, FuncConnected):
             # adding current node (popped out at the current iteration) to the heap:
             self.bin_heap.heappush(curr_node)
             # showing info:
-            self.bin_heap.show()
+            # self.bin_heap.show()
             # iteration steps back:
             self._iterations -= 1
         # plays the sound:
@@ -2619,13 +2625,13 @@ class BfsDfs(Algorithm):
                         )
                     )
                     node.append_arrow(self._obj)
-                    # deque changing:
-                    # BFS:
-                    if self._is_bfs:
-                        self._queue.popleft()
-                    # DFS:
-                    else:
-                        self._queue.pop()
+                # deque changing:
+                # BFS:
+                if self._is_bfs:
+                    self._queue.popleft()
+                # DFS:
+                else:
+                    self._queue.pop()
             # current node has become the NEIGH:
             curr_node = self._curr_node_dict[self._iterations]
             if curr_node not in [self._obj.start_node, self._obj.end_node]:
@@ -2769,7 +2775,7 @@ class Area(Drawable, Interactable, FuncConnected):
         self._no_choice = no_choice
         # sounds:
         self._player = pyglet.media.player.Player()
-        self._source = pyglet.media.load("tuduk.mp3", streaming=False)
+        self._source = pyglet.media.load("tuk.mp3", streaming=False)
 
     @logged()
     def choose_field(self, field_chosen_ind: int = 0):
@@ -2915,6 +2921,9 @@ class PlayButton(Icon, Drawable, Interactable, FuncConnected):
         self._r = r
         self._line_w = line_w
         self._multiplier = 1
+        # sounds:
+        self._player = pyglet.media.player.Player()
+        self._source = pyglet.media.load("tru.mp3", streaming=False)
 
     @logged()
     def setup(self):
@@ -2992,6 +3001,9 @@ class PlayButton(Icon, Drawable, Interactable, FuncConnected):
             self._inter_type = InterType.PRESSED
             self.log.debug(f'{self._func[0].__name__} call')
             self._func[0]()
+        if not self._player.playing:
+            self._player.queue(self._source)
+            self._player.play()
 
     def on_press(self, x, y):
         # if self._inter_type != InterType.PRESSED:
@@ -3387,6 +3399,9 @@ class GearWheelButton(Icon, Drawable, Interactable):
         self._multiplier = multiplier
         self._line_w = line_w
         self._clockwise = clockwise
+        # sounds:
+        self._player = pyglet.media.player.Player()
+        self._source = pyglet.media.load("tuduk.mp3", streaming=False)
 
     @logged()
     def setup(self):
@@ -3444,6 +3459,9 @@ class GearWheelButton(Icon, Drawable, Interactable):
         if arcade.is_point_in_polygon(x, y, self._vertices):
             if self._inter_type != InterType.PRESSED:
                 self._inter_type = InterType.PRESSED
+                if not self._player.playing:
+                    self._player.queue(self._source)
+                    self._player.play()
                 return self
 
     def on_release(self, x, y):
@@ -3557,7 +3575,7 @@ class Arrow(Icon, Drawable, Interactable):  # part of an arrow menu
         self._colour = colour
         # sounds:
         self._player = pyglet.media.player.Player()
-        self._source = pyglet.media.load("tuduk.mp3", streaming=False)
+        self._source = pyglet.media.load("tuk.mp3", streaming=False)
 
     @property
     def _dx(self):  # TODO: this one should not be a protected property!!!
@@ -3747,6 +3765,9 @@ class AstarIcon(Icon, Drawable, Interactable, FuncConnected):
         self._size_h = size_h
         self._line_w = line_w
         self._clockwise = clockwise
+        # sounds:
+        self._player = pyglet.media.player.Player()
+        self._source = pyglet.media.load("tuduk.mp3", streaming=False)
 
     @logged()
     def setup(self):
@@ -3831,6 +3852,9 @@ class AstarIcon(Icon, Drawable, Interactable, FuncConnected):
             if self._inter_type != InterType.PRESSED:
                 self._inter_type = InterType.PRESSED
                 self._func[0]()
+                if not self._player.playing:
+                    self._player.queue(self._source)
+                    self._player.play()
                 return self
 
     def on_release(self, x, y):
@@ -3853,6 +3877,9 @@ class Waves(Icon, Drawable, Interactable, FuncConnected):
         self._size = size
         self._waves_q = waves_q
         self._line_w = line_w
+        # sounds:
+        self._player = pyglet.media.player.Player()
+        self._source = pyglet.media.load("tuduk.mp3", streaming=False)
 
     @logged()
     def setup(self):
@@ -3885,6 +3912,9 @@ class Waves(Icon, Drawable, Interactable, FuncConnected):
             if self._inter_type != InterType.PRESSED:
                 self._inter_type = InterType.PRESSED
                 self._func[0]()
+                if not self._player.playing:
+                    self._player.queue(self._source)
+                    self._player.play()
                 return self
 
     def on_release(self, x, y):
@@ -3907,6 +3937,9 @@ class BfsDfsIcon(Icon, Drawable, Interactable, FuncConnected):
         self.log = logging.getLogger('BfsDfsIcon')
         self._size = size
         self._line_w = line_w
+        # sounds:
+        self._player = pyglet.media.player.Player()
+        self._source = pyglet.media.load("tuduk.mp3", streaming=False)
 
     @logged()
     def setup(self):
@@ -3966,6 +3999,9 @@ class BfsDfsIcon(Icon, Drawable, Interactable, FuncConnected):
             if self._inter_type != InterType.PRESSED:
                 self._inter_type = InterType.PRESSED
                 self._func[0]()
+                if not self._player.playing:
+                    self._player.queue(self._source)
+                    self._player.play()
                 return self
 
     def on_release(self, x, y):
@@ -4125,3 +4161,4 @@ if __name__ == "__main__":
 # TODO: CACHED PROPERTIES!!! are they already cashed by default?
 # TODO: Binary heap with Indexation instead of heapq for performance upgrading (VERY HARD, VERY HARD) +
 # TODO: TRY TO PREVENT CYCLING WITH HEAP AFTER DELETING (HARD, HARD) -
+# TODO: FIX THE BUG WITH WALLS BUILDING WHILE BFS ALGO IS IN INTERACTIVE STATE (MEDIUM, MEDIUM) +

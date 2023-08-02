@@ -305,6 +305,10 @@ class Lastar(arcade.Window):
     logging.config.fileConfig('log.conf', disable_existing_loggers=True)  # LL 36 366 98 989
     # base interaction par:
     _in_interaction = False
+    # is music on:
+    music_on = False
+    # play button lock:
+    gearing = True
 
     def __init__(self, width: int, height: int):
         super().__init__(width, height)
@@ -328,6 +332,7 @@ class Lastar(arcade.Window):
         self._greedy_names = {0: 'IS_GREEDY'}
         self._guide_arrows_names = {0: f'ON/OFF'}
         self._interactive_names = {0: f'IS_INTERACTIVE'}
+        self._music_names = {0: f'IS_ON'}
         # grid and walls_manager:
         self._grid = Grid()
         self._grid.connect_to_func(self.aux_clearing)
@@ -343,7 +348,6 @@ class Lastar(arcade.Window):
         self._astar_icon = None
         self._wave_lee_icon = None
         self._bfs_dfs_icon = None
-        self.bellman_ford_icon = None
         # algos' menus:
         self._wave_lee_menu = None
         self._astar_menu = None
@@ -357,6 +361,8 @@ class Lastar(arcade.Window):
         # two aux areas:
         self._guide_arrows_area = None
         self._show_mode_area = None
+        # music:
+        self._music_mode_area = None
         # HINTS:
         self._mode_info = None
         # manage icons:
@@ -395,6 +401,18 @@ class Lastar(arcade.Window):
     @staticmethod
     def is_in_interaction():
         return Lastar._in_interaction
+
+    @staticmethod
+    def music(ind: int):
+        Lastar.music_on = not Lastar.music_on
+
+    @staticmethod
+    def gear():
+        Lastar.gearing = not Lastar.gearing
+
+    @staticmethod
+    def is_gearing():
+        return Lastar.gearing
 
     @logged()
     def elements_setup(self):
@@ -446,6 +464,7 @@ class Lastar(arcade.Window):
         self._bfs_dfs_menu.append_area(area)
         self._bfs_dfs_menu.connect_to_func(self._bfs_dfs_icon.is_pressed)
         # GRID:
+        ...
         # grid icon setting up:
         self._gear_wheel = GearWheelButton(1785 + 6, 1000, 24, 6)
         self._gear_wheel.set_pressed()
@@ -455,7 +474,7 @@ class Lastar(arcade.Window):
         self._arrows_menu.connect_to_func(self._gear_wheel.is_pressed)
         # area setting up :
         bot_menu_y -= 3 * 3 * sq_size
-        scaling_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Sizes in tiles',
+        scaling_area = Area(bot_menu_x, bot_menu_y, (_d_ := int(3 * delta / 4)), sq_size, line_w, f'Sizes in tiles',
                             {k: f'{v}x{self._grid.get_hor_tiles(k)}' for k, v in self._grid.scale_names.items()})
         scaling_area.connect_to_func(self._grid.set_scale)
         scaling_area.choose_field()
@@ -464,7 +483,7 @@ class Lastar(arcade.Window):
         self._settings_menu.append_area(scaling_area)
         self._settings_menu.connect_to_func(self._gear_wheel.is_pressed)
         # TWO AUX AREAS:
-        bot_menu_y -= 30 + (len(self._grid.scale_names) - 1) * delta + 3 * sq_size
+        bot_menu_y -= 30 + (len(self._grid.scale_names) - 1) * _d_ + 3 * sq_size
         self._guide_arrows_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Guide arrows',
                                        self._guide_arrows_names, True)
         self._guide_arrows_area.connect_to_func(self._grid.set_guide_arrows_ind)
@@ -472,6 +491,11 @@ class Lastar(arcade.Window):
         self._show_mode_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Show mode',
                                     self._interactive_names, True)
         self._show_mode_area.connect_to_func(self.set_interactive_ind)
+        # MUSIC:
+        bot_menu_y -= 30 + 3 * sq_size
+        self._music_mode_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Music mode',
+                                     self._music_names, True)
+        self._music_mode_area.connect_to_func(Lastar.music)
         # menu setting up:
         # MANAGE MENU:
         self._play_button = PlayButton(1785 + 6, 50, 32, 2)
@@ -489,7 +513,7 @@ class Lastar(arcade.Window):
         # HINTS:
         self._mode_info = Info(5 + 26 / 4 - self._grid.line_width, SCREEN_HEIGHT - 30, 26)
         self._mode_info.connect_to_func(self.get_mode_info)
-
+        ...
         # test:
         self._current_algo = self._bellman_ford
 
@@ -563,6 +587,7 @@ class Lastar(arcade.Window):
         self._arrows_menu.setup()
         self._guide_arrows_area.setup()
         self._show_mode_area.setup()
+        self._music_mode_area.setup()
         # grid:
         self._grid.setup()
         # let us make the new mouse cursor:
@@ -623,6 +648,7 @@ class Lastar(arcade.Window):
         # if not self._gear_wheel.is_pressed():
         self._guide_arrows_area.draw()
         self._show_mode_area.draw()
+        self._music_mode_area.draw()
         # NODE CHOSEN:
         nc = self._grid.node_chosen
         if nc:
@@ -762,6 +788,7 @@ class Lastar(arcade.Window):
         self._arrows_menu.on_motion(x, y)
         self._guide_arrows_area.on_motion(x, y)
         self._show_mode_area.on_motion(x, y)
+        self._music_mode_area.on_motion(x, y)
         # building and erasing walls:
         self._grid.build_or_erase(x, y)
 
@@ -781,6 +808,7 @@ class Lastar(arcade.Window):
         self._arrows_menu.on_press(x, y)
         self._guide_arrows_area.on_press(x, y)
         self._show_mode_area.on_press(x, y)
+        self._music_mode_area.on_press(x, y)
         # grid:
         self._grid.press(x, y, button)
         self.log.debug('.on_mouse_press() successfully -> all .on_press() is processing')
@@ -804,6 +832,9 @@ class Lastar(arcade.Window):
         for icon in self._icons_dict.values():
             if icon != icon_chosen:
                 icon.clear_inter_type()
+                if icon == self._gear_wheel:
+                    # ungearing:
+                    Lastar.gear()
 
 
 class DrawLib:
@@ -839,6 +870,11 @@ class DrawLib:
     def is_point_in_circle(cx, cy, r, x, y):
         """checks if the point given located in the circle with the center in (cx, cy) and radius that equals r"""
         return (cx - x) ** 2 + (cy - y) ** 2 <= r ** 2
+
+    @staticmethod
+    def is_point_in_ellipse(cx, cy, rx, ry, x, y):
+        """checks if the point given located in the ellipse with the center in (cx, cy) and radius 1 and 2: rx and ry"""
+        return ry * 2 * (cx - x) ** 2 + rx ** 2 * (cy - y) ** 2 <= (rx * ry) ** 2
 
     @staticmethod
     def draw_icon_lock():
@@ -917,6 +953,7 @@ class FuncConnected(ABC):
         self._func = None
 
     # connects elements and methods:
+    # TODO: get smart!!! Must process two or more functions...
     def connect_to_func(self, *func):
         log = logging.getLogger('FuncConnected')
         try:
@@ -1355,25 +1392,27 @@ class Grid(Drawable, FuncConnected):
         elif self._mode == 1:
             self.log.info(f'selected mode {self._mode_names[1]}')
             if button == arcade.MOUSE_BUTTON_LEFT:
-                self.log.info('MOUSE_BUTTON_LEFT -> set START_NODE')
-                sn = self.get_node(x, y)
-                if sn and sn != self.end_node:
-                    if self._start_node:
-                        self._start_node.type = NodeType.EMPTY
+                if not Lastar.is_in_interaction():
+                    self.log.info('MOUSE_BUTTON_LEFT -> set START_NODE')
+                    sn = self.get_node(x, y)
+                    if sn and sn != self.end_node and sn.type == NodeType.EMPTY:
+                        if self._start_node:
+                            self._start_node.type = NodeType.EMPTY
+                            self._start_node.update_sprite_colour()
+                        sn.type = NodeType.START_NODE
+                        self._start_node = sn
                         self._start_node.update_sprite_colour()
-                    sn.type = NodeType.START_NODE
-                    self._start_node = sn
-                    self._start_node.update_sprite_colour()
             elif button == arcade.MOUSE_BUTTON_RIGHT:
-                self.log.info('MOUSE_BUTTON_RIGHT -> set END_NODE')
-                en = self.get_node(x, y)
-                if en and en != self.start_node:
-                    if self._end_node:
-                        self._end_node.type = NodeType.EMPTY
+                if not Lastar.is_in_interaction():
+                    self.log.info('MOUSE_BUTTON_RIGHT -> set END_NODE')
+                    en = self.get_node(x, y)
+                    if en and en != self.start_node and en.type == NodeType.EMPTY:
+                        if self._end_node:
+                            self._end_node.type = NodeType.EMPTY
+                            self._end_node.update_sprite_colour()
+                        en.type = NodeType.END_NODE
+                        self._end_node = en
                         self._end_node.update_sprite_colour()
-                    en.type = NodeType.END_NODE
-                    self._end_node = en
-                    self._end_node.update_sprite_colour()
         elif self._mode == 2:  # a_star interactive -->> info getting:
             self.log.info(f'selected mode {self._mode_names[2]}')
             n = self.get_node(x, y)
@@ -1410,7 +1449,7 @@ class Grid(Drawable, FuncConnected):
             self._walls_built_erased.append(([self.number_repr(n)], True))
             self._walls_index += 1
             self.log.info(f'The wall successfully built')
-            if not self._player.playing:
+            if not self._player.playing and Lastar.music_on:
                 self._player.queue(self._source_build)
                 self._player.play()
 
@@ -1429,7 +1468,7 @@ class Grid(Drawable, FuncConnected):
             self._walls_index += 1
             self.log.info(f'The wall successfully erased')
             # plays sound:
-            if not self._player.playing:
+            if not self._player.playing and Lastar.music_on:
                 self._player.queue(self._source_erase)
                 self._player.play()
 
@@ -1453,7 +1492,7 @@ class Grid(Drawable, FuncConnected):
         self.log.info(
             f'inner recursive method .{_erase_all_linked_nodes}() called {_erase_all_linked_nodes.rec_calls} times and has max depth of {_erase_all_linked_nodes.rec_depth}')
         # plays sound:
-        if not self._player.playing:
+        if not self._player.playing and Lastar.music_on:
             self._player.queue(self._source_erase_all)
             self._player.play()
 
@@ -1946,10 +1985,12 @@ class Algorithm(Connected):
         self._time_elapsed = 0
         # sounds:
         # sounds:
-        self._player_up = pyglet.media.player.Player()
+        self._player = pyglet.media.player.Player()
         self._source_up = pyglet.media.load("up.mp3", streaming=False)
-        self._player_down = pyglet.media.player.Player()
         self._source_down = pyglet.media.load("down.mp3", streaming=False)
+        self._source_path_found_ru = pyglet.media.load("path_found_alena_ru.mp3", streaming=False)
+        self._source_path_recovered_ru = pyglet.media.load("path_rec_alena_ru.mp3", streaming=False)
+        self._source_path_does_not_exist_ru = pyglet.media.load("path_does_not_exist_alena.mp3", streaming=False)
 
     def connect(self, grid: Grid):
         self._obj = grid
@@ -1980,14 +2021,21 @@ class Algorithm(Connected):
         ...
 
     def sound_up(self):
-        if not self._player_up.playing:
-            self._player_up.queue(self._source_up)
-        self._player_up.play()
+        if not self._player.playing and Lastar.music_on:
+            self._player.queue(self._source_up)
+            self._player.play()
 
     def sound_down(self):
-        if not self._player_down.playing:
-            self._player_down.queue(self._source_down)
-        self._player_down.play()
+        if not self._player.playing and Lastar.music_on:
+            self._player.queue(self._source_down)
+            self._player.play()
+
+    def play_sound(self, source):
+        if Lastar.music_on:
+            self._player.queue(source)
+            if self._player.playing:
+                self._player.next_source()
+            self._player.play()
 
     def base_clear(self):
         # visualization:
@@ -2030,6 +2078,20 @@ class Algorithm(Connected):
 
     @logged()
     def path_up(self):
+        if self._path_index == len(self.path) - 2:
+            if Lastar.music_on:
+                print(f'recovered')
+                self._player.queue(self._source_path_recovered_ru)
+                if self._player.playing:
+                    self._player.next_source()
+                self._player.play()
+        if self._path_index == 0:
+            if Lastar.music_on:
+                print(f'found')
+                self._player.queue(self._source_path_found_ru)
+                if self._player.playing:
+                    self._player.next_source()
+                self._player.play()
         if self._path_index < len(self.path) - 1:
             if (path_node := self._path[self._path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
                 path_node.type = NodeType.PATH_NODE
@@ -2148,6 +2210,10 @@ class Astar(Algorithm, FuncConnected):
         # 5. interactive a_star pars:
         self._curr_node_dict = {}
         self._neighs_added_to_heap_dict = {}
+        # sound:
+        self._player = pyglet.media.player.Player()
+        self._source_path_does_not_exist_ru = pyglet.media.load("path_does_not_exist_alena.mp3", streaming=False)
+        self._source_path_recovered_ru = pyglet.media.load("path_rec_alena_ru.mp3", streaming=False)
 
     def get_nodes_visited_q(self):
         return len(self._nodes_visited)
@@ -2210,8 +2276,13 @@ class Astar(Algorithm, FuncConnected):
         # memoization:
         self._neighs_added_to_heap_dict[self._iterations + 1] = []
         # popping out the most priority node for a_star from the heap:
-        self._curr_node_dict[
-            self._iterations + 1] = self.bin_heap.heappop()
+        if len(self.bin_heap.heap) > 0:
+            self._curr_node_dict[
+                self._iterations + 1] = self.bin_heap.heappop()
+        else:
+            # the path does not exist!!!
+            self.play_sound(self._source_path_does_not_exist_ru)
+            return
         # current node:
         curr_node = self._curr_node_dict[self._iterations + 1]
         if self._iterations > 0 and curr_node != self._obj.end_node:
@@ -2349,6 +2420,7 @@ class Astar(Algorithm, FuncConnected):
         self._func[0](self._greedy_ind)
         self._obj.start_node.g = 0
         self.bin_heap = BinHeap([self._obj.start_node])
+        found = False
         # the main cycle:
         while self.bin_heap.heap:
             self._iterations += 1
@@ -2360,6 +2432,7 @@ class Astar(Algorithm, FuncConnected):
             self._nodes_visited[curr_node] = 1
             # base case of finding the shortest path:
             if curr_node == self._obj.end_node:
+                found = True
                 break
             # next step:
             for neigh in curr_node.get_neighs(self._obj, [NodeType.WALL]):
@@ -2394,6 +2467,8 @@ class Astar(Algorithm, FuncConnected):
         for neigh in self._nodes_visited.keys() | self.bin_heap.heap:
             if neigh.guiding_arrow_sprite is not None:
                 neigh.append_arrow(self._obj)
+        # music:
+        self.play_sound(self._source_path_recovered_ru if found else self._source_path_does_not_exist_ru)
 
 
 class WaveLee(Algorithm):
@@ -2407,6 +2482,10 @@ class WaveLee(Algorithm):
         self._next_wave_lee = None
         self._fronts_dict = None
         self._nodes_visited_q = 0
+        # sound:
+        self._player = pyglet.media.player.Player()
+        self._source_path_does_not_exist_ru = pyglet.media.load("path_does_not_exist_alena.mp3", streaming=False)
+        self._source_path_recovered_ru = pyglet.media.load("path_rec_alena_ru.mp3", streaming=False)
 
     def get_nodes_visited_q(self):
         return self._nodes_visited_q
@@ -2461,8 +2540,9 @@ class WaveLee(Algorithm):
                             neigh.append_arrow(self._obj)
                         self._next_wave_lee.append(neigh)
                         neigh.previously_visited_node = curr_node
-        # print(f'iteration: {self._iterations}, CURRENT FRONT: {self._front_wave_lee}')
         self.log.debug(f'iteration: {self._iterations}, CURRENT FRONT: {self._front_wave_lee}')
+        # plays sound:
+        self.sound_up()
 
     def algo_down(self):
         # possibility check of wave_lee's stepping back:
@@ -2493,6 +2573,8 @@ class WaveLee(Algorithm):
                 self._front_wave_lee = []
             print(f'iteration: {self._iterations}, CURRENT FRONT: {self._front_wave_lee}')
             self.log.debug(f'iteration: {self._iterations}, CURRENT FRONT: {self._front_wave_lee}')
+        # plays sound:
+        self.sound_down()
 
     @timer
     def full_algo(self):
@@ -2509,6 +2591,8 @@ class WaveLee(Algorithm):
                     front_node.type = NodeType.VISITED_NODE
                     front_node.update_sprite_colour()
                 if front_node == self._obj.end_node:
+                    # the path is found:
+                    self.play_sound(self._source_path_recovered_ru)
                     self.recover_path()
                     return
                 for front_neigh in front_node.get_neighs(
@@ -2522,6 +2606,8 @@ class WaveLee(Algorithm):
                         new_front_wave.add(front_neigh)
 
             front_wave = set() | new_front_wave
+        # there is no path found:
+        self.play_sound(self._source_path_does_not_exist_ru)
 
 
 class BfsDfs(Algorithm):
@@ -2536,6 +2622,10 @@ class BfsDfs(Algorithm):
         # dicts:
         self._curr_node_dict = {}
         self._neighs_added_to_heap_dict = {}
+        # sound:
+        self._player = pyglet.media.player.Player()
+        self._source_path_does_not_exist_ru = pyglet.media.load("path_does_not_exist_alena.mp3", streaming=False)
+        self._source_path_recovered_ru = pyglet.media.load("path_rec_alena_ru.mp3", streaming=False)
 
     @property
     def bfs_dfs_ind(self):
@@ -2572,7 +2662,12 @@ class BfsDfs(Algorithm):
     def algo_up(self):
         # one bfs step up:
         self._iterations += 0
-        curr_node = self._queue.pop()
+        if len(self._queue) > 0:
+            curr_node = self._queue.pop()
+        else:
+            # there is no path:
+            self.play_sound(self._source_path_does_not_exist_ru)
+            return
         self._curr_node_dict[self._iterations + 1] = curr_node
         if self._iterations > 0:
             if curr_node.type != NodeType.END_NODE:
@@ -2605,6 +2700,8 @@ class BfsDfs(Algorithm):
             else:
                 self._queue.append(neigh)
         self._iterations += 1
+        # plays sound:
+        self.sound_up()
 
     def algo_down(self):
         if self._iterations > 0:
@@ -2648,6 +2745,8 @@ class BfsDfs(Algorithm):
                     prev_node.update_sprite_colour()
             # step back:
             self._iterations -= 1
+        # plays sound:
+        self.sound_down()
 
     @timer
     def full_algo(self):
@@ -2657,12 +2756,16 @@ class BfsDfs(Algorithm):
         times_of_becoming_a_neigh = dict()
         while queue:
             self._iterations += 1
-            current_node = queue.pop()
+            if len(queue) > 0:
+                current_node = queue.pop()
+            else:
+                break
             if current_node.type not in [NodeType.START_NODE, NodeType.END_NODE]:
                 current_node.type = NodeType.VISITED_NODE
                 current_node.update_sprite_colour()
                 current_node.times_visited += 1
             if current_node == self._obj.end_node:
+                self.play_sound(self._source_path_recovered_ru)
                 return self.recover_path()
             for neigh in current_node.get_neighs(self._obj,
                                                  [NodeType.START_NODE, NodeType.VISITED_NODE, NodeType.WALL] + (
@@ -2685,6 +2788,8 @@ class BfsDfs(Algorithm):
                 # DFS:
                 else:
                     queue.append(neigh)
+        # there is no path found:
+        self.play_sound(self._source_path_does_not_exist_ru)
 
 
 class Menu(Drawable, Interactable, FuncConnected):
@@ -2842,6 +2947,7 @@ class Area(Drawable, Interactable, FuncConnected):
 
     @logged()
     def on_press(self, x, y):
+        print(f'Lastar.music_on: {Lastar.music_on}')
         for i in range(len(self._fields)):
             if not self._is_locked and DrawLib.is_point_in_square(
                     self._cx + 10,
@@ -2851,12 +2957,12 @@ class Area(Drawable, Interactable, FuncConnected):
                 if self._field_chosen is not None and i == self._field_chosen:
                     if self._no_choice:
                         self._field_chosen = None
-                        if not self._player.playing:
+                        if not self._player.playing and Lastar.music_on:
                             self._player.queue(self._source)
                             self._player.play()
                 else:
                     self._field_chosen = i
-                    if not self._player.playing:
+                    if not self._player.playing and Lastar.music_on:
                         self._player.queue(self._source)
                         self._player.play()
 
@@ -2924,6 +3030,7 @@ class PlayButton(Icon, Drawable, Interactable, FuncConnected):
         # sounds:
         self._player = pyglet.media.player.Player()
         self._source = pyglet.media.load("tru.mp3", streaming=False)
+        self._source_error = pyglet.media.load("error.mp3", streaming=False)
 
     @logged()
     def setup(self):
@@ -3001,14 +3108,20 @@ class PlayButton(Icon, Drawable, Interactable, FuncConnected):
             self._inter_type = InterType.PRESSED
             self.log.debug(f'{self._func[0].__name__} call')
             self._func[0]()
-        if not self._player.playing:
+        if not self._player.playing and Lastar.music_on:
             self._player.queue(self._source)
             self._player.play()
 
     def on_press(self, x, y):
-        # if self._inter_type != InterType.PRESSED:
+        print(f'gearing: {Lastar.is_gearing()}')
         if DrawLib.is_point_in_circle(self._cx, self._cy, self._r, x, y):
-            self.press()
+            if not Lastar.is_gearing():
+                self.press()
+            else:
+                # error sound:
+                if not self._player.playing and Lastar.music_on:
+                    self._player.queue(self._source_error)
+                    self._player.play()
 
     def on_release(self, x, y):
         pass
@@ -3240,7 +3353,7 @@ class Eraser(Icon, Drawable, Interactable, FuncConnected):
             self._inter_type = InterType.PRESSED
             self._func[0]()
             # plays sound:
-            if not self._player.playing:
+            if not self._player.playing and Lastar.music_on:
                 self._player.queue(self._source)
                 self._player.play()
 
@@ -3402,6 +3515,7 @@ class GearWheelButton(Icon, Drawable, Interactable):
         # sounds:
         self._player = pyglet.media.player.Player()
         self._source = pyglet.media.load("tuduk.mp3", streaming=False)
+        self._source_error = pyglet.media.load("error.mp3", streaming=False)
 
     @logged()
     def setup(self):
@@ -3457,12 +3571,20 @@ class GearWheelButton(Icon, Drawable, Interactable):
 
     def on_press(self, x, y):
         if arcade.is_point_in_polygon(x, y, self._vertices):
-            if self._inter_type != InterType.PRESSED:
-                self._inter_type = InterType.PRESSED
-                if not self._player.playing:
-                    self._player.queue(self._source)
+            if not Lastar.is_in_interaction():
+                if self._inter_type != InterType.PRESSED:
+                    self._inter_type = InterType.PRESSED
+                    # gearing:
+                    Lastar.gear()
+                    if not self._player.playing and Lastar.music_on:
+                        self._player.queue(self._source)
+                        self._player.play()
+                    return self
+            else:
+                # error sound:
+                if not self._player.playing and Lastar.music_on:
+                    self._player.queue(self._source_error)
                     self._player.play()
-                return self
 
     def on_release(self, x, y):
         pass
@@ -3679,7 +3801,7 @@ class Arrow(Icon, Drawable, Interactable):  # part of an arrow menu
                 ArrowsMenu.arrows_indices.append(self._index)
                 ArrowsMenu.walk_index += 1
                 # plays sound:
-                if not self._player.playing:
+                if not self._player.playing and Lastar.music_on:
                     self._player.queue(self._source)
                     self._player.play()
                 if ArrowsMenu.walk_index == 4:
@@ -3737,7 +3859,7 @@ class ArrowReset(Icon, Drawable, Interactable):
             ArrowsMenu.walk_index = 0
             ArrowsMenu.arrows_indices = []
             # plays sound:
-            if not self._player.playing:
+            if not self._player.playing and Lastar.music_on:
                 self._player.queue(self._source)
                 self._player.play()
             for arrow in ArrowsMenu.arrows:
@@ -3768,6 +3890,7 @@ class AstarIcon(Icon, Drawable, Interactable, FuncConnected):
         # sounds:
         self._player = pyglet.media.player.Player()
         self._source = pyglet.media.load("tuduk.mp3", streaming=False)
+        self._source_error = pyglet.media.load("error.mp3", streaming=False)
 
     @logged()
     def setup(self):
@@ -3849,13 +3972,19 @@ class AstarIcon(Icon, Drawable, Interactable, FuncConnected):
     @logged()
     def on_press(self, x, y):
         if arcade.is_point_in_polygon(x, y, self._vertices[0]):
-            if self._inter_type != InterType.PRESSED:
-                self._inter_type = InterType.PRESSED
-                self._func[0]()
-                if not self._player.playing:
-                    self._player.queue(self._source)
+            if not Lastar.is_in_interaction():
+                if self._inter_type != InterType.PRESSED:
+                    self._inter_type = InterType.PRESSED
+                    self._func[0]()
+                    if not self._player.playing and Lastar.music_on:
+                        self._player.queue(self._source)
+                        self._player.play()
+                    return self
+            else:
+                # error sound:
+                if not self._player.playing and Lastar.music_on:
+                    self._player.queue(self._source_error)
                     self._player.play()
-                return self
 
     def on_release(self, x, y):
         pass
@@ -3880,6 +4009,7 @@ class Waves(Icon, Drawable, Interactable, FuncConnected):
         # sounds:
         self._player = pyglet.media.player.Player()
         self._source = pyglet.media.load("tuduk.mp3", streaming=False)
+        self._source_error = pyglet.media.load("error.mp3", streaming=False)
 
     @logged()
     def setup(self):
@@ -3909,13 +4039,19 @@ class Waves(Icon, Drawable, Interactable, FuncConnected):
     @logged()
     def on_press(self, x, y):
         if DrawLib.is_point_in_circle(self._cx, self._cy, self._size, x, y):
-            if self._inter_type != InterType.PRESSED:
-                self._inter_type = InterType.PRESSED
-                self._func[0]()
-                if not self._player.playing:
-                    self._player.queue(self._source)
+            if not Lastar.is_in_interaction():
+                if self._inter_type != InterType.PRESSED:
+                    self._inter_type = InterType.PRESSED
+                    self._func[0]()
+                    if not self._player.playing and Lastar.music_on:
+                        self._player.queue(self._source)
+                        self._player.play()
+                    return self
+            else:
+                # error sound:
+                if not self._player.playing and Lastar.music_on:
+                    self._player.queue(self._source_error)
                     self._player.play()
-                return self
 
     def on_release(self, x, y):
         pass
@@ -3940,6 +4076,7 @@ class BfsDfsIcon(Icon, Drawable, Interactable, FuncConnected):
         # sounds:
         self._player = pyglet.media.player.Player()
         self._source = pyglet.media.load("tuduk.mp3", streaming=False)
+        self._source_error = pyglet.media.load("error.mp3", streaming=False)
 
     @logged()
     def setup(self):
@@ -3996,13 +4133,19 @@ class BfsDfsIcon(Icon, Drawable, Interactable, FuncConnected):
     @logged()
     def on_press(self, x, y):
         if DrawLib.is_point_in_square(self._cx, self._cy, self._size, x, y):
-            if self._inter_type != InterType.PRESSED:
-                self._inter_type = InterType.PRESSED
-                self._func[0]()
-                if not self._player.playing:
-                    self._player.queue(self._source)
+            if not Lastar.is_in_interaction():
+                if self._inter_type != InterType.PRESSED:
+                    self._inter_type = InterType.PRESSED
+                    self._func[0]()
+                    if not self._player.playing and Lastar.music_on:
+                        self._player.queue(self._source)
+                        self._player.play()
+                    return self
+            else:
+                # error sound:
+                if not self._player.playing and Lastar.music_on:
+                    self._player.queue(self._source_error)
                     self._player.play()
-                return self
 
     def on_release(self, x, y):
         pass
@@ -4162,3 +4305,4 @@ if __name__ == "__main__":
 # TODO: Binary heap with Indexation instead of heapq for performance upgrading (VERY HARD, VERY HARD) +
 # TODO: TRY TO PREVENT CYCLING WITH HEAP AFTER DELETING (HARD, HARD) -
 # TODO: FIX THE BUG WITH WALLS BUILDING WHILE BFS ALGO IS IN INTERACTIVE STATE (MEDIUM, MEDIUM) +
+# TODO: FIND THE VOICE EMULATOR IN ORDER TO MAKE 2 MP#-FILES: 'THE PATH FOUND' and 'THE PATH RESTORED'

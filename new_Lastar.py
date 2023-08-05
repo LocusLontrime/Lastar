@@ -6,7 +6,7 @@ from functools import reduce
 
 # math:
 import math
-import numpy as np
+# import numpy as np  # TODO: delete
 
 # logging
 import logging
@@ -317,7 +317,7 @@ class Lastar(arcade.Window):
         self.set_update_rate(1 / 60)
         # sounds:
         self._player = pyglet.media.player.Player()
-        self._source = pyglet.media.load("sound.mp3", streaming=False)
+        self._source = pyglet.media.load("Sounds/sound.mp3", streaming=False)
         self._player.queue(self._source)
         self._player.play()
         # time elapsed:
@@ -627,7 +627,9 @@ class Lastar(arcade.Window):
         self._grid.draw()
         # HINTS:
         ...
+        # MODE (BUILDING and so on...):
         self._mode_info.draw()
+        # some useful information:
         if self._current_algo is not None:
             arcade.Text(self._current_algo.get_current_state(), 225, SCREEN_HEIGHT - 35, arcade.color.BROWN,
                         bold=True, italic=True).draw()
@@ -645,7 +647,7 @@ class Lastar(arcade.Window):
             if menu is not None:
                 menu.draw()
         self._arrows_menu.draw()
-        # if not self._gear_wheel.is_pressed():
+        ...
         self._guide_arrows_area.draw()
         self._show_mode_area.draw()
         self._music_mode_area.draw()
@@ -829,12 +831,17 @@ class Lastar(arcade.Window):
     @logged()
     def clear_icons_inter_types(self, icon_chosen: 'Icon'):
         """clear the inter_types of settings and algo icons"""
+        # print(f'icon_chosen: {type(icon_chosen)}')
+        # print(f'gw is pressed bef: {self._gear_wheel.is_pressed()}')
+        if icon_chosen != self._gear_wheel:
+            if self._gear_wheel.is_pressed():
+                # ungearing:
+                # print(f'ungearing...')
+                Lastar.gear()
         for icon in self._icons_dict.values():
             if icon != icon_chosen:
                 icon.clear_inter_type()
-                if icon == self._gear_wheel:
-                    # ungearing:
-                    Lastar.gear()
+        # print(f'gw is pressed aft: {self._gear_wheel.is_pressed()}')
 
 
 class DrawLib:
@@ -1060,10 +1067,10 @@ class Grid(Drawable, FuncConnected):
         self._loading_ind = 0
         # sounds:
         self._player = pyglet.media.player.Player()
-        self._source_clear = pyglet.media.load("clear.mp3", streaming=False)
-        self._source_build = pyglet.media.load("build_a_brick.mp3", streaming=False)
-        self._source_erase = pyglet.media.load("brick_hit.mp3", streaming=False)
-        self._source_erase_all = pyglet.media.load("brick_wall_falling.mp3", streaming=False)
+        self._source_clear = pyglet.media.load("Sounds/clear.mp3", streaming=False)
+        self._source_build = pyglet.media.load("Sounds/build_a_brick.mp3", streaming=False)
+        self._source_erase = pyglet.media.load("Sounds/brick_hit.mp3", streaming=False)
+        self._source_erase_all = pyglet.media.load("Sounds/brick_wall_falling.mp3", streaming=False)
 
     # INITIALIZATION AUX:
     @logged()
@@ -1738,7 +1745,7 @@ class Node:
         self.times_visited = 0
         self.times_neighbourized = 0
         # cost and heuristic vars:
-        self.g = np.Infinity  # aggregated cost of moving from start to the current Node, Infinity chosen for convenience and algorithm's logic
+        self.g = math.inf  # np.Infinity  # aggregated cost of moving from start to the current Node, Infinity chosen for convenience and algorithm's logic
         self.h = 0  # approximated cost evaluated by heuristic for path starting from the current node and ending at the exit Node
         self.tiebreaker = None  # recommended for many shortest paths situations
         # f = h + g or total cost of the current Node is not needed here
@@ -1903,7 +1910,7 @@ class Node:
     # @logged()
     def heur_clear(self):
         """clears the node heuristically"""
-        self.g = np.Infinity
+        self.g = math.inf  # np.Infinity
         self.h = 0
         self.tiebreaker = None
         self.previously_visited_node = None
@@ -1986,11 +1993,11 @@ class Algorithm(Connected):
         # sounds:
         # sounds:
         self._player = pyglet.media.player.Player()
-        self._source_up = pyglet.media.load("up.mp3", streaming=False)
-        self._source_down = pyglet.media.load("down.mp3", streaming=False)
-        self._source_path_found_ru = pyglet.media.load("path_found_alena_ru.mp3", streaming=False)
-        self._source_path_recovered_ru = pyglet.media.load("path_rec_alena_ru.mp3", streaming=False)
-        self._source_path_does_not_exist_ru = pyglet.media.load("path_does_not_exist_alena.mp3", streaming=False)
+        self._source_up = pyglet.media.load("Sounds/up.mp3", streaming=False)
+        self._source_down = pyglet.media.load("Sounds/down.mp3", streaming=False)
+        self._source_path_found_ru = pyglet.media.load("Sounds/path_found_alena_ru.mp3", streaming=False)
+        self._source_path_recovered_ru = pyglet.media.load("Sounds/path_rec_alena_ru.mp3", streaming=False)
+        self._source_path_does_not_exist_ru = pyglet.media.load("Sounds/path_does_not_exist_alena.mp3", streaming=False)
 
     def connect(self, grid: Grid):
         self._obj = grid
@@ -2212,8 +2219,8 @@ class Astar(Algorithm, FuncConnected):
         self._neighs_added_to_heap_dict = {}
         # sound:
         self._player = pyglet.media.player.Player()
-        self._source_path_does_not_exist_ru = pyglet.media.load("path_does_not_exist_alena.mp3", streaming=False)
-        self._source_path_recovered_ru = pyglet.media.load("path_rec_alena_ru.mp3", streaming=False)
+        self._source_path_does_not_exist_ru = pyglet.media.load("Sounds/path_does_not_exist_alena.mp3", streaming=False)
+        self._source_path_recovered_ru = pyglet.media.load("Sounds/path_rec_alena_ru.mp3", streaming=False)
 
     def get_nodes_visited_q(self):
         return len(self._nodes_visited)
@@ -2382,7 +2389,7 @@ class Astar(Algorithm, FuncConnected):
                 _f = node.f
                 node.smart_restore(neigh, self.FIELDS)
                 # removing or returning node's heuristic values to their previous values:
-                if neigh.g == np.Infinity:
+                if neigh.g == math.inf:  # np.Infinity:
                     self.bin_heap.remove(node)
                 else:
                     # the neigh has already been two or more times visited:
@@ -2484,8 +2491,8 @@ class WaveLee(Algorithm):
         self._nodes_visited_q = 0
         # sound:
         self._player = pyglet.media.player.Player()
-        self._source_path_does_not_exist_ru = pyglet.media.load("path_does_not_exist_alena.mp3", streaming=False)
-        self._source_path_recovered_ru = pyglet.media.load("path_rec_alena_ru.mp3", streaming=False)
+        self._source_path_does_not_exist_ru = pyglet.media.load("Sounds/path_does_not_exist_alena.mp3", streaming=False)
+        self._source_path_recovered_ru = pyglet.media.load("Sounds/path_rec_alena_ru.mp3", streaming=False)
 
     def get_nodes_visited_q(self):
         return self._nodes_visited_q
@@ -2624,8 +2631,8 @@ class BfsDfs(Algorithm):
         self._neighs_added_to_heap_dict = {}
         # sound:
         self._player = pyglet.media.player.Player()
-        self._source_path_does_not_exist_ru = pyglet.media.load("path_does_not_exist_alena.mp3", streaming=False)
-        self._source_path_recovered_ru = pyglet.media.load("path_rec_alena_ru.mp3", streaming=False)
+        self._source_path_does_not_exist_ru = pyglet.media.load("Sounds/path_does_not_exist_alena.mp3", streaming=False)
+        self._source_path_recovered_ru = pyglet.media.load("Sounds/path_rec_alena_ru.mp3", streaming=False)
 
     @property
     def bfs_dfs_ind(self):
@@ -2880,7 +2887,7 @@ class Area(Drawable, Interactable, FuncConnected):
         self._no_choice = no_choice
         # sounds:
         self._player = pyglet.media.player.Player()
-        self._source = pyglet.media.load("tuk.mp3", streaming=False)
+        self._source = pyglet.media.load("Sounds/tuk.mp3", streaming=False)
 
     @logged()
     def choose_field(self, field_chosen_ind: int = 0):
@@ -3029,8 +3036,8 @@ class PlayButton(Icon, Drawable, Interactable, FuncConnected):
         self._multiplier = 1
         # sounds:
         self._player = pyglet.media.player.Player()
-        self._source = pyglet.media.load("tru.mp3", streaming=False)
-        self._source_error = pyglet.media.load("error.mp3", streaming=False)
+        self._source = pyglet.media.load("Sounds/tru.mp3", streaming=False)
+        self._source_error = pyglet.media.load("Sounds/error.mp3", streaming=False)
 
     @logged()
     def setup(self):
@@ -3298,7 +3305,7 @@ class Eraser(Icon, Drawable, Interactable, FuncConnected):
         self._centers = []
         # sounds:
         self._player = pyglet.media.player.Player()
-        self._source = pyglet.media.load("clear.mp3", streaming=False)
+        self._source = pyglet.media.load("Sounds/clear.mp3", streaming=False)
 
     @logged()
     def setup(self):
@@ -3514,8 +3521,8 @@ class GearWheelButton(Icon, Drawable, Interactable):
         self._clockwise = clockwise
         # sounds:
         self._player = pyglet.media.player.Player()
-        self._source = pyglet.media.load("tuduk.mp3", streaming=False)
-        self._source_error = pyglet.media.load("error.mp3", streaming=False)
+        self._source = pyglet.media.load("Sounds/tuduk.mp3", streaming=False)
+        self._source_error = pyglet.media.load("Sounds/error.mp3", streaming=False)
 
     @logged()
     def setup(self):
@@ -3697,7 +3704,7 @@ class Arrow(Icon, Drawable, Interactable):  # part of an arrow menu
         self._colour = colour
         # sounds:
         self._player = pyglet.media.player.Player()
-        self._source = pyglet.media.load("tuk.mp3", streaming=False)
+        self._source = pyglet.media.load("Sounds/tuk.mp3", streaming=False)
 
     @property
     def _dx(self):  # TODO: this one should not be a protected property!!!
@@ -3828,7 +3835,7 @@ class ArrowReset(Icon, Drawable, Interactable):
         self._arrow_height = arrow_height
         # sounds:
         self._player = pyglet.media.player.Player()
-        self._source = pyglet.media.load("clear.mp3", streaming=False)
+        self._source = pyglet.media.load("Sounds/clear.mp3", streaming=False)
 
     @logged()
     def setup(self):
@@ -3889,8 +3896,8 @@ class AstarIcon(Icon, Drawable, Interactable, FuncConnected):
         self._clockwise = clockwise
         # sounds:
         self._player = pyglet.media.player.Player()
-        self._source = pyglet.media.load("tuduk.mp3", streaming=False)
-        self._source_error = pyglet.media.load("error.mp3", streaming=False)
+        self._source = pyglet.media.load("Sounds/tuduk.mp3", streaming=False)
+        self._source_error = pyglet.media.load("Sounds/error.mp3", streaming=False)
 
     @logged()
     def setup(self):
@@ -4008,8 +4015,8 @@ class Waves(Icon, Drawable, Interactable, FuncConnected):
         self._line_w = line_w
         # sounds:
         self._player = pyglet.media.player.Player()
-        self._source = pyglet.media.load("tuduk.mp3", streaming=False)
-        self._source_error = pyglet.media.load("error.mp3", streaming=False)
+        self._source = pyglet.media.load("Sounds/tuduk.mp3", streaming=False)
+        self._source_error = pyglet.media.load("Sounds/error.mp3", streaming=False)
 
     @logged()
     def setup(self):
@@ -4075,8 +4082,8 @@ class BfsDfsIcon(Icon, Drawable, Interactable, FuncConnected):
         self._line_w = line_w
         # sounds:
         self._player = pyglet.media.player.Player()
-        self._source = pyglet.media.load("tuduk.mp3", streaming=False)
-        self._source_error = pyglet.media.load("error.mp3", streaming=False)
+        self._source = pyglet.media.load("Sounds/tuduk.mp3", streaming=False)
+        self._source_error = pyglet.media.load("Sounds/error.mp3", streaming=False)
 
     @logged()
     def setup(self):

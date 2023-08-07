@@ -86,7 +86,8 @@ def logged(is_debug: bool = True, is_used: bool = True):
     def core(func):  # 36 366 98 989
         @functools.wraps(func)
         def _wrapper(*args, **kwargs):
-            obj = args[0]  # <<-- self
+            # <<-- self:
+            obj = args[0]
             if type(func) != dict:
                 name = func.__name__
                 doc = func.__doc__
@@ -759,13 +760,37 @@ class Lastar(arcade.Window):
                     self._grid.redo()
             # saving and loading:
             case arcade.key.S:
-                self.log.info('key.S -> save() for _walls call')
-                self._grid.save()
+                if self._grid.mode == 0:
+                    self.log.info('key.S -> save() for _walls call')
+                    self._grid.save()
+                elif self._grid.mode == 2:
+                    _y, _x = self._grid.node_chosen.y, self._grid.node_chosen.x
+                    print(f'S. _y: {_y}')
+                    if _y - 1 >= 0:
+                        self._grid.node_chosen = self._grid.grid[_y - 1][_x]
             case arcade.key.L:
                 # cannot loading while in interaction:
                 if not self.in_interaction:
                     self.log.info('key.L -> load() for _walls call')
                     self._grid.load()
+            case arcade.key.W:
+                if self._grid.mode == 2:
+                    _y, _x = self._grid.node_chosen.y, self._grid.node_chosen.x
+                    print(f'W. _y: {_y}')
+                    if _y + 1 < self._grid.tiles_q:
+                        self._grid.node_chosen = self._grid.grid[_y + 1][_x]
+            case arcade.key.A:
+                if self._grid.mode == 2:
+                    _y, _x = self._grid.node_chosen.y, self._grid.node_chosen.x
+                    print(f'A. _y: {_y}')
+                    if _x - 1 >= 0:
+                        self._grid.node_chosen = self._grid.grid[_y][_x - 1]
+            case arcade.key.D:
+                if self._grid.mode == 2:
+                    _y, _x = self._grid.node_chosen.y, self._grid.node_chosen.x
+                    print(f'D. _y: {_y}')
+                    if _x + 1 < self._grid.hor_tiles_q:
+                        self._grid.node_chosen = self._grid.grid[_y][_x + 1]
 
     def on_key_release(self, symbol: int, modifiers: int):
         """main key-releasing method"""
@@ -2195,29 +2220,16 @@ class Astar(Algorithm, FuncConnected):
         self.bin_heap: BinHeap = BinHeap()
         # logger
         self.log = logging.getLogger('Astar')
-        # visualization (made in super __init__()):
-        # self._triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
-        # self._arrow_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive algorithm's visualization
-        # path (made in super __init__()):
-        # self._path = None
-        # self._path_index = 0
-        # a_star important pars:
-        # 1. important nodes (made in super __init__()):
-        # self._start_node = None
-        # self._end_node = None
-        # 2. a_star_settings:
+        # 1. a_star_settings:
         self._heuristic = 0
         self._tiebreaker = None
         self._greedy_ind = None  # is algorithm greedy?
-        # 3. visiting:
+        # 2. visiting:
         self._nodes_visited = {}
-        # 4. iterations and time (made in super __init__()):
-        # self._iterations = 0
-        # self._time_elapsed_ms = 0
-        # 5. interactive a_star pars:
+        # 3. interactive a_star pars:
         self._curr_node_dict = {}
         self._neighs_added_to_heap_dict = {}
-        # sound:
+        # 4. sound:
         self._player = pyglet.media.player.Player()
         self._source_path_does_not_exist_ru = pyglet.media.load("Sounds/path_does_not_exist_alena.mp3", streaming=False)
         self._source_path_recovered_ru = pyglet.media.load("Sounds/path_rec_alena_ru.mp3", streaming=False)
@@ -4313,3 +4325,5 @@ if __name__ == "__main__":
 # TODO: TRY TO PREVENT CYCLING WITH HEAP AFTER DELETING (HARD, HARD) -
 # TODO: FIX THE BUG WITH WALLS BUILDING WHILE BFS ALGO IS IN INTERACTIVE STATE (MEDIUM, MEDIUM) +
 # TODO: FIND THE VOICE EMULATOR IN ORDER TO MAKE 2 MP#-FILES: 'THE PATH FOUND' and 'THE PATH RESTORED'
+# TODO: RE-CONSTRUCT THE PROJECT, FIX VENV LIBS (EASY, EASY)
+# TODO: PATH FOUND/RESTORED -> FIX THE BUG!!!

@@ -310,6 +310,8 @@ class Lastar(arcade.Window):
     music_on = False
     # play button lock:
     gearing = True
+    # interaction two?
+    ...
 
     def __init__(self, width: int, height: int):
         super().__init__(width, height)
@@ -341,7 +343,6 @@ class Lastar(arcade.Window):
         self._astar = None
         self._wave_lee = None
         self._bfs_dfs = None
-        self._bellman_ford = None
         # current_algo:
         self._current_algo = None
         # self._current_icon ???
@@ -353,7 +354,6 @@ class Lastar(arcade.Window):
         self._wave_lee_menu = None
         self._astar_menu = None
         self._bfs_dfs_menu = None
-        self._bellman_ford_menu = None
         # settings icon:
         self._gear_wheel = None
         # settings menu and arrows menu:
@@ -401,7 +401,7 @@ class Lastar(arcade.Window):
 
     @staticmethod
     def is_in_interaction():
-        return Lastar._in_interaction
+        return Lastar._in_interaction  # or self._play_button._inter_type == InterType.PRESSED
 
     @staticmethod
     def music(ind: int):
@@ -515,8 +515,6 @@ class Lastar(arcade.Window):
         self._mode_info = Info(5 + 26 / 4 - self._grid.line_width, SCREEN_HEIGHT - 30, 26)
         self._mode_info.connect_to_func(self.get_mode_info)
         ...
-        # test:
-        self._current_algo = self._bellman_ford
 
     def get_mode_info(self):
         return f'Mode: {self._grid.mode_names[self._grid.mode]}'
@@ -764,10 +762,10 @@ class Lastar(arcade.Window):
                     self.log.info('key.S -> save() for _walls call')
                     self._grid.save()
                 elif self._grid.mode == 2:
-                    _y, _x = self._grid.node_chosen.y, self._grid.node_chosen.x
-                    print(f'S. _y: {_y}')
-                    if _y - 1 >= 0:
-                        self._grid.node_chosen = self._grid.grid[_y - 1][_x]
+                    if self._grid.node_chosen is not None:
+                        _y, _x = self._grid.node_chosen.y, self._grid.node_chosen.x
+                        if _y - 1 >= 0:
+                            self._grid.node_chosen = self._grid.grid[_y - 1][_x]
             case arcade.key.L:
                 # cannot loading while in interaction:
                 if not self.in_interaction:
@@ -775,22 +773,22 @@ class Lastar(arcade.Window):
                     self._grid.load()
             case arcade.key.W:
                 if self._grid.mode == 2:
-                    _y, _x = self._grid.node_chosen.y, self._grid.node_chosen.x
-                    print(f'W. _y: {_y}')
-                    if _y + 1 < self._grid.tiles_q:
-                        self._grid.node_chosen = self._grid.grid[_y + 1][_x]
+                    if self._grid.node_chosen is not None:
+                        _y, _x = self._grid.node_chosen.y, self._grid.node_chosen.x
+                        if _y + 1 < self._grid.tiles_q:
+                            self._grid.node_chosen = self._grid.grid[_y + 1][_x]
             case arcade.key.A:
                 if self._grid.mode == 2:
-                    _y, _x = self._grid.node_chosen.y, self._grid.node_chosen.x
-                    print(f'A. _y: {_y}')
-                    if _x - 1 >= 0:
-                        self._grid.node_chosen = self._grid.grid[_y][_x - 1]
+                    if self._grid.node_chosen is not None:
+                        _y, _x = self._grid.node_chosen.y, self._grid.node_chosen.x
+                        if _x - 1 >= 0:
+                            self._grid.node_chosen = self._grid.grid[_y][_x - 1]
             case arcade.key.D:
                 if self._grid.mode == 2:
-                    _y, _x = self._grid.node_chosen.y, self._grid.node_chosen.x
-                    print(f'D. _y: {_y}')
-                    if _x + 1 < self._grid.hor_tiles_q:
-                        self._grid.node_chosen = self._grid.grid[_y][_x + 1]
+                    if self._grid.node_chosen is not None:
+                        _y, _x = self._grid.node_chosen.y, self._grid.node_chosen.x
+                        if _x + 1 < self._grid.hor_tiles_q:
+                            self._grid.node_chosen = self._grid.grid[_y][_x + 1]
 
     def on_key_release(self, symbol: int, modifiers: int):
         """main key-releasing method"""
@@ -1288,7 +1286,7 @@ class Grid(Drawable, FuncConnected):
         self._walls_built_erased = walls_built_erased
 
     @property
-    def walls_index(self):
+    def walls_index(self):                                                              # 36 366 98 989 LL
         return self._walls_index
 
     @walls_index.setter
@@ -1957,6 +1955,8 @@ class Node:
     def max_delta(node1, node2: 'Node'):
         return max(abs(node1.y - node2.y), abs(node1.x - node2.x))
 
+    # MIN DELTA???
+
     @staticmethod
     def no_heuristic(node1, node2: 'Node'):
         return 0
@@ -2086,12 +2086,14 @@ class Algorithm(Connected):
 
     def nodes_init(self):
         # start and end nodes:
-        self._obj.start_node = self._obj.grid[self._obj.tiles_q - 1][0]
-        self._obj.start_node.type = NodeType.START_NODE
-        self._obj.start_node.update_sprite_colour()
-        self._obj.end_node = self._obj.grid[0][self._obj.hor_tiles_q - 1]
-        self._obj.end_node.type = NodeType.END_NODE
-        self._obj.end_node.update_sprite_colour()  # 98
+        if self._obj.start_node is None:
+            self._obj.start_node = self._obj.grid[self._obj.tiles_q - 1][0]
+            self._obj.start_node.type = NodeType.START_NODE
+            self._obj.start_node.update_sprite_colour()
+        if self._obj.end_node is None:
+            self._obj.end_node = self._obj.grid[0][self._obj.hor_tiles_q - 1]
+            self._obj.end_node.type = NodeType.END_NODE
+            self._obj.end_node.update_sprite_colour()  # 98
 
     @abstractmethod
     def prepare(self):
@@ -2115,6 +2117,7 @@ class Algorithm(Connected):
                 print(f'recovered')
                 self._player.queue(self._source_path_recovered_ru)
                 if self._player.playing:
+                    self._player.pause()
                     self._player.next_source()
                 self._player.play()
         if self._path_index == 0:
@@ -2351,10 +2354,10 @@ class Astar(Algorithm, FuncConnected):
                         neigh.append_arrow(self._obj)
                 # adding all the valid neighs to the priority heap:
                 if neigh not in self.bin_heap:
-                    # the neigh is visited at the first time:
+                    # the neigh is added to the heap at the first time:
                     self.bin_heap.heappush(neigh)
                 else:
-                    # the neigh became two or more times visited:
+                    # the neigh became two or more times neighbourized:
                     self.bin_heap.restore_heap_inv(neigh, temp_f)
         # showing info:
         # self.bin_heap.show()
@@ -2362,6 +2365,10 @@ class Astar(Algorithm, FuncConnected):
         self._iterations += 1
         # plays the sound:
         self.sound_up()
+        # print:
+        print(f'UP...')
+        print(f'bin dict: {sorted(list(self.bin_heap._dict.items()), key=lambda k: k[1])}')
+        print(f'bin heap: {self.bin_heap.heap}')
 
     def algo_down(self):
         # getting the previous current node from memo table:
@@ -2394,6 +2401,7 @@ class Astar(Algorithm, FuncConnected):
                 self._nodes_visited[curr_node] -= 1
             else:
                 self._nodes_visited.pop(curr_node)
+                print(f'popping out...')
             # removing the neighs added from the heap:
             for neigh in self._neighs_added_to_heap_dict[self._iterations]:
                 y, x = neigh.y, neigh.x
@@ -2401,11 +2409,13 @@ class Astar(Algorithm, FuncConnected):
                 _f = node.f
                 node.smart_restore(neigh, self.FIELDS)
                 # removing or returning node's heuristic values to their previous values:
-                if neigh.g == math.inf:  # np.Infinity:
+                if neigh.type not in [NodeType.NEIGH, NodeType.TWICE_NEIGHBOURIZED]:  # np.Infinity:
+                    print(f'removing...')
                     self.bin_heap.remove(node)
                 else:
                     # the neigh has already been two or more times visited:
-                    self.bin_heap.restore_heap_inv(neigh, _f)
+                    print(f'restoring...')
+                    self.bin_heap.restore_heap_inv(node, _f)  # neigh
                 # operations with arrows:
                 if node.type == NodeType.EMPTY:  # not in [NodeType.START_NODE, NodeType.END_NODE]
                     if node.guiding_arrow_sprite in self._obj.arrow_sprite_list:
@@ -2432,6 +2442,10 @@ class Astar(Algorithm, FuncConnected):
             self._iterations -= 1
         # plays the sound:
         self.sound_down()
+        # print:
+        print(f'DOWN...')
+        print(f'bin dict: {sorted(list(self.bin_heap._dict.items()), key=lambda k: k[1])}')
+        print(f'bin heap: {self.bin_heap.heap}')
 
     @timer
     def full_algo(self):
@@ -3695,7 +3709,7 @@ class ArrowsMenu(Icon, Drawable, Interactable, FuncConnected):  # cx, cy = (1755
         pass
 
     def on_key_release(self):
-        pass
+        pass                                                                                               
 
 
 class Arrow(Icon, Drawable, Interactable):  # part of an arrow menu
@@ -4324,6 +4338,8 @@ if __name__ == "__main__":
 # TODO: Binary heap with Indexation instead of heapq for performance upgrading (VERY HARD, VERY HARD) +
 # TODO: TRY TO PREVENT CYCLING WITH HEAP AFTER DELETING (HARD, HARD) -
 # TODO: FIX THE BUG WITH WALLS BUILDING WHILE BFS ALGO IS IN INTERACTIVE STATE (MEDIUM, MEDIUM) +
-# TODO: FIND THE VOICE EMULATOR IN ORDER TO MAKE 2 MP#-FILES: 'THE PATH FOUND' and 'THE PATH RESTORED'
+# TODO: FIND THE VOICE EMULATOR IN ORDER TO MAKE 2 MP#-FILES: 'THE PATH FOUND' and 'THE PATH RESTORED' +
 # TODO: RE-CONSTRUCT THE PROJECT, FIX VENV LIBS (EASY, EASY)
 # TODO: PATH FOUND/RESTORED -> FIX THE BUG!!!
+# TODO: WALLS AND START/END POINTS SHOULD BE REMAINED THE SAME WHEN THE ALGO IS CHANGED AND ERASING FUNCTION MUST NOT BE WORKING DURING THIS PHASE
+# TODO: BUG!!! ALGO CANNOT BE CHANGED WHEN IT IS PLAYING... (EASY, EASY)

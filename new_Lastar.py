@@ -2,6 +2,7 @@
 
 # functools:
 import functools
+import random
 from functools import reduce
 
 # math:
@@ -88,14 +89,14 @@ def logged(is_debug: bool = True, is_used: bool = True):
         def _wrapper(*args, **kwargs):
             # <<-- self:
             obj = args[0]
-            if type(func) != dict:
+            if type(func) is not dict:
                 name = func.__name__
                 doc = func.__doc__
             else:
                 name = [value.__name__ for value in func.values()]
                 doc = [value.__doc__ for value in func.values()]
             # logging in two diff ways:
-            foo = obj.log.debug if is_debug else obj.log.info
+            foo = obj.log.debug if is_debug else obj.log.info                         # 36 366 98 989 98989 LL
             foo(f'method(s) .{name}() of {obj.__class__} started')
             foo(f"method(s)' description: {doc}")
             f = func(*args, **kwargs)
@@ -177,7 +178,7 @@ class BinHeap:
 
     def __init__(self, arr=None):
         # the heap itself as an array:
-        self._heap = [] if arr is None else arr
+        self._heap = [] if arr is None else arr[::]
         # array of elements' indices:
         self._dict = None
         # building indices' dict:
@@ -197,13 +198,13 @@ class BinHeap:
         """checks if the item lies in the heap"""
         return item in self._dict.keys()
 
-    def restore_heap_inv(self, neigh: 'Node', temp_f: int):
+    def restore_heap_inv(self, neigh: 'GridNode', temp_f: int):
         """restores the heap invariant after the neigh's priority change"""
         if neigh.f > temp_f:
-            # new value is greater:
+            # the new value is greater:
             self._siftup(self.index(neigh))
         elif neigh.f < temp_f:
-            # new value is lower:
+            # the new value is lower:
             self._siftdown(0, self.index(neigh))
 
     @property
@@ -312,6 +313,9 @@ class Lastar(arcade.Window):
     gearing = True
     # interaction two?
     ...
+    # is key pressed?
+    left_key_pressed = False
+    right_key_pressed = False
 
     def __init__(self, width: int, height: int):
         super().__init__(width, height)
@@ -332,7 +336,7 @@ class Lastar(arcade.Window):
         # names dicts:
         self._heuristic_names = {0: 'MANHATTAN', 1: 'EUCLIDIAN', 2: 'MAX_DELTA', 3: 'DIJKSTRA'}
         self._tiebreaker_names = {0: 'VECTOR_CROSS', 1: 'COORDINATES'}
-        self._greedy_names = {0: 'IS_GREEDY'}
+        # self._greedy_names = {0: 'IS_GREEDY'}
         self._guide_arrows_names = {0: f'ON/OFF'}
         self._interactive_names = {0: f'IS_INTERACTIVE'}
         self._music_names = {0: f'IS_ON'}
@@ -421,7 +425,7 @@ class Lastar(arcade.Window):
         # ALGOS:
         self._astar = Astar()
         self._astar.connect(self._grid)
-        self._astar.connect_to_func(Node.set_greedy)
+        # self._astar.connect_to_func(Node.set_greedy)
         self._wave_lee = WaveLee()
         self._wave_lee.connect(self._grid)
         self._bfs_dfs = BfsDfs()
@@ -443,11 +447,11 @@ class Lastar(arcade.Window):
                                 True)
         tiebreakers_area.connect_to_func(self._astar.set_tiebreaker)
         bot_menu_y -= 30 + (len(self._tiebreaker_names) - 1) * delta + 3 * sq_size
-        is_greedy_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Is greedy', self._greedy_names, True)
-        is_greedy_area.connect_to_func(self._astar.set_greedy_ind)
+        # is_greedy_area = Area(bot_menu_x, bot_menu_y, delta, sq_size, line_w, f'Is greedy', self._greedy_names, True)
+        # is_greedy_area.connect_to_func(Node.set_greedy)
         # menu composing and connecting to an icon:
         self._astar_menu = Menu()
-        self._astar_menu.multiple_append(heurs_area, tiebreakers_area, is_greedy_area)
+        self._astar_menu.multiple_append(heurs_area, tiebreakers_area)  # , is_greedy_area
         self._astar_menu.connect_to_func(self._astar_icon.is_pressed)
         # icon setting up for wave_lee:
         self._wave_lee_icon = Waves(1750 + 50 + 48 + 10 + 6, 1020 - 73 - 25, 32, 5)
@@ -557,6 +561,11 @@ class Lastar(arcade.Window):
         print(f'Connection APPROVED...')
         self.log.info('Connection APPROVED...')
         # lockers off:
+        self.unlock()
+
+    @logged()
+    def unlock(self):
+        # unlocks all the locks...
         for menu in self._menus_dict.values():
             if menu is not None:
                 if not menu.is_hidden():
@@ -731,73 +740,78 @@ class Lastar(arcade.Window):
     def on_key_press(self, symbol: int, modifiers: int):
         """main key-pressing method"""
         # is called when user press the symbol key:
-        match symbol:
-            # a_star_call:
-            case arcade.key.SPACE:
-                self.log.info('key.SPACE -> _play_button.press() call')
-                self._play_button.press()
-            # entirely grid clearing:
-            case arcade.key.ENTER:
-                self.log.info('key.ENTER -> .clear_grid() call')
-                self._grid.clear_grid()
-            # a_star interactive:
-            case arcade.key.RIGHT:
-                self.log.info('key.RIGHT -> .on_key_press()[1 -> _step_button_right] call')
-                self._step_button_right.on_key_press()
-            case arcade.key.LEFT:
-                self.log.info('key.LEFT -> .on_key_press()[2 -> _step_button_left] call')
-                self._step_button_left.on_key_press()  #
-            # undoing and cancelling:
-            case arcade.key.Z:  # undo
-                if not Lastar._in_interaction:
-                    self.log.info('key.Z -> .undo() for _walls_built_erased call')
-                    self._grid.undo()
-            case arcade.key.Y:  # cancels undo
-                if not Lastar._in_interaction:
-                    self.log.info('key.Y -> redo() for _walls_built_erased call')
-                    self._grid.redo()
-            # saving and loading:
-            case arcade.key.S:
-                if self._grid.mode == 0:
-                    self.log.info('key.S -> save() for _walls call')
-                    self._grid.save()
-                elif self._grid.mode == 2:
-                    if self._grid.node_chosen is not None:
-                        _y, _x = self._grid.node_chosen.y, self._grid.node_chosen.x
-                        if _y - 1 >= 0:
-                            self._grid.node_chosen = self._grid.grid[_y - 1][_x]
-            case arcade.key.L:
-                # cannot loading while in interaction:
-                if not self.in_interaction:
-                    self.log.info('key.L -> load() for _walls call')
-                    self._grid.load()
-            case arcade.key.W:
-                if self._grid.mode == 2:
-                    if self._grid.node_chosen is not None:
-                        _y, _x = self._grid.node_chosen.y, self._grid.node_chosen.x
-                        if _y + 1 < self._grid.tiles_q:
-                            self._grid.node_chosen = self._grid.grid[_y + 1][_x]
-            case arcade.key.A:
-                if self._grid.mode == 2:
-                    if self._grid.node_chosen is not None:
-                        _y, _x = self._grid.node_chosen.y, self._grid.node_chosen.x
-                        if _x - 1 >= 0:
-                            self._grid.node_chosen = self._grid.grid[_y][_x - 1]
-            case arcade.key.D:
-                if self._grid.mode == 2:
-                    if self._grid.node_chosen is not None:
-                        _y, _x = self._grid.node_chosen.y, self._grid.node_chosen.x
-                        if _x + 1 < self._grid.hor_tiles_q:
-                            self._grid.node_chosen = self._grid.grid[_y][_x + 1]
+        if not Lastar.left_key_pressed and not Lastar.right_key_pressed:
+            match symbol:
+                # a_star_call:
+                case arcade.key.SPACE:
+                    self.log.info('key.SPACE -> _play_button.press() call')
+                    self._play_button.press()
+                # entirely grid clearing:
+                case arcade.key.ENTER:
+                    self.log.info('key.ENTER -> .clear_grid() call')
+                    self._grid.clear_grid()
+                # a_star interactive:
+                case arcade.key.RIGHT:
+                    Lastar.right_key_pressed = True
+                    self.log.info('key.RIGHT -> .on_key_press()[1 -> _step_button_right] call')
+                    self._step_button_right.on_key_press()
+                case arcade.key.LEFT:
+                    Lastar.left_key_pressed = True
+                    self.log.info('key.LEFT -> .on_key_press()[2 -> _step_button_left] call')
+                    self._step_button_left.on_key_press()  #
+                # undoing and cancelling:
+                case arcade.key.Z:  # undo
+                    if not Lastar._in_interaction:
+                        self.log.info('key.Z -> .undo() for _walls_built_erased call')
+                        self._grid.undo()
+                case arcade.key.Y:  # cancels undo
+                    if not Lastar._in_interaction:
+                        self.log.info('key.Y -> redo() for _walls_built_erased call')
+                        self._grid.redo()
+                # saving and loading:
+                case arcade.key.S:
+                    if self._grid.mode == 0:
+                        self.log.info('key.S -> save() for _walls call')
+                        self._grid.save()
+                    elif self._grid.mode == 2:
+                        if self._grid.node_chosen is not None:
+                            _y, _x = self._grid.node_chosen.y, self._grid.node_chosen.x
+                            if _y - 1 >= 0:
+                                self._grid.node_chosen = self._grid.grid[_y - 1][_x]
+                case arcade.key.L:
+                    # cannot loading while in interaction:
+                    if not self.in_interaction:
+                        self.log.info('key.L -> load() for _walls call')
+                        self._grid.load()
+                case arcade.key.W:
+                    if self._grid.mode == 2:
+                        if self._grid.node_chosen is not None:
+                            _y, _x = self._grid.node_chosen.y, self._grid.node_chosen.x
+                            if _y + 1 < self._grid.tiles_q:
+                                self._grid.node_chosen = self._grid.grid[_y + 1][_x]
+                case arcade.key.A:
+                    if self._grid.mode == 2:
+                        if self._grid.node_chosen is not None:
+                            _y, _x = self._grid.node_chosen.y, self._grid.node_chosen.x
+                            if _x - 1 >= 0:
+                                self._grid.node_chosen = self._grid.grid[_y][_x - 1]
+                case arcade.key.D:
+                    if self._grid.mode == 2:
+                        if self._grid.node_chosen is not None:
+                            _y, _x = self._grid.node_chosen.y, self._grid.node_chosen.x
+                            if _x + 1 < self._grid.hor_tiles_q:
+                                self._grid.node_chosen = self._grid.grid[_y][_x + 1]
 
     def on_key_release(self, symbol: int, modifiers: int):
         """main key-releasing method"""
         # long press ending:
         match symbol:
             case arcade.key.RIGHT:
+                Lastar.right_key_pressed = False
                 self.log.info('key.RIGHT release-> .on_key_press()[1 -> _step_button_right] call')
                 self._step_button_right.on_key_release()
             case arcade.key.LEFT:
+                Lastar.left_key_pressed = False
                 self.log.info('key.LEFT release-> .on_key_press()[12 -> _step_button_left] call')
                 self._step_button_left.on_key_release()
 
@@ -869,7 +883,7 @@ class Lastar(arcade.Window):
 
 class DrawLib:
     @staticmethod
-    def create_line_arrow(node: 'Node', deltas: tuple[int, int] = (-1, 0),
+    def create_line_arrow(node: 'GridNode', deltas: tuple[int, int] = (-1, 0),
                           grid: 'Grid' = None):
         """creates a guiding triangle-arrow in order to visualize the path and visited nodes more comprehensively,
         by default the arrow to be drawn is left sided"""
@@ -997,15 +1011,68 @@ class Structure(ABC):
     """parental class for different kinds of structures like graph, grid and so on"""
 
     def __init__(self):
-        ...
+        # a node chosen for info displaying
+        self._node_chosen = None
+        # modes:
+        self._mode = 0  # 98 for building the walls and erasing them afterwards for the every structure, the modes remained can vary...
+        self._mode_names = None
 
     @abstractmethod
-    def get_neighs(self):
+    def get_neighs(self, node: 'Node', forbidden_node_types: list['NodeType']) -> list['Node']:
         # TODO: exclude .get_neighs(...) method from Node class and implement it in all Structures
         ...
 
     @abstractmethod
-    def initialize_all_the_arrows(self):
+    def initialize_guiding_arrows(self):
+        ...
+
+    @abstractmethod
+    def get_pars(self):
+        ...
+
+    @abstractmethod
+    def node(self, num: int) -> 'Node':
+        ...
+
+    @abstractmethod
+    def get_node(self, mouse_x, mouse_y):
+        ...
+
+    # getters/setters...
+
+    # some methods:
+    @abstractmethod
+    def initialize(self):
+        ...
+
+    @abstractmethod
+    def can_start(self):
+        ...
+
+    @abstractmethod
+    def clear_redo_memo(self):
+        ...
+
+    # make a node the chosen one:
+    @abstractmethod
+    def choose_node(self, node: 'Node'):
+        """chooses a node for info display"""
+        self._node_chosen = node
+
+    @abstractmethod
+    def setup(self):
+        ...
+
+    @abstractmethod
+    def update(self):
+        ...
+
+    @abstractmethod
+    def scroll(self):
+        self._mode = (self._mode + 1) % len(self._mode_names)
+
+    @abstractmethod
+    def draw(self):
         ...
 
     # something, rotating the guiding arrows if such ones exist
@@ -1016,13 +1083,41 @@ class Structure(ABC):
 
 
 class Link(Drawable):
+    # TODO: now every LINK is the different object!!! Not paired links...
     """represents an edge, connecting two nodes, in a Graph, can be directed or undirected"""
 
-    def __init__(self, node1: 'Node', node2: 'Node'):
+    ANGLE = 15  # in degrees
+
+    def __init__(self, node1: 'GraphNode', node2: 'GraphNode', val: int | float = None):
+        # nodes:
+        self.to_ = node2
+        self.from_ = node1
+        # value (the length of the link)
+        if val is None:
+            # if the lengths of the nodes' links are equal to euclidian distances between these 2 nodes...
+            self.val = GraphNode.euclidian_distance(self.to_,  self.from_)
+        else:
+            self.val = val  # recounting after node's moving...
+        # type of link:
+        self.type = None
         # segment line:
-        self.link_shape = arcade.create_line(node1.x, node1.y, node2.x, node2.y, arcade.color.BLACK, line_width=2)
+        # self.link_shape = arcade.create_line(node1.x, node1.y, node2.x, node2.y, arcade.color.BLACK, line_width=2)
         # directional arrow:
-        self.link_arrow_shape = None  # node1->node2 arrow and visa versa
+        # self.link_arrow_shape = None  # node1->node2 arrow and visa versa
+        # colour:
+        self.colour = None
+
+    # def link_init(self, node1: 'GraphNode', node2: 'GraphNode'):
+    #     # type of node initialization:
+    #     if node1 in node2.links:
+    #         self.type = LinkType.UNDIRECTED
+    #     else:
+    #         self.type = LinkType.DIRECTED
+    #     # links' drawing section:
+    #     # in the draw section now...
+
+    # def move(self, ): DEPRECATED, now links' coords are strictly affected by nodes' coords
+    #     ...
 
     def locate_directional_arrow(self):
         ...
@@ -1034,10 +1129,50 @@ class Link(Drawable):
         pass
 
     def draw(self):
-        pass
+        # draws per every frame the link in accordance with 'from' and 'to' nodes' coords ->
+        angle_rad = Link.ANGLE * math.pi / 180
+        distance = math.hypot(abs(self.from_.y - self.to_.y), abs(self.from_.x - self.to_.x))
+        ys, xs = Link.sep_seg(self.from_.y, self.from_.x, self.to_.y, self.to_.x, Graph.NODE_RADIUS, distance - Graph.NODE_RADIUS)
+        ye, xe = Link.sep_seg(self.from_.y, self.from_.x, self.to_.y, self.to_.x, distance - Graph.NODE_RADIUS, Graph.NODE_RADIUS)
+        if self.type == LinkType.UNDIRECTED:
+            ys_, xs_ = Link.rotate(ys, xs, angle_rad, self.from_.y, self.from_.x)
+            ye_, xe_ = Link.rotate(ye, xe, -angle_rad, self.to_.y, self.to_.x)
+            _ys, _xs = Link.rotate(ys, xs, -angle_rad, self.from_.y, self.from_.x)
+            _ye, _xe = Link.rotate(ye, xe, angle_rad, self.to_.y, self.to_.x)
+            Link.draw_arrow_line(ys_, xs_, ye_, xe_)
+            Link.draw_arrow_line(_ys, _xs, _ye, _xe)
+        else:
+            Link.draw_arrow_line(ys, xs, ye, xe)
+
+    @staticmethod
+    def draw_arrow_line(ys: int | float, xs: int | float, ye: int | float, xe: int | float, arrow_side_length=5, arrow_angle=30, line_w=1):
+        rad_angle = arrow_angle * math.pi / 180
+        distance = math.hypot(abs(ye - ys), abs(xe - xs))
+        y0_, x0_ = Link.sep_seg(ys, xs, ye, xe, distance - arrow_side_length, arrow_side_length)
+        # y0, x0 = y0_ - ye, x0_ - xe
+        # y0 = (arrow_side_length * ys + (distance - arrow_side_length) * ye) / distance - ye
+        # x0 = (arrow_side_length * xs + (distance - arrow_side_length) * xe) / distance - xe
+        # dx1 = math.cos(rad_angle) * x0 + math.sin(rad_angle) * y0
+        # dy1 = -math.sin(rad_angle) * x0 + math.cos(rad_angle) * y0
+        # dx2 = math.cos(rad_angle) * x0 - math.sin(rad_angle) * y0
+        # dy2 = math.sin(rad_angle) * x0 + math.cos(rad_angle) * y0
+        arcade.draw_line(xs, ys, xe, ye, arcade.color.BLACK, line_w)  # 1???
+        arcade.draw_line(xe, ye, *Link.rotate(y0_, x0_, rad_angle, ye, xe), arcade.color.BLACK, line_w)
+        arcade.draw_line(xe, ye, *Link.rotate(y0_, x0_, -rad_angle, ye, xe), arcade.color.BLACK, line_w)
+
+    @staticmethod
+    def sep_seg(ys: int | float, xs: int | float, ye: int | float, xe: int | float, q: int | float, p: int | float) -> tuple[int | float, int | float]:
+        return (p * ys + q * ye) / (p + q), (p * xs + q * xe) / (p + q)
+
+    @staticmethod
+    def rotate(y: int | float, x: int | float, rad_angle: int | float, y0: int | float, x0: int | float) -> tuple[int | float, int | float]:
+        """rotates (y, x) point relative to the coordinate system with the center in (y0, x0),
+        positive angle is for anti-clockwise rotation direction"""
+        y_rel, x_rel = y - y0, x - x0
+        return y0 + math.sin(rad_angle) * x_rel + math.cos(rad_angle) * y_rel, x0 + math.cos(rad_angle) * x_rel - math.sin(rad_angle) * y_rel
 
 
-class Grid(Drawable, FuncConnected):
+class Grid(Structure, Drawable, FuncConnected):
     """core class for grid lines, nodes and guiding arrows display, start/end nodes and walls building and erasing,
     node choosing for info getting and saving/loading of wall-ornaments"""
 
@@ -1049,16 +1184,19 @@ class Grid(Drawable, FuncConnected):
         # important nodes:
         self._start_node = None
         self._end_node = None
+        # objects like WORMHOLES:
+        self._wormholes = dict()
         # game mode:
-        self._mode = 0  # 0 for building the walls and erasing them afterwards, 1 for a start and end nodes choosing and 2 for info getting for every node
-        self._mode_names = {0: 'BUILDING', 1: 'START&END', 2: 'DETAILS'}
+        # self._mode = 0  # 0 for building the walls and erasing them afterwards, 1 for a start and end nodes choosing and 2 for info getting for every node
+        self._mode_names = {0: 'BUILDING', 1: 'START&END', 2: 'DETAILS', 3: 'WORMHOLES'}
         # the current node chosen (for getting info):
-        self._node_chosen = None
+        # self._node_chosen = None
         # guide arrows ON/OFF:
         self._guide_arrows_ind = None
         # visualization:
         self._node_sprite_list = arcade.SpriteList()
         self._grid_line_shapes = arcade.ShapeElementList()
+        self._wormholes_sprite_list = arcade.SpriteList()
         # algo steps visualization:
         self._triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
         self._arrow_sprite_list = arcade.SpriteList()  # <<-- for more comprehensive algorithm's visualization
@@ -1129,7 +1267,7 @@ class Grid(Drawable, FuncConnected):
 
     # AUX:
     @logged()
-    def get_triangle(self, node: 'Node', point: tuple[int, int]):
+    def get_triangle(self, node: 'GridNode', point: tuple[int, int]):
         """triangle points getting"""
         scaled_point = point[0] * (self._tile_size // 2 - 2), point[1] * (self._tile_size // 2 - 2)
         deltas = (
@@ -1147,7 +1285,7 @@ class Grid(Drawable, FuncConnected):
         return (cx, cy), (cx + deltas[0][0], cy + deltas[0][1]), (cx + deltas[1][0], cy + deltas[1][1])
 
     @logged()
-    def number_repr(self, node: 'Node'):
+    def number_repr(self, node: 'GridNode'):
         """gets the number representation for the node"""
         return node.y * self._hor_tiles_q + node.x
 
@@ -1157,7 +1295,7 @@ class Grid(Drawable, FuncConnected):
         return divmod(number, self._hor_tiles_q)
 
     @logged()
-    def node(self, num: int) -> 'Node':
+    def node(self, num: int) -> 'GridNode':
         """gets the node itself for its number representation"""
         y, x = self.coords(num)
         return self._grid[y][x]
@@ -1308,7 +1446,7 @@ class Grid(Drawable, FuncConnected):
     @logged()
     def initialize(self):
         """initializes all the nodes for _tiles_q par"""
-        self._grid = [[Node(j, i, 1, NodeType.EMPTY) for i in range(self._hor_tiles_q)] for j in range(self._tiles_q)]
+        self._grid = [[GridNode(j, i, 1, NodeType.EMPTY) for i in range(self._hor_tiles_q)] for j in range(self._tiles_q)]
 
     @logged()
     def can_start(self):
@@ -1324,10 +1462,9 @@ class Grid(Drawable, FuncConnected):
 
     @logged()
     # make a node the chosen one:
-    def choose_node(self, node: 'Node'):
+    def choose_node(self, node: 'GridNode'):
         """chooses a node for info display"""
         self._node_chosen = node
-        # draw a frame
 
     @logged()
     def setup(self):
@@ -1352,6 +1489,8 @@ class Grid(Drawable, FuncConnected):
         self._grid_line_shapes.draw()
         # blocks:
         self._node_sprite_list.draw()
+        # wormholes:
+        self._wormholes_sprite_list.draw()
         # arrows:
         if self._guide_arrows_ind is not None:
             # if len(self.arrow_sprite_list) > 0:
@@ -1385,6 +1524,22 @@ class Grid(Drawable, FuncConnected):
                                    self._line_width))
         self.log.info(
             f"{self._tiles_q + self._hor_tiles_q + 2} grid lines' shapes initialization")
+
+    def get_neighs(self, node: 'GridNode', forbidden_node_types: list['NodeType']) -> list['GridNode']:
+        # TODO: should be used instead of duplicate implemented in Node/GridNode/GraphNode...
+        # TODO: DELETE THIS METHOD FROM NODE CLASS ANF IMPLEMENT IT IN ALL THE STRUCTURE CLASSES,
+        #  COZ ITS LOGIC STRONGLY DEPENDS ON THEIR SIGNATURE!!!
+        """gets neighs of the node, now can be set up"""
+        for dy, dx in GridNode.walk:
+            ny, nx = self.y + dy, self.x + dx
+            if 0 <= ny < grid.tiles_q and 0 <= nx < grid.hor_tiles_q:
+                # by default, can visit the already visited nodes
+                if grid.grid[ny][nx].type not in forbidden_node_types:
+                    yield grid.grid[ny][nx]
+
+    def get_extended_neighs(self, node: 'GridNode') -> list['GridNode']:
+        # TODO: should be used instead of duplicate implemented in Node/GridNode/GraphNode...
+        ...
 
     # WALLS MANAGER:
     # EMPTIES -->> WALLS and BACK:
@@ -1505,9 +1660,9 @@ class Grid(Drawable, FuncConnected):
     # erases all nodes, that are connected vertically, horizontally or diagonally to a chosen one,
     # then nodes connected to them the same way and so on recursively...
     @logged()
-    def erase_all_linked_nodes(self, node: 'Node'):  # TODO: PROCESS AND LOG THIS RECURSIVE METHOD VERY CAREFULLY!!!
+    def erase_all_linked_nodes(self, node: 'GridNode'):  # TODO: PROCESS AND LOG THIS RECURSIVE METHOD VERY CAREFULLY!!!
         @counted
-        def _erase_all_linked_nodes(curr_node: 'Node'):
+        def _erase_all_linked_nodes(curr_node: 'GridNode'):
             curr_node.type = NodeType.EMPTY
             curr_node.update_sprite_colour()
             _number_repr = self.number_repr(curr_node)
@@ -1518,13 +1673,20 @@ class Grid(Drawable, FuncConnected):
                 if neigh.type == NodeType.WALL:
                     _erase_all_linked_nodes(neigh)
 
-        _erase_all_linked_nodes(node)
-        self.log.info(
-            f'inner recursive method .{_erase_all_linked_nodes}() called {_erase_all_linked_nodes.rec_calls} times and has max depth of {_erase_all_linked_nodes.rec_depth}')
-        # plays sound:
-        if not self._player.playing and Lastar.music_on:
-            self._player.queue(self._source_erase_all)
-            self._player.play()
+        # check for the node type (should be of a Wall type):
+        if node.type == NodeType.WALL:
+
+            _erase_all_linked_nodes(node)
+            self.log.info(
+                f'inner recursive method .{_erase_all_linked_nodes}() called {_erase_all_linked_nodes.rec_calls} times and has max depth of {_erase_all_linked_nodes.rec_depth}')
+            # plays sound:
+            if not self._player.playing and Lastar.music_on:
+                self._player.queue(self._source_erase_all)
+                self._player.play()
+
+        else:
+            # error sound ->
+            ...
 
     # CLEARING/REBUILDING:
     @lock
@@ -1540,6 +1702,7 @@ class Grid(Drawable, FuncConnected):
         self._node_sprite_list = arcade.SpriteList()
         self._grid_line_shapes = arcade.ShapeElementList()
         self._walls = set()
+        self._wormholes = dict()
         self.setup()
 
     @logged()
@@ -1670,23 +1833,29 @@ class Constructable(ABC):
     def __init__(self):
         ...
 
+    # what else?
 
-class Graph(Drawable, FuncConnected):
+
+class Graph(Structure, Drawable, FuncConnected):
     """represents a graph of nodes -->> POSTPONED"""
+
+    NODE_RADIUS = 16
 
     def __init__(self):
         super().__init__()
         self.log = logging.getLogger('Graph')
         # the graph itself:
-        self._graph = None
+        # TODO: it is necessary to implement good dicts for graph storing...
+        self._nodes: dict[int, GraphNode] = {}  # all the information needed are kept inside the nodes...
+        # self._links_dict: dict[tuple[GraphNode, GraphNode], Link] = {}  # keeps all the links between the graph's nodes, keys: pairs of nodes (left=from, right=to)
         # important nodes:
         self._start_node = None
         self._end_node = None
         # game mode:
-        self._mode = 0  # 0 for building the walls and erasing them afterwards, 1 for a start and end nodes choosing and 2 for info getting for every node
+        # self._mode = 0  # 0 for building the walls and erasing them afterwards, 1 for a start and end nodes choosing and 2 for info getting for every node
         self._mode_names = {0: 'BUILDING', 1: 'START&END', 2: 'DETAILS'}
         # the current node chosen (for getting info):
-        self._node_chosen = None
+        # self._node_chosen = None
         # guide arrows ON/OFF:
         self._guide_arrows_ind = None
         # visualization:
@@ -1696,26 +1865,72 @@ class Graph(Drawable, FuncConnected):
         self._path_arrows = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
         # pars:
         self._line_width = None
+        self._node_radius = 8
         # memoization for undo/redo area:
         ...
 
-    def choose_node(self):
+    @property
+    def node_sprite_list(self):
+        return self._node_sprite_list
+
+    @node_sprite_list.setter
+    def node_sprite_list(self, node_sprite_list):
+        self._node_sprite_list = node_sprite_list
+
+    def initialize_guiding_arrows(self):
+        pass
+
+    def get_pars(self):
+        pass
+
+    def node(self, num: int) -> 'GraphNode':
+        return self._nodes[num]
+
+    def get_node(self, mouse_x, mouse_y):
+        for node_ in self._nodes.values():
+            if DrawLib.is_point_in_circle(node_.x, node_.y, 10, mouse_x, mouse_y):
+                return node_
+
+    def can_start(self):
+        """checks if start and end nodes are chosen"""
+        return self._start_node is not None and self._end_node is not None
+
+    def clear_redo_memo(self):
+        pass
+
+    def scroll(self):
+        pass
+
+    def get_neighs(self, node: 'GraphNode', forbidden_node_types: list['NodeType']) -> list['GraphNode']:
         ...
 
-    def move_node(self):
-        ...
+    def choose_node(self, node: 'GraphNode'):
+        self._node_chosen = node
 
-    def add_node(self):
-        ...
+    # def move_node(self, node_: 'GraphNode', y_: float, x_: float):
+    #     # moves node to the new coords, redraws all the links affected ->
+    #     node_.move(y_, x_)
+    #     ...
 
-    def erase_node(self):
-        ...
+    def add_node(self, y, x, number):
+        # just adds a new node without any links:
+        new_node = GraphNode(y, x, number, NodeType.EMPTY)
+        self._nodes[number] = new_node
 
-    def append_link(self):
-        ...
-
-    def remove_link(self):
-        ...
+    def erase_node(self, y, x):
+        # get node at first...
+        node: GraphNode = ...
+        # erasing all the links (directed ones more carefully):
+        neighs = [n for n in node.links.keys()]
+        for neigh in neighs:
+            link = node.links[neigh]
+            del node.links[neigh]
+            if link in neigh.links.values():
+                del neigh.links[node]
+        # erasing the node's sprite:
+        self.node_sprite_list.remove(node.sprite)
+        # now deleting the node itself:
+        del self._nodes[node.val]
 
     def clear_empty_nodes(self):
         """clear the graph from the algo's visualization"""
@@ -1726,7 +1941,8 @@ class Graph(Drawable, FuncConnected):
         ...
 
     def initialize(self):
-        self._graph = dict()
+        # perhaps should load/initialize some simple graph for a start...
+        ...
 
     def get_sprites(self):
         ...
@@ -1734,7 +1950,7 @@ class Graph(Drawable, FuncConnected):
     def setup(self):
         # initialization:
         self.initialize()
-        # sprites, shapes and etc...
+        # sprites, shapes etc...
         # blocks:
         self.get_sprites()
 
@@ -1742,21 +1958,17 @@ class Graph(Drawable, FuncConnected):
         pass
 
     def draw(self):
-        pass
+        # drawing nodes:
+        ...
+        # drawing links:
+        ...
 
 
-class Node:
-    """represents a node for a graph or a grid:"""
-    is_greedy = False
-    # horizontal and vertical up and down moves:
-    walk = [(dy, dx) for dx in range(-1, 2) for dy in range(-1, 2) if dy * dx == 0 and (dy, dx) != (0, 0)]
-    extended_walk = [(dy, dx) for dx in range(-1, 2) for dy in range(-1, 2) if (dy, dx) != (0, 0)]
-    # guiding arrow dirs dict:
-    dirs_to_angles = {(1, 0): 0, (0, 1): 90, (-1, 0): 180, (0, -1): 270}
+class Node(ABC):
 
-    def __init__(self, y, x, val, node_type: 'NodeType'):
-        # logger
-        self.log = logging.getLogger('Node')
+    # is_greedy = False
+
+    def __init__(self, y: int, x: int, val: int, node_type: 'NodeType'):
         # type and sprite:
         self.type = node_type
         self.sprite = None
@@ -1768,14 +1980,210 @@ class Node:
         self.times_visited = 0
         self.times_neighbourized = 0
         # cost and heuristic vars:
-        self.g = math.inf  # np.Infinity  # aggregated cost of moving from start to the current Node, Infinity chosen for convenience and algorithm's logic
+        self.g = math.inf  # np.Infinity || aggregated cost of moving from start to the current Node, Infinity chosen for convenience and algorithm's logic
         self.h = 0  # approximated cost evaluated by heuristic for path starting from the current node and ending at the exit Node
         self.tiebreaker = None  # recommended for many shortest paths situations
         # f = h + g or total cost of the current Node is not needed here
-        # heur dict, TODO: (it should be implemented in Astar class instead of node one) (medium, easy):
-        self.heuristics = {0: self.manhattan_distance, 1: self.euclidian_distance, 2: self.max_delta,
-                           3: self.no_heuristic}
-        self.tiebreakers = {0: self.vector_cross_product_deviation, 1: self.coordinates_pair}
+        self.heuristics = {}
+        self.tiebreakers = {}
+
+    @abstractmethod
+    def init_heurs_ties(self):
+        ...
+
+    # @staticmethod DEPRECATED
+    # def set_greedy(greedy_ind: int):
+    #     Node.is_greedy = False if greedy_ind is None else True
+
+    @property
+    def coords(self):
+        """returns a tuple of node's coordinates: (x, y)"""
+        return self.x, self.y
+
+    @property
+    def f(self):
+        """returns overall node's estimation f"""
+        return self.g + self.h
+
+    @abstractmethod
+    def smart_copy(self, attributes: list[str]):
+        ...
+
+    @abstractmethod
+    def smart_restore(self, other: 'Node', attributes: list[str]):
+        ...
+
+    @abstractmethod
+    def smart_core(self, other: 'Node', attributes: list[str]):
+        ...
+
+    @abstractmethod
+    def get_solid_colour_sprite(self, structure: Structure):
+        ...
+
+    @abstractmethod
+    def update_sprite_colour(self):
+        ...
+
+    @abstractmethod
+    def __eq__(self, other):
+        ...
+
+    @abstractmethod
+    def __lt__(self, other):
+        ...
+
+    @abstractmethod
+    def __hash__(self):
+        ...
+
+    @abstractmethod
+    def clear(self):
+        ...
+
+    @abstractmethod
+    def heur_clear(self):
+        ...
+
+    # TODO: ELIMINATE THESE METHODS (should be moved to Structure classes!!!)
+    @abstractmethod
+    def get_neighs(self, struct: Structure, forbidden_node_types: list['NodeType']) -> list['Node']:
+        ...
+
+    @abstractmethod
+    def get_extended_neighs(self, struct: Structure) -> list['Node']:
+        ...
+
+
+class GraphNode(Node):
+    def __init__(self, y: int, x: int, val, node_type: 'NodeType'):
+        # super method call:
+        super().__init__(y, x, val, node_type)
+        # logger
+        self.log = logging.getLogger('GraphNode')
+        # graph-only pars:
+        self.links: dict[GraphNode, Link] = dict()  # neighs and links simultaneously...
+
+    def init_heurs_ties(self):
+        # heurs and ties for graph?!? TODO: find all reasonable...
+        self.heuristics[...] = ...
+        self.tiebreaker[...] = ...
+
+    @staticmethod
+    def euclidian_distance(node1: 'GraphNode', node2: 'GraphNode'):
+        return math.sqrt((node1.y - node2.y) ** 2 + (node1.x - node2.x) ** 2)
+
+    def append_link(self, node_to: 'GraphNode'):  # node_from: 'GraphNode' is the node itself -> self.
+        if node_to not in self.links.keys():
+            val = self.euclidian_distance(self, node_to)
+            # new link:
+            new_link = Link(self, node_to, val)
+            if self not in node_to.links:
+                # this one is undirected:
+                new_link.type = LinkType.UNDIRECTED
+                # adding a new link:
+                self.links[node_to] = new_link
+            else:
+                # directed one:
+                new_link.type = LinkType.DIRECTED
+                # updating link to undirected:
+                node_to.links[self].type = LinkType.UNDIRECTED
+                # adding an existing link to the node:
+                self.links[node_to] = node_to.links[self]
+
+    def remove_link(self, node_to: 'GraphNode'):  # node_from: 'GraphNode' is the node itself -> self.
+        if node_to in self.links:
+            del self.links[node_to]
+            if self in node_to.links:
+                node_to.links[self].type = LinkType.DIRECTED
+
+    # DUNDERS:
+    def __str__(self):
+        ...
+
+    def __repr__(self):
+        ...
+
+    def __eq__(self, other):
+        pass
+
+    def __lt__(self, other):
+        pass
+
+    def __hash__(self):
+        pass
+
+    def move(self, y_: float, x_: float):
+        # the node moves:
+        self.y = y_
+        self.x = x_
+        # all the links connected are automatically being redrawn:
+        # for neigh_node, link in self.links.items():
+        #     ...
+
+    # SMART COPYING SECTION:
+    def smart_copy(self, attributes: list[str]):
+        pass
+
+    def smart_restore(self, other: 'GridNode', attributes: list[str]):
+        pass
+
+    def smart_core(self, other: 'GridNode', attributes: list[str]):
+        pass
+
+    # DRAWINGS:
+    def get_solid_colour_sprite(self, graph: Graph):
+        # need something spherical...
+        """makes a solid colour sprite for a node"""
+        self.sprite = arcade.SpriteCircle(10, arcade.color.RED)
+        self.sprite.center_x, self.sprite.center_y = self.y, self.x
+        graph.node_sprite_list.append(self.sprite)
+
+    def update_sprite_colour(self):
+        pass
+
+    # CLEARING:
+    def clear(self):
+        pass
+
+    def heur_clear(self):
+        pass
+
+    # TODO: ELIMINATE THESE METHODS (should be moved to Structure classes!!!)
+    # NEIGHBOURIZING:
+    def get_neighs(self, grid: Grid, forbidden_node_types: list['NodeType']) -> list['GridNode']:
+        pass
+
+    def get_extended_neighs(self, grid: Grid) -> list['GridNode']:
+        pass
+
+
+class GridNode(Node):
+    """represents a node for a graph or a grid:"""
+
+    # horizontal and vertical up and down moves:
+    walk = [(dy, dx) for dx in range(-1, 2) for dy in range(-1, 2) if dy * dx == 0 and (dy, dx) != (0, 0)]
+    extended_walk = [(dy, dx) for dx in range(-1, 2) for dy in range(-1, 2) if (dy, dx) != (0, 0)]
+    # guiding arrow dirs dict:
+    dirs_to_angles = {(1, 0): 0, (0, 1): 90, (-1, 0): 180, (0, -1): 270}
+
+    def __init__(self, y: int, x: int, val: int, node_type: 'NodeType'):
+        # super init call:
+        super().__init__(y, x, val, node_type)
+        # logger
+        self.log = logging.getLogger('GridNode')
+        # heurs and ties init:
+        self.init_heurs_ties()
+
+    def init_heurs_ties(self):
+        # heurs:
+        self.heuristics[0] = self.manhattan_distance
+        self.heuristics[1] = self.euclidian_distance
+        self.heuristics[2] = self.max_delta
+        self.heuristics[3] = self.no_heuristic
+        # ties:
+        self.tiebreakers[0] = self.vector_cross_product_deviation
+        self.tiebreakers[1] = self.coordinates_pair
 
     # TODO: HOW TO MAKE THESE PROPERTIES?
     # @property
@@ -1786,56 +2194,21 @@ class Node:
     # def cy(self):
     #     return 5 + node.y * grid.tile_size + grid.tile_size / 2
 
-    @property
-    def coords(self):
-        """returns a tuple of node's coordinates: (x, y)"""
-        return self.x, self.y
-
-    @property
-    def f(self):
-        return self.g + self.h
-
-    @staticmethod
-    def set_greedy(greedy_ind: int):
-        Node.is_greedy = False if greedy_ind is None else True
-
-    # COPYING/RESTORING:
-    @logged()
-    def aux_copy(self):
-        """makes an auxiliary copy for a node, it is needed for a_star interactive"""
-        copied_node = Node(self.y, self.x, self.type, self.val)
-        copied_node.g = self.g
-        copied_node.h = self.h
-        copied_node.tiebreaker = self.tiebreaker
-        copied_node.type = self.type
-        copied_node.previously_visited_node = self.previously_visited_node
-        return copied_node
-
-    @logged()
-    def restore(self, copied_node: 'Node'):
-        """restore the node from its auxiliary copy"""
-        self.g = copied_node.g
-        self.h = copied_node.h
-        self.tiebreaker = copied_node.tiebreaker
-        self.type = copied_node.type  # NodeType.EMPTY ???
-        self.update_sprite_colour()
-        self.previously_visited_node = copied_node.previously_visited_node
-
     # SMART COPYING/RESTORING:
     @logged()
     def smart_copy(self, attributes: list[str]):
-        copied_node = Node(self.y, self.x, self.type, self.val)
+        copied_node = GridNode(self.y, self.x, self.val, self.type)
         self.smart_core(copied_node, attributes)
         return copied_node
 
     @logged()
-    def smart_restore(self, other: 'Node', attributes: list[str]):
+    def smart_restore(self, other: 'GridNode', attributes: list[str]):
         other.smart_core(self, attributes)
         if 'type' in attributes:
             self.update_sprite_colour()
 
     @logged()
-    def smart_core(self, other: 'Node', attributes: list[str]):
+    def smart_core(self, other: 'GridNode', attributes: list[str]):
         for attribute in attributes:
             other.__dict__[attribute] = self.__getattribute__(attribute)
 
@@ -1887,7 +2260,7 @@ class Node:
         grid.arrow_sprite_list.append(self.guiding_arrow_sprite)
 
     # TODO: DANGEROUS TO LOG!!!
-    def remove_arrow(self, grid: Grid):
+    def remove_arrow(self, grid: Grid):  # TODO: WHETHER IS IT NEEDED?..
         """removes the guiding arrow sprite of the node from the arrow_sprite_list"""
         grid.arrow_sprite_list.remove(self.guiding_arrow_sprite)
         self.guiding_arrow_sprite = None
@@ -1897,25 +2270,26 @@ class Node:
         # if self.guiding_arrow_sprite is not None and self.guiding_arrow_sprite in grid.arrow_sprite_list:
         grid.arrow_sprite_list.remove(self.guiding_arrow_sprite)
 
+    # DUNDERS:
     def __str__(self):
         return f'{self.y, self.x}({self.g, self.h, self.g + self.h})[{hash(self)}] -->> {self.val}'
 
     def __repr__(self):
         return str(self)
 
-    # DUNDERS:
     def __eq__(self, other):
-        if type(self) != type(other):
+        if type(self) is not type(other):
             return False
         else:
             return (self.y, self.x) == (other.y, other.x)
 
     # this is needed for using Node objects in priority queue like heapq and so on
-    def __lt__(self, other: 'Node'):
-        if self.is_greedy:
-            return (self.h, self.tiebreaker) < (other.h, other.tiebreaker)
-        else:
-            return (self.g + self.h, self.tiebreaker) < (other.g + other.h, other.tiebreaker)
+    def __lt__(self, other: 'GridNode'):
+        # if Node.is_greedy:
+        #     # print(f'IS_GREEDY!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+        #     return (self.h, self.tiebreaker) < (other.h, other.tiebreaker)
+        # else:
+        return (self.g + self.h, self.tiebreaker) < (other.g + other.h, other.tiebreaker)
 
     def __hash__(self):
         return hash((self.y, self.x))
@@ -1944,25 +2318,25 @@ class Node:
 
     # HEURISTICS: # TODO: DANGEROUS TO LOG!!!
     @staticmethod
-    def manhattan_distance(node1, node2: 'Node'):
+    def manhattan_distance(node1, node2: 'GridNode'):
         return abs(node1.y - node2.y) + abs(node1.x - node2.x)
 
     @staticmethod
-    def euclidian_distance(node1, node2: 'Node'):
+    def euclidian_distance(node1, node2: 'GridNode'):
         return math.sqrt((node1.y - node2.y) ** 2 + (node1.x - node2.x) ** 2)
 
     @staticmethod
-    def max_delta(node1, node2: 'Node'):
+    def max_delta(node1, node2: 'GridNode'):
         return max(abs(node1.y - node2.y), abs(node1.x - node2.x))
 
     # MIN DELTA???
 
     @staticmethod
-    def no_heuristic(node1, node2: 'Node'):
+    def no_heuristic(node1, node2: 'GridNode'):
         return 0
 
     @staticmethod
-    def mult_heur(node1, node2: 'Node'):  # for testing... admissible and non-consistent heuristic.
+    def mult_heur(node1, node2: 'GridNode'):  # for testing... admissible and non-consistent heuristic.
         return abs(node1.y - node2.y) * abs(node1.x - node2.x)
 
     # SELF * OTHER, TIEBREAKER:
@@ -1976,21 +2350,28 @@ class Node:
     def coordinates_pair(start, end, neigh):
         return neigh.y, neigh.x
 
+    @staticmethod
+    def randon_num():
+        # TODO: TRY TO USE THIS SHIT...
+        coeff_ = ...
+        return coeff_ * random.randint(0, 1_000)
+
+    # TODO: ELIMINATE THESE METHODS (should be moved to Structure classes!!!)
     # NEIGHS:
     # TODO: DANGEROUS TO LOG!!!
-    def get_neighs(self, grid: Grid, forbidden_node_types: list['NodeType']):  # has become smarter
+    def get_neighs(self, grid: Grid, forbidden_node_types: list['NodeType']) -> list['GridNode']:  # has become smarter
         # TODO: DELETE THIS METHOD FROM NODE CLASS ANF IMPLEMENT IT IN ALL THE STRUCTURE CLASSES,
         #  COZ ITS LOGIC STRONGLY DEPENDS ON THEIR SIGNATURE!!!
         """gets neighs of the node, now can be set up"""
         for dy, dx in self.walk:
             ny, nx = self.y + dy, self.x + dx
             if 0 <= ny < grid.tiles_q and 0 <= nx < grid.hor_tiles_q:
-                # by default can visit the already visited nodes
+                # by default, can visit the already visited nodes
                 if grid.grid[ny][nx].type not in forbidden_node_types:
                     yield grid.grid[ny][nx]
 
     # TODO: DANGEROUS TO LOG!!!
-    def get_extended_neighs(self, grid: Grid) -> list['Node']:
+    def get_extended_neighs(self, grid: Grid) -> list['GridNode']:
         # TODO: DELETE THIS METHOD FROM NODE CLASS ANF IMPLEMENT IT IN ALL THE STRUCTURE CLASSES,
         #  COZ ITS LOGIC STRONGLY DEPENDS ON THEIR SIGNATURE!!!
         """gets extended neighs (with diagonal ones) of the node, generator"""
@@ -1998,6 +2379,26 @@ class Node:
             ny, nx = self.y + dy, self.x + dx
             if 0 <= ny < grid.tiles_q and 0 <= nx < grid.hor_tiles_q:
                 yield grid.grid[ny][nx]
+
+
+class Wormhole(Drawable):
+
+    def __init__(self, y: int, x: int):
+        # coords:
+        self.y = y
+        self.x = x
+        # visual:
+        self._sprite = None
+
+    def setup(self):
+        ...
+
+    def update(self):
+        ...
+
+    def draw(self):
+        # TODO: should depends on scale_size!!!
+        ...
 
 
 # class representing an algo:
@@ -2110,6 +2511,8 @@ class Algorithm(Connected):
         """returns the important details (like heur, val and so on) for the node chosen"""
         ...
 
+    # TODO: path_up, path_down, recover_path, visualize_path should be moved to Structures, coz these methods
+    #  strongly depends on the type of the Structure...
     @logged()
     def path_up(self):
         if self._path_index == len(self.path) - 2:
@@ -2207,7 +2610,7 @@ class Algorithm(Connected):
         ...
 
 
-class Astar(Algorithm, FuncConnected):
+class Astar(Algorithm):
 
     FIELDS = [
         'g',
@@ -2226,16 +2629,13 @@ class Astar(Algorithm, FuncConnected):
         # 1. a_star_settings:
         self._heuristic = 0
         self._tiebreaker = None
-        self._greedy_ind = None  # is algorithm greedy?
         # 2. visiting:
         self._nodes_visited = {}
         # 3. interactive a_star pars:
         self._curr_node_dict = {}
         self._neighs_added_to_heap_dict = {}
         # 4. sound:
-        self._player = pyglet.media.player.Player()
-        self._source_path_does_not_exist_ru = pyglet.media.load("Sounds/path_does_not_exist_alena.mp3", streaming=False)
-        self._source_path_recovered_ru = pyglet.media.load("Sounds/path_rec_alena_ru.mp3", streaming=False)
+        # ...initialized in Algo superclass...
 
     def get_nodes_visited_q(self):
         return len(self._nodes_visited)
@@ -2256,9 +2656,6 @@ class Astar(Algorithm, FuncConnected):
     def set_tiebreaker(self, ind: int or None):
         self._tiebreaker = ind
 
-    def set_greedy_ind(self, ind: int or None):
-        self._greedy_ind = ind
-
     def get_details(self):
         node_chosen = self._obj.node_chosen
         return f"Node: {node_chosen.y, node_chosen.x}, val: {node_chosen.val}, g: {node_chosen.g}, h: {node_chosen.h}, " \
@@ -2272,7 +2669,7 @@ class Astar(Algorithm, FuncConnected):
         # heur/cost:
         self._obj.start_node.g = 0
         # transmitting the greedy flag to the Node class: TODO: fix this strange doing <<--
-        self._func[0](self._greedy_ind)
+        # self._func[0](self._greedy_ind)
         # important pars and dicts:
         self._iterations = 0
         self._time_elapsed = 0
@@ -2366,9 +2763,9 @@ class Astar(Algorithm, FuncConnected):
         # plays the sound:
         self.sound_up()
         # print:
-        print(f'UP...')
-        print(f'bin dict: {sorted(list(self.bin_heap._dict.items()), key=lambda k: k[1])}')
-        print(f'bin heap: {self.bin_heap.heap}')
+        # print(f'UP...')
+        # print(f'bin dict: {sorted(list(self.bin_heap._dict.items()), key=lambda k: k[1])}')
+        # print(f'bin heap: {self.bin_heap.heap}')
 
     def algo_down(self):
         # getting the previous current node from memo table:
@@ -2450,7 +2847,7 @@ class Astar(Algorithm, FuncConnected):
     @timer
     def full_algo(self):
         # transmitting the greedy flag to the Node class: TODO: fix this strange doing <<--
-        self._func[0](self._greedy_ind)
+        # self._func[0](self._greedy_ind)
         self._obj.start_node.g = 0
         self.bin_heap = BinHeap([self._obj.start_node])
         found = False
@@ -2516,9 +2913,7 @@ class WaveLee(Algorithm):
         self._fronts_dict = None
         self._nodes_visited_q = 0
         # sound:
-        self._player = pyglet.media.player.Player()
-        self._source_path_does_not_exist_ru = pyglet.media.load("Sounds/path_does_not_exist_alena.mp3", streaming=False)
-        self._source_path_recovered_ru = pyglet.media.load("Sounds/path_rec_alena_ru.mp3", streaming=False)
+        #...initialized in Algo superclass...
 
     def get_nodes_visited_q(self):
         return self._nodes_visited_q
@@ -2644,6 +3039,10 @@ class WaveLee(Algorithm):
 
 
 class BfsDfs(Algorithm):
+    FIELDS = [
+        'type',
+        'previously_visited_node'
+    ]
 
     def __init__(self):
         super().__init__('Bfs/Dfs')
@@ -2656,9 +3055,7 @@ class BfsDfs(Algorithm):
         self._curr_node_dict = {}
         self._neighs_added_to_heap_dict = {}
         # sound:
-        self._player = pyglet.media.player.Player()
-        self._source_path_does_not_exist_ru = pyglet.media.load("Sounds/path_does_not_exist_alena.mp3", streaming=False)
-        self._source_path_recovered_ru = pyglet.media.load("Sounds/path_rec_alena_ru.mp3", streaming=False)
+        # ...initialized in Algo superclass...
 
     @property
     def bfs_dfs_ind(self):
@@ -2717,7 +3114,9 @@ class BfsDfs(Algorithm):
                 [NodeType.NEIGH] if self._is_bfs else [])):
             if neigh.type != NodeType.END_NODE:
                 # at first memoization for further 'undoing':
-                self._neighs_added_to_heap_dict[self._iterations + 1].add(neigh.aux_copy())
+                self._neighs_added_to_heap_dict[self._iterations + 1].add(neigh.smart_copy(
+                    self.FIELDS
+                ))  # neigh.aux_copy()
                 # then changing neigh's pars:
                 neigh.type = NodeType.NEIGH
                 neigh.update_sprite_colour()
@@ -2743,7 +3142,10 @@ class BfsDfs(Algorithm):
                 # TODO: neigh type restoring needed!!!
                 y, x = neigh.y, neigh.x
                 node = self._obj.grid[y][x]
-                node.restore(neigh)
+                node.smart_restore(
+                    neigh,
+                    self.FIELDS
+                )
                 if node not in [self._obj.start_node, self._obj.end_node]:
                     node.remove_arrow_from_sprite_list(self._obj)
                 if node.type == NodeType.NEIGH:
@@ -2825,6 +3227,47 @@ class BfsDfs(Algorithm):
         self.play_sound(self._source_path_does_not_exist_ru)
 
 
+class Greedy(Algorithm):  # TODO: BEST FIRST SEARCH!!! ( ??? only for graphs i suppose ??? )
+    FIELDS = [
+        'type',
+        'previously_visited_node'
+    ]
+
+    def __init__(self):
+        super().__init__('Bfs/Dfs')
+        # logger
+        self.log = logging.getLogger('Bfs/Dfs')
+        # important algo's attributes:
+        self._queue = None
+        # dicts:
+        self._curr_node_dict = {}
+        self._neighs_added_to_heap_dict = {}
+        # sound:
+        #...initialized in Algo superclass...
+
+    def get_nodes_visited_q(self):
+        pass
+
+    def clear(self):
+        pass
+
+    def prepare(self):
+        pass
+
+    def get_details(self):
+        pass
+
+    def algo_up(self):
+        pass
+
+    def algo_down(self):
+        pass
+
+    def full_algo(self):
+        pass
+
+    ...
+
 class Menu(Drawable, Interactable, FuncConnected):
 
     def __init__(self):
@@ -2848,7 +3291,7 @@ class Menu(Drawable, Interactable, FuncConnected):
             self.append_area(area)
 
     def lock(self):
-        """prevents menu from changes"""
+        """prevents the menu from changes"""
         for area in self._areas:
             area.lock()
 
@@ -3709,7 +4152,7 @@ class ArrowsMenu(Icon, Drawable, Interactable, FuncConnected):  # cx, cy = (1755
         pass
 
     def on_key_release(self):
-        pass                                                                                               
+        pass
 
 
 class Arrow(Icon, Drawable, Interactable):  # part of an arrow menu
@@ -3840,7 +4283,7 @@ class Arrow(Icon, Drawable, Interactable):  # part of an arrow menu
                 if ArrowsMenu.walk_index == 4:
                     ArrowsMenu.choosing_arrows = False
                     # Node's directions choosing priority change (in .get_neighs() method):
-                    Node.walk = [self.walk[ArrowsMenu.arrows_indices[_]] for _ in range(4)]
+                    GridNode.walk = [self.walk[ArrowsMenu.arrows_indices[_]] for _ in range(4)]
 
     def on_release(self, x, y):
         pass
@@ -4289,6 +4732,9 @@ class NodeType(Enum):
     FRONT_NEIGH = arcade.color.CYAN
 
 
+# new objects: WORMHOLE, SAND, SWAMP
+
+
 class InterType(Enum):
     NONE = 1
     HOVERED = 2
@@ -4303,9 +4749,8 @@ class MenuType(Enum):
 
 
 class LinkType(Enum):
-    _1to2 = 1
-    _2to1 = 2
-    UNDIRECTED = 3
+    DIRECTED = 1
+    UNDIRECTED = 2
 
 
 # the main method for a game run:
@@ -4320,26 +4765,38 @@ def main():
 if __name__ == "__main__":
     main()
 
-# TODO: LAYERS OF DRAWING ( ??? ) -
-# TODO: LOGGING OF MOUSE MOVEMENT, KEYS
-# TODO: BETTER VISUALIZATION FOR FULL ALGO!!! +
-# TODO: GUIDING ARROWS OPTION FOR FULL ALGO!!! +
-# TODO: TRY SOMETHING WITH GETATTR OVERRIDING...
-# TODO: MULTIPROCESSING FOR GUIDING ARROWS INITIALIZATION
-# TODO: SPRITE-GUIDING_ARROWS AND THEIR FURTHER ROTATION/DRAWING +
+# TODO: LAYERS OF DRAWING ( ??? ) - what is it?..
+# TODO: LOGGING OF MOUSE MOVEMENT, KEYS -> possible performance loss...
+# TODO: BETTER VISUALIZATION FOR FULL ALGO!!! +++
+# TODO: GUIDING ARROWS OPTION FOR FULL ALGO!!! +++
+# TODO: TRY SOMETHING WITH GETATTR OVERRIDING... what for?..
+# TODO: MULTIPROCESSING FOR GUIDING ARROWS INITIALIZATION (HARD)
+# TODO: SPRITE-GUIDING_ARROWS AND THEIR FURTHER ROTATION/DRAWING +++
 # TODO: BACKGROUND SAVING DAEMON PROCESS, BACKGROUND INITIALIZATION ( ??? )
 # TODO: SPEED UP BFS&DFS full algo methods!!! ( ??? )
 # TODO: FIX THE ROTATING of Arrow_90x151! +-
 # TODO: PATH ARROWS DRAWING OPTIMIZING!!! ( ??? )
-# TODO: DFS INTERACTIVE LOCK
-# TODO: INFO BLOCK MUST BE ONLY ONE: ALGO or NODE!!! -->> may be not...
+# TODO: DFS INTERACTIVE LOCK ( ??? )
+# TODO: INFO BLOCK MUST BE ONLY ONE: ALGO or NODE!!! -->> may be not... ( ??? )
 # TODO: FIX BUG WITH SCALING ON INTEGRATED VIDEO-CARD + (error with nvidia scaling 125% caught)
 # TODO: CACHED PROPERTIES!!! are they already cashed by default?
-# TODO: Binary heap with Indexation instead of heapq for performance upgrading (VERY HARD, VERY HARD) +
-# TODO: TRY TO PREVENT CYCLING WITH HEAP AFTER DELETING (HARD, HARD) -
-# TODO: FIX THE BUG WITH WALLS BUILDING WHILE BFS ALGO IS IN INTERACTIVE STATE (MEDIUM, MEDIUM) +
-# TODO: FIND THE VOICE EMULATOR IN ORDER TO MAKE 2 MP#-FILES: 'THE PATH FOUND' and 'THE PATH RESTORED' +
+# TODO: Binary heap with Indexation instead of heapq for performance upgrading (VERY HARD) +++
+# TODO: TRY TO PREVENT CYCLING WITH HEAP AFTER DELETING (HARD, HARD) --- !!!
+# TODO: FIX THE BUG WITH WALLS BUILDING WHILE BFS ALGO IS IN INTERACTIVE STATE (MEDIUM) +++
+# TODO: FIND THE VOICE EMULATOR IN ORDER TO MAKE 2 MP#-FILES: 'THE PATH FOUND' and 'THE PATH RESTORED' (EASY) +++
 # TODO: RE-CONSTRUCT THE PROJECT, FIX VENV LIBS (EASY, EASY)
-# TODO: PATH FOUND/RESTORED -> FIX THE BUG!!!
-# TODO: WALLS AND START/END POINTS SHOULD BE REMAINED THE SAME WHEN THE ALGO IS CHANGED AND ERASING FUNCTION MUST NOT BE WORKING DURING THIS PHASE
-# TODO: BUG!!! ALGO CANNOT BE CHANGED WHEN IT IS PLAYING... (EASY, EASY)
+# TODO: PATH FOUND/RESTORED -> FIX THE BUG!!! ( ??? where is the BUG ??? )
+# TODO: WALLS AND START/END POINTS SHOULD BE REMAINED THE SAME WHEN THE ALGO IS CHANGED AND ERASING FUNCTION MUST NOT BE WORKING DURING THIS PHASE (EASY)
+# TODO: BUG!!! ALGO CANNOT BE CHANGED WHEN IT IS PLAYING... (EASY, EASY) DECISION -> IT CANNOT BE CHANGED WHILE BEING PLAYED!!!
+# TODO: IMPLEMENT GREEDY ALGO!!! (MEDIUM, MEDIUM)
+# TODO*: RANDOM NUMBERS HEURISTIC... ( ??? )
+
+# TODO: FIX a serious SOLID rules violation... (single responsibility AT FIRST)...  clear in Lastar, not in the Grid class.
+
+# new TODO: error sound while trying to delete not a Wall object... (EASY, EASY)
+
+# TODO: Now Algorithm class is NOT FuncConnected!!!
+
+# TODO: WORMHOLES should be added;)
+
+

@@ -1,5 +1,6 @@
-import numpy as np
-from new_Lastar import Algorithm, NodeType, Node, timer
+import math
+
+from new_Lastar import Algorithm, NodeType, GridNode, timer
 
 
 # Witch Doctor's algo (Maxim Vedernikov):
@@ -45,7 +46,7 @@ class BellmanFord(Algorithm):
         # neighs initialization:
         self.initialize_neighs()
 
-    def perform_edge_relaxation(self, from_: Node, to: Node):
+    def perform_edge_relaxation(self, from_: GridNode, to: GridNode):
         """relaxes an edge on the grid in the direction from 'from_' node to 'to' node"""
         print(f'relaxes the edge of {from_, to}')
         to.g = from_.g + from_.val
@@ -75,7 +76,7 @@ class BellmanFord(Algorithm):
                         self._iterations += 1
                         # TODO: ??? optimization ???
                         # necessary condition for the edge relaxation:
-                        if current_node.g != np.Infinity and current_node.g + current_node.val < neigh.g:
+                        if current_node.g != math.inf and current_node.g + current_node.val < neigh.g:
                             self.perform_edge_relaxation(current_node, neigh)
                             # if at least one edge relaxation has been performed -> we can proceed to the next global iteration
                             # after the inner cycle has been completed:
@@ -123,7 +124,7 @@ class BellmanFord(Algorithm):
                             # print(f'LALA')
                             # TODO: ??? optimization ???
                             # necessary condition for the edge relaxation:
-                            if current_node.g != np.Infinity and current_node.g + current_node.val < neigh.g:
+                            if current_node.g != math.inf and current_node.g + current_node.val < neigh.g:
                                 self.perform_edge_relaxation(current_node, neigh)
                                 # if at least one edge relaxation has been performed -> we can proceed to the next global iteration
                                 # after the inner cycle has been completed:

@@ -709,7 +709,7 @@ c__q = [Circle(ctr=Point(x=0, y=0), r=0.38640867748763413), Circle(ctr=Point(x=0
 # the main method for a game run:
 def main():
     # line_width par should be even number for correct grid&nodes representation:
-    game = Pathfinder(SCREEN_WIDTH, SCREEN_HEIGHT, a__q, b__q, c__q)
+    game = Pathfinder(SCREEN_WIDTH, SCREEN_HEIGHT, a__xy, b__xy, c__xy)
     game.setup()
     arcade.run()
 

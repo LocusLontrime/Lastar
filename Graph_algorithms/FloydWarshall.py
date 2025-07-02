@@ -1,4 +1,5 @@
-import numpy as np
+import math
+
 from new_Lastar import Algorithm, NodeType
 
 
@@ -68,7 +69,7 @@ class FloydWarshall(Algorithm):
         # инициализируем матрицу смежности с неизвестными расстояниями (число нод = число строк = число столбцов)
         # как вариант можно попробовать сразу создать матрицу, исключая из подсчёта стены
         self.size_matrix = self._obj.hor_tiles_q * self._obj.tiles_q
-        self.adjacency_matrix = [[np.Infinity for i in range(self.size_matrix)] for j in
+        self.adjacency_matrix = [[math.inf for _ in range(self.size_matrix)] for _ in
                                  range(self.size_matrix)]
 
         # neighs' initialization:

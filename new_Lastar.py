@@ -23,6 +23,8 @@ from abc import ABC, abstractmethod
 
 # queues:
 from collections import deque
+from typing import Any
+
 # BinHeap
 
 # graphics:
@@ -1221,17 +1223,19 @@ class Grid(Structure, Drawable, FuncConnected):
         self._end_node = None
         # objects like WORMHOLES:
         self._wormholes_build_phase = 0  # can be 0 or 1... 0 -> first wormhole opened, 1 -> the second
-        self._wormholes_connected = True  # TODO: is it really needed?..
+        self._wormholes_connected = True
         self._wormholes = dict()
         self._wormholes_links = dict()
         self._prev_wormhole_coords = None
         # path through wormholes' pair visualizing:
-        self._arrow_bullets_sprite_list = arcade.SpriteList()
         self._dashed_line_blocks_sprite_list = arcade.SpriteList()
+        self._dashed_line_blocks_dict = dict()
         self._wormhole_emitter = None
         self._wormhole_receiver = None
         self._update_steps_counter = None
-        self._stop_the_bullets = True
+        self._dashed_line_blocks_building = False
+        self._dashed_line_block_y = None
+        self._dashed_line_block_x = None
         # game mode:
         # self._mode = 0  # 0 for building the walls and erasing them afterwards, 1 for a start and end nodes choosing and 2 for info getting for every node
         self._mode_names = {0: 'BUILDING', 1: 'START&END', 2: 'DETAILS', 3: 'WORMHOLES'}
@@ -1353,14 +1357,14 @@ class Grid(Structure, Drawable, FuncConnected):
         """gets the node from the current mouse coordinates"""
         x_, y_ = mouse_x - 5, mouse_y - 5
         x, y = int(x_ // self._tile_size), int(y_ // self._tile_size)
-        return (y, x) if 0 <= x < self._hor_tiles_q and 0 <= y < self.tiles_q else (None, None)
+        return (y, x) if (0 <= x < self._hor_tiles_q) and (0 <= y < self.tiles_q) else (None, None)
 
     @logged()
     def get_node(self, mouse_x, mouse_y):
         """gets the node from the current mouse coordinates"""
         y, x = self.get_grid_coords(mouse_x, mouse_y)
         print(f'GET NODE ->  {y, x = }')
-        return self.grid[y][x] if y else None
+        return self.grid[y][x] if y is not None else None
 
     def wormholes_connect(self):
         self._wormholes_connected = True
@@ -1393,16 +1397,36 @@ class Grid(Structure, Drawable, FuncConnected):
         self._wormhole_receiver = value
 
     @property
-    def arrow_bullets_sprite_list(self):
-        return self._arrow_bullets_sprite_list
+    def dashed_line_blocks_dict(self):
+        return self._dashed_line_blocks_dict
+
+    @property
+    def dashed_line_block_y(self):
+        return self._dashed_line_block_y
+
+    @property
+    def dashed_line_block_x(self):
+        return self._dashed_line_block_x
+
+    @dashed_line_block_y.setter
+    def dashed_line_block_y(self, value):
+        self._dashed_line_block_y = value
+
+    @dashed_line_block_x.setter
+    def dashed_line_block_x(self, value):
+        self._dashed_line_block_x = value
+
+    @property
+    def dashed_line_blocks_building(self):
+        return self._dashed_line_blocks_building
+
+    @dashed_line_blocks_building.setter
+    def dashed_line_blocks_building(self, value):
+        self._dashed_line_blocks_building = value
 
     @property
     def dashed_line_blocks_sprite_list(self):
         return self._dashed_line_blocks_sprite_list
-
-    @property
-    def stop_the_bullets(self):
-        return self._stop_the_bullets
 
     @property
     def arrows_names(self):
@@ -1552,6 +1576,9 @@ class Grid(Structure, Drawable, FuncConnected):
     def initialize(self):
         """initializes all the nodes for _tiles_q par"""
         self._grid = [[GridNode(j, i, 1, NodeType.EMPTY) for i in range(self._hor_tiles_q)] for j in range(self._tiles_q)]
+        for j in range(self._tiles_q):
+            for i in range(self._hor_tiles_q):
+                print(f'[{j, i}] -> {self._grid[j][i]}')
 
     @logged()
     def can_start(self):
@@ -1588,10 +1615,8 @@ class Grid(Structure, Drawable, FuncConnected):
         # wormholes' logic:
         for wormhole in self._wormholes.values():
             wormhole.update()
-        # arrow bullets' behavior:
-        if self.wormhole_emitter is not None and self._update_steps_counter % 4 == 0:
-            # now emitter emits (once per every 10 frames) ->
-            self.wormhole_emitter.arrow_shoot(self.wormhole_receiver, self)
+        # dashed_line_blocks behavior:
+        ...
 
         self._update_steps_counter += 1
 
@@ -1617,8 +1642,8 @@ class Grid(Structure, Drawable, FuncConnected):
         for wormhole in self._wormholes.values():
             wormhole.draw()
 
-        # arrow_bullets:
-        self.arrow_bullets_sprite_list.draw()
+        # dashed_line_blocks:
+        self.dashed_line_blocks_sprite_list.draw()
 
     @logged()
     # creates sprites for all the nodes:
@@ -1769,6 +1794,7 @@ class Grid(Structure, Drawable, FuncConnected):
     def build_wall(self, x, y):
         # now building the walls:
         n: GridNode = self.get_node(x, y)
+        print(f'GridNode -> {n = }')
         if n and n.type == NodeType.EMPTY:
             # there is no wormhole here:
             if (n.y, n.x) not in self.wormholes.keys():
@@ -2032,10 +2058,6 @@ class Grid(Structure, Drawable, FuncConnected):
     @property
     def mode(self):
         return self._mode
-
-    @stop_the_bullets.setter
-    def stop_the_bullets(self, value):
-        self._stop_the_bullets = value
 
 
 # TODO: DECIDE IF IT IS REALLY NEEDED!!!
@@ -2707,7 +2729,14 @@ class Algorithm(Connected):
     #  strongly depends on the type of the Structure...
     @logged()
     def path_up(self):
-        if self._obj.stop_the_bullets:
+        if self._obj.dashed_line_blocks_building:
+            res = self._obj.wormhole_emitter.create_dashed_line_block(self._obj.wormhole_receiver, self._obj.dashed_line_block_y, self._obj.dashed_line_block_x)
+            if res is not None:
+                self._obj.dashed_line_block_y, self._obj.dashed_line_block_x, dashed_line_block_sprite_ = res
+                self._obj.dashed_line_blocks_dict[self._obj.wormhole_receiver] += [dashed_line_block_sprite_]
+            else:
+                self._obj.dashed_line_blocks_building = False
+        else:
             if self._path_index == len(self.path) - 2:
                 if Lastar.music_on:
                     print(f'recovered')
@@ -2727,12 +2756,22 @@ class Algorithm(Connected):
                 if (path_node := self._path[self._path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
                     path_node.type = NodeType.PATH_NODE
                     path_node.update_sprite_colour()
-                # arrow_bullets:
+                # dashed_line_blocks:
                 if ((self._path[self._path_index + 1].y, self._path[self._path_index + 1].x) in self._obj.wormholes.keys() and
                         (self._path[self._path_index].y, self._path[self._path_index].x) in self._obj.wormholes.keys()):
                     self._obj.wormhole_emitter = self._obj.wormholes[(self._path[self._path_index].y, self._path[self._path_index].x)]
                     self._obj.wormhole_receiver = self._obj.wormholes[(self._path[self._path_index + 1].y, self._path[self._path_index + 1].x)]
-                    self._obj.stop_the_bullets = False
+                    self._obj.dashed_line_blocks_building = True
+                    self._obj.dashed_line_block_y, self._obj.dashed_line_block_x = DrawLib.sep_seg(
+                        self._obj.wormhole_emitter.cy,
+                        self._obj.wormhole_emitter.cx,
+                        self._obj.wormhole_receiver.cy,
+                        self._obj.wormhole_receiver.cx,
+                        self._obj.tile_size // math.sqrt(2),
+                        math.sqrt((self._obj.wormhole_receiver.cy - self._obj.wormhole_emitter.cy) ** 2 + (self._obj.wormhole_receiver.cx - self._obj.wormhole_emitter.cx) ** 2) - self._obj.tile_size // math.sqrt(2)
+                    )
+                    # working with dashed_line_blocks_dict:
+                    self._obj.dashed_line_blocks_dict[self._obj.wormhole_receiver] = []
                 else:
                     # arrows:
                     p = -self._path[self._path_index + 1].x + self._path[self._path_index].x, \
@@ -2749,6 +2788,7 @@ class Algorithm(Connected):
                     node.remove_arrow_from_sprite_list(self._obj)
                 # index's step up:
                 self._path_index += 1
+                print(f'{self._path_index = }')
 
     @logged()
     def recover_path(self):
@@ -2783,19 +2823,33 @@ class Algorithm(Connected):
 
     @logged()
     def path_down(self):
-        if self._path_index > 0:
-            if (path_node := self._path[self._path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
-                path_node.type = NodeType.VISITED_NODE
-                path_node.update_sprite_colour()
-                # arrows:
-            self._obj.triangle_shape_list.remove(self._obj.triangle_shape_list[self._path_index - 1])  # NOT A BUG!!!
-            # line arrows restoring:
-            if path_node not in [self._obj.start_node, self._obj.end_node]:
-                path_node.append_arrow(self._obj)
-            self._path_index -= 1
+        if self._obj.dashed_line_blocks_building:
+            if self._obj.dashed_line_blocks_dict[self._obj.wormhole_receiver]:
+                dashed_line_block_sprite_: arcade.SpriteSolidColor = self._obj.dashed_line_blocks_dict[self._obj.wormhole_receiver].pop()
+                dashed_line_block_sprite_.remove_from_sprite_lists()
+            else:
+                self._obj.dashed_line_blocks_building = False
+                del self._obj.dashed_line_blocks_dict[self._obj.wormhole_receiver]
         else:
-            self._path = None
-            self.algo_down()
+            if self._path_index > 0:
+                # dashed_line_blocks:
+                if ((self._path[self._path_index - 1].y, self._path[self._path_index - 1].x) in self._obj.wormholes.keys() and
+                        (self._path[self._path_index].y, self._path[self._path_index].x) in self._obj.wormholes.keys()):
+                    self._obj.dashed_line_blocks_building = True
+                    self._obj.wormhole_receiver = self._obj.wormholes[(self._path[self._path_index].y, self._path[self._path_index].x)]
+                else:
+                    # arrows:
+                    self._obj.triangle_shape_list.remove(self._obj.triangle_shape_list[self._path_index - 1 - len(self._obj.dashed_line_blocks_dict)])  # NOT A BUG!!!
+                if (path_node := self._path[self._path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
+                    path_node.type = NodeType.VISITED_NODE
+                    path_node.update_sprite_colour()
+                # line arrows restoring:
+                if path_node not in [self._obj.start_node, self._obj.end_node]:
+                    path_node.append_arrow(self._obj)
+                self._path_index -= 1
+            else:
+                self._path = None
+                self.algo_down()
 
     @abstractmethod
     def algo_up(self):
@@ -4350,20 +4404,6 @@ class Wormhole(Icon, Drawable, Interactable, Connected):
         # wormhole spinning:
         if self._inter_type == InterType.HOVERED:
             self._incrementer += self.DELTA
-        # arrow bullet moving:
-        # here we call update on all the bullet-sprites:
-        if not self._obj.stop_the_bullets:
-            self._obj.arrow_bullets_sprite_list.update()
-            # bullet should be removed if reaches the wormhole-receiver:
-            for arrow_bullet in self._obj.arrow_bullets_sprite_list:
-                if DrawLib.is_point_in_square(
-                        self._obj.wormhole_receiver.cx,
-                        self._obj.wormhole_receiver.cy,
-                        self._obj.tile_size,
-                        arrow_bullet.center_x,
-                        arrow_bullet.center_y
-                ):
-                    self._obj.stop_the_bullets = True
 
     def draw(self):
         # TODO: should depends on scale_size!!!
@@ -4465,25 +4505,14 @@ class Wormhole(Icon, Drawable, Interactable, Connected):
         # else:
         #     arcade.draw_rectangle_filled(self._cx, self._cy, w, h * (rem_ - 3 * T / 2) / (T / 2), arcade.color.BLACK)
 
-    def arrow_shoot(self, wormhole_goal: 'Wormhole', grid: Grid):
+    def create_dashed_line_block(self, wormhole_goal: 'Wormhole', y: float, x: float) -> tuple[Any, arcade.SpriteSolidColor] | None:
+        distance = math.sqrt((wormhole_goal.cy - y) ** 2 + (wormhole_goal.cx - x) ** 2)
+        shift = 2 * (self._obj.tile_size // 4)
+        # border case:
+        if distance < shift:
+            return None
         # sprite creation:
-        arrow_bullet_sprite = arcade.SpriteSolidColor(grid.tile_size // 4, grid.tile_size // 16, arcade.color.RED)
-        arrow_bullet_sprite.center_x = self.cx
-        arrow_bullet_sprite.center_y = self.cy
-        dx, dy = wormhole_goal.cx - self.cx, wormhole_goal.cy - self.cy
-        # directional angle:
-        angle_rad = math.atan2(dy, dx)
-        # necessary rotation:
-        arrow_bullet_sprite.angle = math.degrees(angle_rad)
-        # delta shift per update cycle step:
-        arrow_bullet_sprite.change_x = math.cos(angle_rad) * 5
-        arrow_bullet_sprite.change_y = math.sin(angle_rad) * 5
-        # adds the arrow_bullet to the Sprite list in the Grid class:
-        grid.arrow_bullets_sprite_list.append(arrow_bullet_sprite)
-
-    def create_dashed_line_block(self, wormhole_goal: 'Wormhole', y: float, x: float, grid: Grid) -> tuple[float, float]:
-        # sprite creation:
-        dashed_line_block_sprite = arcade.SpriteSolidColor(grid.tile_size // 4, grid.tile_size // 16, arcade.color.RED)
+        dashed_line_block_sprite = arcade.SpriteSolidColor(self._obj.tile_size // 4, self._obj.tile_size // 16, arcade.color.RED)
         dashed_line_block_sprite.center_x = x
         dashed_line_block_sprite.center_y = y
         dx, dy = wormhole_goal.cx - self.cx, wormhole_goal.cy - self.cy
@@ -4492,11 +4521,9 @@ class Wormhole(Icon, Drawable, Interactable, Connected):
         # necessary rotation:
         dashed_line_block_sprite.angle = math.degrees(angle_rad)
         # adds the dashed_line_block to the Sprite list in the Grid class:
-        grid.dashed_line_blocks_sprite_list.append(dashed_line_block_sprite)
-        # next dashed_line_blocks coords calculation:
-        distance = math.sqrt((wormhole_goal.cy - y) ** 2 + (wormhole_goal.cx - x) ** 2)
-        shift = 2 * (grid.tile_size // 4)
-        return DrawLib.sep_seg(y, x, wormhole_goal.cy, wormhole_goal.cx, shift, distance - shift)
+        self._obj.dashed_line_blocks_sprite_list.append(dashed_line_block_sprite)
+        # next dashed_line_blocks coords calculation and return:
+        return *DrawLib.sep_seg(y, x, wormhole_goal.cy, wormhole_goal.cx, shift, distance - shift), dashed_line_block_sprite
 
     def on_motion(self, x, y):
         # the node the mouse's cursor is in:
@@ -5268,16 +5295,18 @@ if __name__ == "__main__":
 
 # TODO: Now Algorithm class is NOT FuncConnected!!!
 
-# TODO: WORMHOLES should be added;)
+# TODO: WORMHOLES should be added;) +++
 # TODO: GridNode.walk should be relocated to Grid class...
 # TODO: IMPROVE PROTECTION FROM WALLS BUILDING WHILE WORMHOLES ACTIVATING AND VISA VERSA...
 
 # TODO: method append_arrow needs to be checked for Wormhole in the every usage!
-# TODO: line connected wormholes for better visualizing of the path...
+# TODO: dashed line connected wormholes for better visualizing of the path (path_up algo improvement)... +++
+# TODO: improve path down algo for reversed dashed line visualisation +++
 # TODO: wall blocks cannot be created where a wormhole opened...  +++
-# TODO: user should be able to remove wormholes...
+# TODO: user should be able to remove wormholes... +++
 
-# TODO: Catch a strange bug -> can start algo in the gearing phase but cannot do it during the algo phase...
+# TODO: Catch a strange bug -> can start algo in the gearing phase but cannot do it during the algo phase... +++
 # TODO: return initial implementation to method update in Drawable interface!!! It means no *args ** kwargs!!! +++
+# TODO: WALLS cannot be built in the bottom row of the grid, why? FIX! +++
 
 

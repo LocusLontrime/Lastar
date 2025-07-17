@@ -505,6 +505,7 @@ class Lastar(arcade.Window):
         # MANAGE MENU:
         self._play_button = PlayButton(1785 + 6, 50, 32, 2)
         self._play_button.connect_to_func(self.play_button_func)
+        self._play_button.connect(self._grid)
         self._step_button_right = StepButton(1785 + 6 + 50, 50, 24, 16, 2)
         self._step_button_right.connect_to_func(self.up, self.another_ornament)
         self._step_button_left = StepButton(1786 + 6 - 50, 50, 24, 16, 2, False)  #
@@ -627,6 +628,9 @@ class Lastar(arcade.Window):
         # HINTS:
         self._mode_info.update()
 
+        # grid, if it is needed:
+        self._grid.update()
+
     def on_draw(self):
         """main drawing method, draws all the elements once per every frame"""  #
         # renders this screen:
@@ -688,26 +692,24 @@ class Lastar(arcade.Window):
     @logged()
     def start_algo(self):
         """starts and prepares the current algorithm for the further using"""
-        if not self._grid.loading:
-            if self._grid.start_node and self._grid.end_node:
-                # STEP BY STEP:
-                if self._interactive_ind is not None:  # TODO: add interactive area to wave_lee and bfs_dfs!!!
-                    # game logic:
-                    Lastar._in_interaction = True
-                    # prepare:
-                    self._current_algo.prepare()
-                    # lockers on:
-                    for menu in self._menus_dict.values():
-                        if menu is not None:
-                            if not menu.is_hidden():
-                                menu.lock()
-                    self._show_mode_area.lock()
-                else:
-                    # getting paths:
-                    self._time_elapsed = self._current_algo.full_algo()
-                    self._current_algo.recover_path()
-                    # path's drawing for all three algos cores:
-                    self._current_algo.visualize_path()
+        # STEP BY STEP:
+        if self._interactive_ind is not None:  # TODO: add interactive area to wave_lee and bfs_dfs!!!
+            # game logic:
+            Lastar._in_interaction = True
+            # prepare:
+            self._current_algo.prepare()
+            # lockers on:
+            for menu in self._menus_dict.values():
+                if menu is not None:
+                    if not menu.is_hidden():
+                        menu.lock()
+            self._show_mode_area.lock()
+        else:
+            # getting paths:
+            self._time_elapsed = self._current_algo.full_algo()
+            self._current_algo.recover_path()
+            # path's drawing for all three algos cores:
+            self._current_algo.visualize_path()
 
     @logged()
     def up(self):
@@ -831,6 +833,9 @@ class Lastar(arcade.Window):
         # building and erasing walls:
         self._grid.build_or_erase(x, y)
 
+        # TODO: TEST:
+        self._grid.motion(x, y)
+
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int):
         """main mouse-pressing method"""
         for icon in self._icons_dict.values():
@@ -903,6 +908,37 @@ class DrawLib:
             )
         )
         return shape
+
+    @staticmethod
+    def draw_arrow_line(ys: int | float, xs: int | float, ye: int | float, xe: int | float, tile_size=89,
+                        arrow_angle=30, line_w=2, colour=arcade.color.BLACK):
+        rad_angle = arrow_angle * math.pi / 180
+        distance = math.hypot(abs(ye - ys), abs(xe - xs))
+
+        arrow_side_length = tile_size = tile_size / math.sqrt(2)
+        ys_, xs_ = DrawLib.sep_seg(ys, xs, ye, xe, tile_size, distance - tile_size)
+        ye_, xe_ = DrawLib.sep_seg(ye, xe, ys, xs, tile_size, distance - tile_size)
+        y0_, x0_ = DrawLib.sep_seg(ye_, xe_, ys_, xs_, arrow_side_length, distance - arrow_side_length)
+        y1_, x1_ = DrawLib.sep_seg(ys_, xs_, ye_, xe_, arrow_side_length, distance - arrow_side_length)
+        arcade.draw_line(xs_, ys_, xe_, ye_, colour, line_w)  # 1???
+        arcade.draw_line(xe_, ye_, *Link.rotate(y0_, x0_, rad_angle, ye_, xe_), colour, line_w)
+        arcade.draw_line(xe_, ye_, *Link.rotate(y0_, x0_, -rad_angle, ye_, xe_), colour, line_w)
+        arcade.draw_line(xs_, ys_, *Link.rotate(y1_, x1_, rad_angle, ys_, xs_), colour, line_w)
+        arcade.draw_line(xs_, ys_, *Link.rotate(y1_, x1_, -rad_angle, ys_, xs_), colour, line_w)
+
+    @staticmethod
+    def rotate(x: int | float, y: int | float, rad_angle: int | float, x0: int | float, y0: int | float) -> tuple[
+        int | float, int | float]:
+        """rotates (y, x) point relative to the coordinate system with the center in (y0, x0),
+        positive angle is for anti-clockwise rotation direction"""
+        y_rel, x_rel = y - y0, x - x0
+        return x0 + math.cos(rad_angle) * x_rel - math.sin(rad_angle) * y_rel, y0 + math.sin(
+            rad_angle) * x_rel + math.cos(rad_angle) * y_rel
+
+    @staticmethod
+    def sep_seg(ys: int | float, xs: int | float, ye: int | float, xe: int | float, p: int | float, q: int | float) -> \
+            tuple[int | float, int | float]:
+        return (p * ye + q * ys) / (p + q), (p * xe + q * xs) / (p + q)
 
     # helpful auxiliary methods:
     @staticmethod
@@ -1145,36 +1181,35 @@ class Link(Drawable):
             Link.draw_arrow_line(ys, xs, ye, xe)
 
     @staticmethod
-    def draw_arrow_line(ys: int | float, xs: int | float, ye: int | float, xe: int | float, arrow_side_length=5, arrow_angle=30, line_w=1):
+    def draw_arrow_line(ys: int | float, xs: int | float, ye: int | float, xe: int | float, arrow_side_length=5 * 2,
+                        arrow_angle=30, line_w=2):
         rad_angle = arrow_angle * math.pi / 180
         distance = math.hypot(abs(ye - ys), abs(xe - xs))
-        y0_, x0_ = Link.sep_seg(ys, xs, ye, xe, distance - arrow_side_length, arrow_side_length)
-        # y0, x0 = y0_ - ye, x0_ - xe
-        # y0 = (arrow_side_length * ys + (distance - arrow_side_length) * ye) / distance - ye
-        # x0 = (arrow_side_length * xs + (distance - arrow_side_length) * xe) / distance - xe
-        # dx1 = math.cos(rad_angle) * x0 + math.sin(rad_angle) * y0
-        # dy1 = -math.sin(rad_angle) * x0 + math.cos(rad_angle) * y0
-        # dx2 = math.cos(rad_angle) * x0 - math.sin(rad_angle) * y0
-        # dy2 = math.sin(rad_angle) * x0 + math.cos(rad_angle) * y0
+        y0_, x0_ = Link.sep_seg(ye, xe, ys, xs, arrow_side_length, distance - arrow_side_length)
         arcade.draw_line(xs, ys, xe, ye, arcade.color.BLACK, line_w)  # 1???
         arcade.draw_line(xe, ye, *Link.rotate(y0_, x0_, rad_angle, ye, xe), arcade.color.BLACK, line_w)
         arcade.draw_line(xe, ye, *Link.rotate(y0_, x0_, -rad_angle, ye, xe), arcade.color.BLACK, line_w)
 
     @staticmethod
-    def sep_seg(ys: int | float, xs: int | float, ye: int | float, xe: int | float, q: int | float, p: int | float) -> tuple[int | float, int | float]:
-        return (p * ys + q * ye) / (p + q), (p * xs + q * xe) / (p + q)
-
-    @staticmethod
-    def rotate(y: int | float, x: int | float, rad_angle: int | float, y0: int | float, x0: int | float) -> tuple[int | float, int | float]:
+    def rotate(y: int | float, x: int | float, rad_angle: int | float, y0: int | float, x0: int | float) -> tuple[
+        int | float, int | float]:
         """rotates (y, x) point relative to the coordinate system with the center in (y0, x0),
         positive angle is for anti-clockwise rotation direction"""
         y_rel, x_rel = y - y0, x - x0
-        return y0 + math.sin(rad_angle) * x_rel + math.cos(rad_angle) * y_rel, x0 + math.cos(rad_angle) * x_rel - math.sin(rad_angle) * y_rel
+        return x0 + math.cos(rad_angle) * x_rel - math.sin(rad_angle) * y_rel, y0 + math.sin(
+            rad_angle) * x_rel + math.cos(rad_angle) * y_rel
+
+    @staticmethod
+    def sep_seg(ys: int | float, xs: int | float, ye: int | float, xe: int | float, p: int | float, q: int | float) -> \
+            tuple[int | float, int | float]:
+        return (p * ye + q * ys) / (p + q), (p * xe + q * xs) / (p + q)
 
 
 class Grid(Structure, Drawable, FuncConnected):
     """core class for grid lines, nodes and guiding arrows display, start/end nodes and walls building and erasing,
     node choosing for info getting and saving/loading of wall-ornaments"""
+
+    wormholes_capacity = 3  # for the fourth pair of wormholes -> "MAX capacity has been already reached!!!"
 
     def __init__(self):
         super().__init__()
@@ -1185,7 +1220,18 @@ class Grid(Structure, Drawable, FuncConnected):
         self._start_node = None
         self._end_node = None
         # objects like WORMHOLES:
+        self._wormholes_build_phase = 0  # can be 0 or 1... 0 -> first wormhole opened, 1 -> the second
+        self._wormholes_connected = True  # TODO: is it really needed?..
         self._wormholes = dict()
+        self._wormholes_links = dict()
+        self._prev_wormhole_coords = None
+        # path through wormholes' pair visualizing:
+        self._arrow_bullets_sprite_list = arcade.SpriteList()
+        self._dashed_line_blocks_sprite_list = arcade.SpriteList()
+        self._wormhole_emitter = None
+        self._wormhole_receiver = None
+        self._update_steps_counter = None
+        self._stop_the_bullets = True
         # game mode:
         # self._mode = 0  # 0 for building the walls and erasing them afterwards, 1 for a start and end nodes choosing and 2 for info getting for every node
         self._mode_names = {0: 'BUILDING', 1: 'START&END', 2: 'DETAILS', 3: 'WORMHOLES'}
@@ -1196,7 +1242,7 @@ class Grid(Structure, Drawable, FuncConnected):
         # visualization:
         self._node_sprite_list = arcade.SpriteList()
         self._grid_line_shapes = arcade.ShapeElementList()
-        self._wormholes_sprite_list = arcade.SpriteList()
+        # self._wormholes_sprite_list = arcade.SpriteList()  # maybe it the next updates...
         # algo steps visualization:
         self._triangle_shape_list = arcade.ShapeElementList()  # <<-- for more comprehensive path visualization
         self._arrow_sprite_list = arcade.SpriteList()  # <<-- for more comprehensive algorithm's visualization
@@ -1232,6 +1278,8 @@ class Grid(Structure, Drawable, FuncConnected):
         self._source_build = pyglet.media.load("Sounds/build_a_brick.mp3", streaming=False)
         self._source_erase = pyglet.media.load("Sounds/brick_hit.mp3", streaming=False)
         self._source_erase_all = pyglet.media.load("Sounds/brick_wall_falling.mp3", streaming=False)
+        self._source_open_wormhole = pyglet.media.load("Sounds/portal_open.mp3", streaming=False)
+        self._source_close_wormhole = pyglet.media.load("Sounds/portal_close.mp3", streaming=False)
 
     # INITIALIZATION AUX:
     @logged()
@@ -1301,11 +1349,60 @@ class Grid(Structure, Drawable, FuncConnected):
         return self._grid[y][x]
 
     @logged()
-    def get_node(self, mouse_x, mouse_y):
+    def get_grid_coords(self, mouse_x, mouse_y):
         """gets the node from the current mouse coordinates"""
         x_, y_ = mouse_x - 5, mouse_y - 5
-        x, y = x_ // self._tile_size, y_ // self._tile_size
-        return self.grid[y][x] if 0 <= x < self._hor_tiles_q and 0 <= y < self.tiles_q else None
+        x, y = int(x_ // self._tile_size), int(y_ // self._tile_size)
+        return (y, x) if 0 <= x < self._hor_tiles_q and 0 <= y < self.tiles_q else (None, None)
+
+    @logged()
+    def get_node(self, mouse_x, mouse_y):
+        """gets the node from the current mouse coordinates"""
+        y, x = self.get_grid_coords(mouse_x, mouse_y)
+        print(f'GET NODE ->  {y, x = }')
+        return self.grid[y][x] if y else None
+
+    def wormholes_connect(self):
+        self._wormholes_connected = True
+
+    def wormholes_disconnect(self):
+        self._wormholes_connected = False
+
+    @property
+    def wormholes_connected(self):
+        return self._wormholes_connected
+
+    @property
+    def wormholes_build_phase(self):
+        return self._wormholes_build_phase
+
+    @property
+    def wormhole_emitter(self):
+        return self._wormhole_emitter
+
+    @property
+    def wormhole_receiver(self):
+        return self._wormhole_receiver
+
+    @wormhole_emitter.setter
+    def wormhole_emitter(self, value):
+        self._wormhole_emitter = value
+
+    @wormhole_receiver.setter
+    def wormhole_receiver(self, value):
+        self._wormhole_receiver = value
+
+    @property
+    def arrow_bullets_sprite_list(self):
+        return self._arrow_bullets_sprite_list
+
+    @property
+    def dashed_line_blocks_sprite_list(self):
+        return self._dashed_line_blocks_sprite_list
+
+    @property
+    def stop_the_bullets(self):
+        return self._stop_the_bullets
 
     @property
     def arrows_names(self):
@@ -1440,6 +1537,14 @@ class Grid(Structure, Drawable, FuncConnected):
         self._walls = walls
 
     @property
+    def wormholes(self):
+        return self._wormholes
+
+    @property
+    def wormholes_links(self):
+        return self._wormholes_links
+
+    @property
     def loading(self):
         return self._loading
 
@@ -1468,6 +1573,8 @@ class Grid(Structure, Drawable, FuncConnected):
 
     @logged()
     def setup(self):
+        # start counting:
+        self._update_steps_counter = 0
         # initialization:
         self.initialize()
         self.initialize_guiding_arrows()
@@ -1478,7 +1585,15 @@ class Grid(Structure, Drawable, FuncConnected):
         self.make_grid_lines()
 
     def update(self):
-        pass
+        # wormholes' logic:
+        for wormhole in self._wormholes.values():
+            wormhole.update()
+        # arrow bullets' behavior:
+        if self.wormhole_emitter is not None and self._update_steps_counter % 4 == 0:
+            # now emitter emits (once per every 10 frames) ->
+            self.wormhole_emitter.arrow_shoot(self.wormhole_receiver, self)
+
+        self._update_steps_counter += 1
 
     @logged()
     def scroll(self):
@@ -1490,7 +1605,7 @@ class Grid(Structure, Drawable, FuncConnected):
         # blocks:
         self._node_sprite_list.draw()
         # wormholes:
-        self._wormholes_sprite_list.draw()
+        # self._wormholes_sprite_list.draw()  # drawn through arcade.draw...
         # arrows:
         if self._guide_arrows_ind is not None:
             # if len(self.arrow_sprite_list) > 0:
@@ -1498,6 +1613,12 @@ class Grid(Structure, Drawable, FuncConnected):
         # path arrows:
         if self._triangle_shape_list:
             self._triangle_shape_list.draw()
+
+        for wormhole in self._wormholes.values():
+            wormhole.draw()
+
+        # arrow_bullets:
+        self.arrow_bullets_sprite_list.draw()
 
     @logged()
     # creates sprites for all the nodes:
@@ -1531,15 +1652,26 @@ class Grid(Structure, Drawable, FuncConnected):
         #  COZ ITS LOGIC STRONGLY DEPENDS ON THEIR SIGNATURE!!!
         """gets neighs of the node, now can be set up"""
         for dy, dx in GridNode.walk:
-            ny, nx = self.y + dy, self.x + dx
-            if 0 <= ny < grid.tiles_q and 0 <= nx < grid.hor_tiles_q:
+            ny, nx = node.y + dy, node.x + dx
+            if 0 <= ny < self.tiles_q and 0 <= nx < self.hor_tiles_q:
                 # by default, can visit the already visited nodes
-                if grid.grid[ny][nx].type not in forbidden_node_types:
-                    yield grid.grid[ny][nx]
+                if self.grid[ny][nx].type not in forbidden_node_types:
+                    yield self.grid[ny][nx]
+        # TODO: check for Wormhole in the node given:
+        if (node.y, node.x) in self._wormholes.keys():
+            y_, x_ = self._wormholes_links[(node.y, node.x)]
+            if self.grid[y_][x_].type not in forbidden_node_types:
+                yield self.grid[y_][x_]
 
     def get_extended_neighs(self, node: 'GridNode') -> list['GridNode']:
         # TODO: should be used instead of duplicate implemented in Node/GridNode/GraphNode...
-        ...
+        # TODO: DELETE THIS METHOD FROM NODE CLASS ANF IMPLEMENT IT IN ALL THE STRUCTURE CLASSES,
+        #  COZ ITS LOGIC STRONGLY DEPENDS ON THEIR SIGNATURE!!!
+        """gets extended neighs (with diagonal ones) of the node, generator"""
+        for dy, dx in GridNode.extended_walk:
+            ny, nx = node.y + dy, node.x + dx
+            if 0 <= ny < self.tiles_q and 0 <= nx < self.hor_tiles_q:
+                yield self.grid[ny][nx]
 
     # WALLS MANAGER:
     # EMPTIES -->> WALLS and BACK:
@@ -1606,6 +1738,20 @@ class Grid(Structure, Drawable, FuncConnected):
                     self._node_chosen = None
                 else:
                     self._node_chosen = n
+        elif self.mode == 3:  # wormholes building/erasing -->
+            if button == arcade.MOUSE_BUTTON_LEFT:
+                self.log.info('MOUSE_BUTTON_LEFT -> opening a wormhole')
+                self.open_wormhole(x, y)
+            elif button == arcade.MOUSE_BUTTON_RIGHT:
+                self.log.info('MOUSE_BUTTON_RIGHT -> closing the wormhole')
+                self.close_wormhole(x, y)
+
+        for wormhole in self._wormholes.values():
+            wormhole.on_press(x, y)
+
+    def motion(self, x, y):
+        for wormhole in self._wormholes.values():
+            wormhole.on_motion(x, y)
 
     # builds/erases walls:
     @logged()
@@ -1622,21 +1768,23 @@ class Grid(Structure, Drawable, FuncConnected):
 
     def build_wall(self, x, y):
         # now building the walls:
-        n = self.get_node(x, y)
+        n: GridNode = self.get_node(x, y)
         if n and n.type == NodeType.EMPTY:
-            self.log.info(f'Building a wall')
-            n.type = NodeType.WALL
-            self._walls.add(self.number_repr(n))
-            n.update_sprite_colour()
-            self.clear_redo_memo()
-            # if self._walls_index < len(self._walls_built_erased) - 1:
-            #     self._walls_built_erased = self._walls_built_erased[:self._walls_index + 1]
-            self._walls_built_erased.append(([self.number_repr(n)], True))
-            self._walls_index += 1
-            self.log.info(f'The wall successfully built')
-            if not self._player.playing and Lastar.music_on:
-                self._player.queue(self._source_build)
-                self._player.play()
+            # there is no wormhole here:
+            if (n.y, n.x) not in self.wormholes.keys():
+                self.log.info(f'Building a wall')
+                n.type = NodeType.WALL
+                self._walls.add(self.number_repr(n))
+                n.update_sprite_colour()
+                self.clear_redo_memo()
+                # if self._walls_index < len(self._walls_built_erased) - 1:
+                #     self._walls_built_erased = self._walls_built_erased[:self._walls_index + 1]
+                self._walls_built_erased.append(([self.number_repr(n)], True))
+                self._walls_index += 1
+                self.log.info(f'The wall successfully built')
+                if not self._player.playing and Lastar.music_on:
+                    self._player.queue(self._source_build)
+                    self._player.play()
 
     def erase_wall(self, x, y):
         # now erasing the walls:
@@ -1668,8 +1816,8 @@ class Grid(Structure, Drawable, FuncConnected):
             _number_repr = self.number_repr(curr_node)
             self._walls.remove(_number_repr)
             self._walls_built_erased[self._walls_index][0].append(_number_repr)
-            for neigh in curr_node.get_extended_neighs(
-                    self):  # TODO: FIT .get_extended_neighs() method in Node class!!!
+            for neigh in self.get_extended_neighs(
+                    curr_node):  # TODO: FIT .get_extended_neighs() method in Node class!!!
                 if neigh.type == NodeType.WALL:
                     _erase_all_linked_nodes(neigh)
 
@@ -1688,6 +1836,56 @@ class Grid(Structure, Drawable, FuncConnected):
             # error sound ->
             ...
 
+    def open_wormhole(self, x, y):
+        # opens a wormhole in an empty node:
+        node_: GridNode = self.get_node(x, y)
+        if node_ and node_.type == NodeType.EMPTY:
+            y_grid, x_grid = node_.y, node_.x
+            x_centred, y_centred, _, _ = node_.get_center_n_sizes(self)
+            # there is no wormhole already opened in this node:
+            if (y_grid, x_grid) not in self._wormholes.keys():
+                # capacity limit reach check:
+                if len(self.wormholes) < 2 * self.wormholes_capacity:
+                    self._wormholes[(y_grid, x_grid)] = Wormhole(y_centred, x_centred, -1 / 8, 7, colour=Wormhole.COLOURS[len(self.wormholes) // 2])
+                    self._wormholes[(y_grid, x_grid)].connect(self)
+                    self._wormholes[(y_grid, x_grid)].setup()
+                    if self._wormholes_build_phase == 0:
+                        self._prev_wormhole_coords = y_grid, x_grid
+                    else:  # means build phase = 1:
+                        # connecting a pair of wormholes to each other:
+                        _y_grid, _x_grid = self._prev_wormhole_coords
+                        self._wormholes_links[(_y_grid, _x_grid)] = y_grid, x_grid
+                        self._wormholes_links[(y_grid, x_grid)] = _y_grid, _x_grid
+                    # build phase incrementation:
+                    self._wormholes_build_phase = (self._wormholes_build_phase + 1) % 2
+                    if not self._player.playing and Lastar.music_on:
+                        self._player.queue(self._source_open_wormhole)
+                        self._player.play()
+
+    def close_wormhole(self, x, y):
+        # removes a pair of linked wormholes or a solo one...
+        node_: GridNode = self.get_node(x, y)
+        if node_ and node_.type == NodeType.EMPTY:
+            y_grid, x_grid = node_.y, node_.x
+            # there is a wormhole already opened in this node:
+            if (y_grid, x_grid) in self._wormholes.keys():
+                # pair:
+                if (y_grid, x_grid) in self._wormholes_links.keys():
+                    y_grid_paired, x_grid_paired = self._wormholes_links[(y_grid, x_grid)]
+                    del self.wormholes[(y_grid, x_grid)]
+                    del self.wormholes[(y_grid_paired, x_grid_paired)]
+                    del self._wormholes_links[(y_grid, x_grid)]
+                    del self._wormholes_links[(y_grid_paired, x_grid_paired)]
+                    # wormholes' build phase stays the same
+                # a solo wormhole:
+                else:
+                    del self.wormholes[(y_grid, x_grid)]
+                    # wormholes' build phase should be decremented:
+                    self._wormholes_build_phase = (self._wormholes_build_phase - 1) % 2
+                if not self._player.playing and Lastar.music_on:
+                    self._player.queue(self._source_close_wormhole)
+                    self._player.play()
+
     # CLEARING/REBUILDING:
     @lock
     def rebuild_map(self):
@@ -1702,7 +1900,7 @@ class Grid(Structure, Drawable, FuncConnected):
         self._node_sprite_list = arcade.SpriteList()
         self._grid_line_shapes = arcade.ShapeElementList()
         self._walls = set()
-        self._wormholes = dict()
+        self.wormholes_wipe()
         self.setup()
 
     @logged()
@@ -1735,6 +1933,16 @@ class Grid(Structure, Drawable, FuncConnected):
         self._walls = set()
         # memoization for possible undoing:
         ...
+        # wormholes clearing:
+        self.wormholes_wipe()
+
+    def wormholes_wipe(self):
+        self._wormholes_connected = True
+        self._wormholes_build_phase = 0
+        self._wormholes = dict()
+        self._wormholes_links = dict()
+        self._prev_wormhole_coords = None
+        # self._wormholes_sprite_list = arcade.SpriteList()
 
     @logged()
     def aux_clear(self):
@@ -1754,11 +1962,11 @@ class Grid(Structure, Drawable, FuncConnected):
         """undo manager: cancels the action with the wall"""
         if not self._loading:
             if self._walls_index > 0:
-                for num in (l := self._walls_built_erased[self._walls_index])[0]:
+                for num in (L := self._walls_built_erased[self._walls_index])[0]:
                     node = self.node(num)
-                    node.type = NodeType.EMPTY if l[1] else NodeType.WALL
+                    node.type = NodeType.EMPTY if L[1] else NodeType.WALL
                     node.update_sprite_colour()
-                    if l[1]:
+                    if L[1]:
                         self._walls.remove(self.number_repr(node))
                     else:
                         self._walls.add(self.number_repr(node))
@@ -1769,11 +1977,11 @@ class Grid(Structure, Drawable, FuncConnected):
         """redo manager: redo an action with a wall"""
         if not self._loading:
             if self._walls_index < len(self._walls_built_erased) - 1:
-                for num in (l := self._walls_built_erased[self._walls_index + 1])[0]:
+                for num in (L := self._walls_built_erased[self._walls_index + 1])[0]:
                     node = self.node(num)
-                    node.type = NodeType.WALL if l[1] else NodeType.EMPTY
+                    node.type = NodeType.WALL if L[1] else NodeType.EMPTY
                     node.update_sprite_colour()
-                    if l[1]:
+                    if L[1]:
                         self._walls.add(self.number_repr(node))
                     else:
                         self._walls.remove(self.number_repr(node))
@@ -1824,6 +2032,10 @@ class Grid(Structure, Drawable, FuncConnected):
     @property
     def mode(self):
         return self._mode
+
+    @stop_the_bullets.setter
+    def stop_the_bullets(self, value):
+        self._stop_the_bullets = value
 
 
 # TODO: DECIDE IF IT IS REALLY NEEDED!!!
@@ -2046,13 +2258,13 @@ class Node(ABC):
         ...
 
     # TODO: ELIMINATE THESE METHODS (should be moved to Structure classes!!!)
-    @abstractmethod
-    def get_neighs(self, struct: Structure, forbidden_node_types: list['NodeType']) -> list['Node']:
-        ...
-
-    @abstractmethod
-    def get_extended_neighs(self, struct: Structure) -> list['Node']:
-        ...
+    # @abstractmethod
+    # def get_neighs(self, struct: Structure, forbidden_node_types: list['NodeType']) -> list['Node']:
+    #     ...
+    #
+    # @abstractmethod
+    # def get_extended_neighs(self, struct: Structure) -> list['Node']:
+    #     ...
 
 
 class GraphNode(Node):
@@ -2151,11 +2363,11 @@ class GraphNode(Node):
 
     # TODO: ELIMINATE THESE METHODS (should be moved to Structure classes!!!)
     # NEIGHBOURIZING:
-    def get_neighs(self, grid: Grid, forbidden_node_types: list['NodeType']) -> list['GridNode']:
-        pass
-
-    def get_extended_neighs(self, grid: Grid) -> list['GridNode']:
-        pass
+    # def get_neighs(self, grid: Grid, forbidden_node_types: list['NodeType']) -> list['GridNode']:
+    #     pass
+    #
+    # def get_extended_neighs(self, grid: Grid) -> list['GridNode']:
+    #     pass
 
 
 class GridNode(Node):
@@ -2254,7 +2466,7 @@ class GridNode(Node):
         """
 
         # here the arrow rotates:
-        self.guiding_arrow_sprite.angle = self.dirs_to_angles[delta]
+        self.guiding_arrow_sprite.angle = self.dirs_to_angles.get(delta, 0)
 
     def append_arrow(self, grid: Grid):
         grid.arrow_sprite_list.append(self.guiding_arrow_sprite)
@@ -2359,46 +2571,26 @@ class GridNode(Node):
     # TODO: ELIMINATE THESE METHODS (should be moved to Structure classes!!!)
     # NEIGHS:
     # TODO: DANGEROUS TO LOG!!!
-    def get_neighs(self, grid: Grid, forbidden_node_types: list['NodeType']) -> list['GridNode']:  # has become smarter
-        # TODO: DELETE THIS METHOD FROM NODE CLASS ANF IMPLEMENT IT IN ALL THE STRUCTURE CLASSES,
-        #  COZ ITS LOGIC STRONGLY DEPENDS ON THEIR SIGNATURE!!!
-        """gets neighs of the node, now can be set up"""
-        for dy, dx in self.walk:
-            ny, nx = self.y + dy, self.x + dx
-            if 0 <= ny < grid.tiles_q and 0 <= nx < grid.hor_tiles_q:
-                # by default, can visit the already visited nodes
-                if grid.grid[ny][nx].type not in forbidden_node_types:
-                    yield grid.grid[ny][nx]
-
-    # TODO: DANGEROUS TO LOG!!!
-    def get_extended_neighs(self, grid: Grid) -> list['GridNode']:
-        # TODO: DELETE THIS METHOD FROM NODE CLASS ANF IMPLEMENT IT IN ALL THE STRUCTURE CLASSES,
-        #  COZ ITS LOGIC STRONGLY DEPENDS ON THEIR SIGNATURE!!!
-        """gets extended neighs (with diagonal ones) of the node, generator"""
-        for dy, dx in self.extended_walk:
-            ny, nx = self.y + dy, self.x + dx
-            if 0 <= ny < grid.tiles_q and 0 <= nx < grid.hor_tiles_q:
-                yield grid.grid[ny][nx]
-
-
-class Wormhole(Drawable):
-
-    def __init__(self, y: int, x: int):
-        # coords:
-        self.y = y
-        self.x = x
-        # visual:
-        self._sprite = None
-
-    def setup(self):
-        ...
-
-    def update(self):
-        ...
-
-    def draw(self):
-        # TODO: should depends on scale_size!!!
-        ...
+    # def get_neighs(self, grid: Grid, forbidden_node_types: list['NodeType']) -> list['GridNode']:  # has become smarter
+    #     # TODO: DELETE THIS METHOD FROM NODE CLASS ANF IMPLEMENT IT IN ALL THE STRUCTURE CLASSES,
+    #     #  COZ ITS LOGIC STRONGLY DEPENDS ON THEIR SIGNATURE!!!
+    #     """gets neighs of the node, now can be set up"""
+    #     for dy, dx in self.walk:
+    #         ny, nx = self.y + dy, self.x + dx
+    #         if 0 <= ny < grid.tiles_q and 0 <= nx < grid.hor_tiles_q:
+    #             # by default, can visit the already visited nodes
+    #             if grid.grid[ny][nx].type not in forbidden_node_types:
+    #                 yield grid.grid[ny][nx]
+    #
+    # # TODO: DANGEROUS TO LOG!!!
+    # def get_extended_neighs(self, grid: Grid) -> list['GridNode']:
+    #     # TODO: DELETE THIS METHOD FROM NODE CLASS ANF IMPLEMENT IT IN ALL THE STRUCTURE CLASSES,
+    #     #  COZ ITS LOGIC STRONGLY DEPENDS ON THEIR SIGNATURE!!!
+    #     """gets extended neighs (with diagonal ones) of the node, generator"""
+    #     for dy, dx in self.extended_walk:
+    #         ny, nx = self.y + dy, self.x + dx
+    #         if 0 <= ny < grid.tiles_q and 0 <= nx < grid.hor_tiles_q:
+    #             yield grid.grid[ny][nx]
 
 
 # class representing an algo:
@@ -2515,40 +2707,48 @@ class Algorithm(Connected):
     #  strongly depends on the type of the Structure...
     @logged()
     def path_up(self):
-        if self._path_index == len(self.path) - 2:
-            if Lastar.music_on:
-                print(f'recovered')
-                self._player.queue(self._source_path_recovered_ru)
-                if self._player.playing:
-                    self._player.pause()
-                    self._player.next_source()
-                self._player.play()
-        if self._path_index == 0:
-            if Lastar.music_on:
-                print(f'found')
-                self._player.queue(self._source_path_found_ru)
-                if self._player.playing:
-                    self._player.next_source()
-                self._player.play()
-        if self._path_index < len(self.path) - 1:
-            if (path_node := self._path[self._path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
-                path_node.type = NodeType.PATH_NODE
-                path_node.update_sprite_colour()
-            # arrows:
-            p = -self._path[self._path_index + 1].x + self._path[self._path_index].x, \
-                -self._path[self._path_index + 1].y + self._path[self._path_index].y
-            p1, p2, p3 = self._obj.get_triangle(self._path[self._path_index + 1], p)
-            triangle_shape = arcade.create_triangles_filled_with_colors(
-                [p1, p2, p3],
-                [arcade.color.WHITE, arcade.color.RED, arcade.color.RED])
-            self._obj.triangle_shape_list.append(triangle_shape)  # NOT A BUG!!!
-            # line arrows removing:
-            node = self._path[self._path_index + 1]
-            # if self.inter_types[2] == InterType.PRESSED:
-            if node not in [self._obj.start_node, self._obj.end_node]:
-                node.remove_arrow_from_sprite_list(self._obj)
-            # index's step up:
-            self._path_index += 1
+        if self._obj.stop_the_bullets:
+            if self._path_index == len(self.path) - 2:
+                if Lastar.music_on:
+                    print(f'recovered')
+                    self._player.queue(self._source_path_recovered_ru)
+                    if self._player.playing:
+                        self._player.pause()
+                        self._player.next_source()
+                    self._player.play()
+            if self._path_index == 0:
+                if Lastar.music_on:
+                    print(f'found')
+                    self._player.queue(self._source_path_found_ru)
+                    if self._player.playing:
+                        self._player.next_source()
+                    self._player.play()
+            if self._path_index < len(self.path) - 1:
+                if (path_node := self._path[self._path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
+                    path_node.type = NodeType.PATH_NODE
+                    path_node.update_sprite_colour()
+                # arrow_bullets:
+                if ((self._path[self._path_index + 1].y, self._path[self._path_index + 1].x) in self._obj.wormholes.keys() and
+                        (self._path[self._path_index].y, self._path[self._path_index].x) in self._obj.wormholes.keys()):
+                    self._obj.wormhole_emitter = self._obj.wormholes[(self._path[self._path_index].y, self._path[self._path_index].x)]
+                    self._obj.wormhole_receiver = self._obj.wormholes[(self._path[self._path_index + 1].y, self._path[self._path_index + 1].x)]
+                    self._obj.stop_the_bullets = False
+                else:
+                    # arrows:
+                    p = -self._path[self._path_index + 1].x + self._path[self._path_index].x, \
+                        -self._path[self._path_index + 1].y + self._path[self._path_index].y
+                    p1, p2, p3 = self._obj.get_triangle(self._path[self._path_index + 1], p)
+                    triangle_shape = arcade.create_triangles_filled_with_colors(
+                        [p1, p2, p3],
+                        [arcade.color.WHITE, arcade.color.RED, arcade.color.RED])
+                    self._obj.triangle_shape_list.append(triangle_shape)  # NOT A BUG!!!
+                # line arrows removing:
+                node = self._path[self._path_index + 1]
+                # if self.inter_types[2] == InterType.PRESSED:
+                if node not in [self._obj.start_node, self._obj.end_node]:
+                    node.remove_arrow_from_sprite_list(self._obj)
+                # index's step up:
+                self._path_index += 1
 
     @logged()
     def recover_path(self):
@@ -2726,7 +2926,7 @@ class Astar(Algorithm):
             self.recover_path()
         # next step:
         # we can search for neighs on the fly:
-        for neigh in curr_node.get_neighs(self._obj, [NodeType.WALL]):  # getting all the neighs 'on the fly;
+        for neigh in self._obj.get_neighs(curr_node, [NodeType.WALL]):  # getting all the neighs 'on the fly;
             if neigh.g > curr_node.g + neigh.val:
                 # memoization for further 'undoing':
                 self._neighs_added_to_heap_dict[self._iterations + 1].append(neigh.smart_copy(self.FIELDS))
@@ -2865,7 +3065,7 @@ class Astar(Algorithm):
                 found = True
                 break
             # next step:
-            for neigh in curr_node.get_neighs(self._obj, [NodeType.WALL]):
+            for neigh in self._obj.get_neighs(curr_node, [NodeType.WALL]):
                 if neigh.g > curr_node.g + neigh.val:
                     temp_f = neigh.f
                     neigh.g = curr_node.g + neigh.val
@@ -2957,7 +3157,7 @@ class WaveLee(Algorithm):
                 self.recover_path()
                 print(f'PATH RECOVERED')
                 break
-            for neigh in curr_node.get_neighs(self._obj, [NodeType.START_NODE, NodeType.WALL, NodeType.VISITED_NODE]):
+            for neigh in self._obj.get_neighs(curr_node, [NodeType.START_NODE, NodeType.WALL, NodeType.VISITED_NODE]):
                 if neigh.val == 1:  # it is equivalent to if neigh.type == NodeType.EMPTY, TODO: decide if is it needed???
                     if neigh not in self._next_wave_lee:
                         if neigh != self._obj.end_node:
@@ -3023,8 +3223,8 @@ class WaveLee(Algorithm):
                     self.play_sound(self._source_path_recovered_ru)
                     self.recover_path()
                     return
-                for front_neigh in front_node.get_neighs(
-                        self._obj,
+                for front_neigh in self._obj.get_neighs(
+                        front_node,
                         [NodeType.START_NODE, NodeType.VISITED_NODE, NodeType.WALL]):
                     if front_neigh not in new_front_wave:
                         front_neigh.previously_visited_node = front_node
@@ -3110,7 +3310,7 @@ class BfsDfs(Algorithm):
         if curr_node == self._obj.end_node:
             self.recover_path()
         self._neighs_added_to_heap_dict[self._iterations + 1] = set()
-        for neigh in curr_node.get_neighs(self._obj, [NodeType.START_NODE, NodeType.VISITED_NODE, NodeType.WALL] + (
+        for neigh in self._obj.get_neighs(curr_node, [NodeType.START_NODE, NodeType.VISITED_NODE, NodeType.WALL] + (
                 [NodeType.NEIGH] if self._is_bfs else [])):
             if neigh.type != NodeType.END_NODE:
                 # at first memoization for further 'undoing':
@@ -3202,7 +3402,7 @@ class BfsDfs(Algorithm):
             if current_node == self._obj.end_node:
                 self.play_sound(self._source_path_recovered_ru)
                 return self.recover_path()
-            for neigh in current_node.get_neighs(self._obj,
+            for neigh in self._obj.get_neighs(current_node,
                                                  [NodeType.START_NODE, NodeType.VISITED_NODE, NodeType.WALL] + (
                                                          [NodeType.NEIGH] if self._is_bfs else [])):
                 if neigh.type != NodeType.END_NODE:
@@ -3492,7 +3692,8 @@ class Icon(ABC):
         return self._inter_type == InterType.PRESSED
 
 
-class PlayButton(Icon, Drawable, Interactable, FuncConnected):
+class PlayButton(Icon, Drawable, Interactable, FuncConnected, Connected):
+
     DELTAS = [0.5, 0.015]  # pixels/radians
 
     def __init__(self, cx, cy, r, line_w):
@@ -3507,6 +3708,9 @@ class PlayButton(Icon, Drawable, Interactable, FuncConnected):
         self._player = pyglet.media.player.Player()
         self._source = pyglet.media.load("Sounds/tru.mp3", streaming=False)
         self._source_error = pyglet.media.load("Sounds/error.mp3", streaming=False)
+
+    def connect(self, grid: Grid):
+        self._obj = grid
 
     @logged()
     def setup(self):
@@ -3591,13 +3795,20 @@ class PlayButton(Icon, Drawable, Interactable, FuncConnected):
     def on_press(self, x, y):
         print(f'gearing: {Lastar.is_gearing()}')
         if DrawLib.is_point_in_circle(self._cx, self._cy, self._r, x, y):
-            if not Lastar.is_gearing():
-                self.press()
-            else:
-                # error sound:
-                if not self._player.playing and Lastar.music_on:
-                    self._player.queue(self._source_error)
-                    self._player.play()
+            # walls are not being loaded at the moment being:
+            if not self._obj.loading:
+                # start and end nodes has been already defined:
+                if self._obj.start_node and self._obj.end_node:
+                    # all the wormholes have their own pairs:
+                    if self._obj.wormholes_build_phase == 0:
+                        if not Lastar.is_gearing():
+                            self.press()
+                            return
+
+            # error sound:
+            if not self._player.playing and Lastar.music_on:
+                self._player.queue(self._source_error)
+                self._player.play()
 
     def on_release(self, x, y):
         pass
@@ -3992,28 +4203,35 @@ class GearWheelButton(Icon, Drawable, Interactable):
         self._player = pyglet.media.player.Player()
         self._source = pyglet.media.load("Sounds/tuduk.mp3", streaming=False)
         self._source_error = pyglet.media.load("Sounds/error.mp3", streaming=False)
+        # aux:
+        self.circumference = None
+        self.angular_size = None
+        self.max_cogs_fit_in_the_gear_wheel = None
+        self.cogs_q = None
+        self.fit_angular_size = None
 
     @logged()
     def setup(self):
-        ...
+        # pre-calculations:
+        self.circumference = 2 * math.pi * self._r  # approximately if cog_size << radius
+        self.angular_size = (2 * math.pi) * self._cog_size / self.circumference
+        self.max_cogs_fit_in_the_gear_wheel = int(self.circumference / self._cog_size)
+        self.cogs_q = self.max_cogs_fit_in_the_gear_wheel // 2
+        self.fit_angular_size = (2 * math.pi - self.cogs_q * self.angular_size) / self.cogs_q
 
     def update(self):
         if self._inter_type == InterType.HOVERED:
             self._incrementer += self.DELTA
 
     def draw(self):
-        circumference = 2 * math.pi * self._r  # approximately if cog_size << radius
-        angular_size = (2 * math.pi) * self._cog_size / circumference
-        max_cogs_fit_in_the_gear_wheel = int(circumference / self._cog_size)
-        cogs_q = max_cogs_fit_in_the_gear_wheel // 2
-        fit_angular_size = (2 * math.pi - cogs_q * angular_size) / cogs_q
+
         angle = self._incrementer if self._clockwise else -self._incrementer  # in radians
 
         self._vertices = []
 
-        for i in range(cogs_q):
+        for i in range(self.cogs_q):
             # aux pars:
-            _a, a_ = (angle - angular_size / 2), (angle + angular_size / 2)
+            _a, a_ = (angle - self.angular_size / 2), (angle + self.angular_size / 2)
             _rx, _ry, rx_, ry_ = self._r * math.cos(_a), self._r * math.sin(_a), self._r * math.cos(
                 a_), self._r * math.sin(a_)
             _dx, _dy = self._cog_size * math.cos(_a), self._cog_size * math.sin(_a)
@@ -4024,7 +4242,7 @@ class GearWheelButton(Icon, Drawable, Interactable):
             self._vertices.append([self._cx + rx_ + dx_, self._cy + ry_ + dy_])
             self._vertices.append([self._cx + rx_, self._cy + ry_])
             # angle incrementation:
-            angle += angular_size + fit_angular_size
+            angle += self.angular_size + self.fit_angular_size
         # upper gear wheel:
         # arcade.draw_polygon_filled(upper_vertices_list, arcade.color.PASTEL_GRAY)
         if self._inter_type == InterType.PRESSED:
@@ -4061,6 +4279,259 @@ class GearWheelButton(Icon, Drawable, Interactable):
                 if not self._player.playing and Lastar.music_on:
                     self._player.queue(self._source_error)
                     self._player.play()
+
+    def on_release(self, x, y):
+        pass
+
+    def on_key_press(self):
+        pass
+
+    def on_key_release(self):
+        pass
+
+
+class Wormhole(Icon, Drawable, Interactable, Connected):
+    # does it make sense to log???
+
+    DELTA = 0.02
+
+    COLOURS = [
+        arcade.color.APPLE_GREEN,
+        arcade.color.CADMIUM_ORANGE,
+        arcade.color.AMARANTH_PINK,
+        arcade.color.JORDY_BLUE,
+        ...  # ?
+    ]
+
+    def __init__(self, cy: int, cx: int, angle_part=1/8, vertices_num=7, line_w=2, clockwise=True, colour=arcade.color.RED):
+        super().__init__(cx, cy)  # reversed repr...
+        print(f'WORMHOLE COORDS cy, cx -> {self._cy, self._cx}')
+        # visual:
+        self._clockwise = clockwise
+        self._vertices_num = vertices_num
+        self._line_w = line_w
+        self._multiplier = angle_part
+        self._colour = colour
+        # sounds:
+        # TODO: UPDATE SOUNDS!!!!!!!!!
+        self._player = pyglet.media.player.Player()
+        self._source = pyglet.media.load("Sounds/tuduk.mp3", streaming=False)
+        self._source_error = pyglet.media.load("Sounds/error.mp3", streaming=False)
+        # aux:
+        self._angular_size = None
+
+    def connect(self, grid: Grid):
+        self._obj = grid
+
+    def is_hovered(self) -> bool:
+        return self._inter_type == InterType.HOVERED
+
+    @property
+    def inter_type(self):
+        return self._inter_type
+
+    @inter_type.setter
+    def inter_type(self, inter_type):
+        self._inter_type = inter_type
+
+    @property
+    def cx(self):
+        return self._cx
+
+    @property
+    def cy(self):
+        return self._cy
+
+    def setup(self):
+        # pre-calculations:
+        self._angular_size = (2 * math.pi) / self._vertices_num
+
+    def update(self):
+        # wormhole spinning:
+        if self._inter_type == InterType.HOVERED:
+            self._incrementer += self.DELTA
+        # arrow bullet moving:
+        # here we call update on all the bullet-sprites:
+        if not self._obj.stop_the_bullets:
+            self._obj.arrow_bullets_sprite_list.update()
+            # bullet should be removed if reaches the wormhole-receiver:
+            for arrow_bullet in self._obj.arrow_bullets_sprite_list:
+                if DrawLib.is_point_in_square(
+                        self._obj.wormhole_receiver.cx,
+                        self._obj.wormhole_receiver.cy,
+                        self._obj.tile_size,
+                        arrow_bullet.center_x,
+                        arrow_bullet.center_y
+                ):
+                    self._obj.stop_the_bullets = True
+
+    def draw(self):
+        # TODO: should depends on scale_size!!!
+        # R = (3 / 4) * self._obj.tile_size / 2
+        r1 = self._obj.tile_size / 2 - 4  # - 2 * self._line_w  # (3 / 4) *
+        r2 = self._obj.tile_size / 4 - 2
+
+        angle = self._incrementer if self._clockwise else -self._incrementer  # in radians
+
+        self._vertices = []
+
+        for i in range(self._vertices_num):
+            # aux pars:
+            _a, a_ = angle, angle - self._angular_size * self._multiplier
+            _rx, _ry, rx_, ry_ = r1 * math.cos(_a), r1 * math.sin(_a), r2 * math.cos(a_), r2 * math.sin(a_)
+            # polygon's points:
+            self._vertices.append([self._cx + _rx, self._cy + _ry])
+            self._vertices.append([self._cx + rx_, self._cy + ry_])
+            # angle incrementation:
+            angle += self._angular_size
+
+        # Colours:
+        # arcade.color.APPLE_GREEN
+        # arcade.color.RED
+        # arcade.color.DARK_YELLOW
+        # arcade.color.BRONZE
+        # arcade.color.ORANGE_RED
+
+        # inner figure:
+        arcade.draw_polygon_filled(self._vertices, arcade.color.BLACK)
+        arcade.draw_polygon_outline(self._vertices, self._colour, self._line_w + 1)
+
+        # r1 - self._incrementer % (r1 - r2)
+        # 2nd method (elliptical portal):
+        # arcade.draw_ellipse_filled(
+        #     self._cx,
+        #     self._cy,
+        #     2 * r2 + (r1 - r2) * math.cos(2 * math.pi * self._incrementer / (Wormhole.DELTA * 1.5 * 60)),
+        #     2 * r2 + (r1 - r2) * math.sin(2 * math.pi * self._incrementer / (Wormhole.DELTA * 1.5 * 60)),
+        #     arcade.color.BLACK
+        # )
+        #
+        # arcade.draw_ellipse_outline(
+        #     self._cx,
+        #     self._cy,
+        #     2 * r2 + (r1 - r2) * math.cos(2 * math.pi * self._incrementer / (Wormhole.DELTA * 1.5 * 60)),
+        #     2 * r2 + (r1 - r2) * math.sin(2 * math.pi * self._incrementer / (Wormhole.DELTA * 1.5 * 60)),
+        #     arcade.color.RED,
+        #     self._line_w + (0 if self._inter_type == InterType.NONE else 1)
+        # )
+
+        # 3rd method (liquid triangle):
+        # r = self._obj.tile_size
+        #
+        # arcade.draw_polygon_filled(
+        #     [
+        #         (DrawLib.rotate(*DrawLib.sep_seg(self._cy + r / math.sqrt(3), self._cx, self._cy, self._cx,
+        #                          math.cos(2 * math.pi * self._incrementer / 2) / 2, 1 + 1)[::-1], self._incrementer / 2, self._cx, self._cy)),
+        #         (DrawLib.rotate(*DrawLib.sep_seg(self._cy - r / (2 * math.sqrt(3)), self._cx + r / 2, self._cy, self._cx,
+        #                          math.cos(2 * math.pi * self._incrementer / 2 + math.pi / 2) / 2, 1 + 1)[::-1], self._incrementer / 2, self._cx, self._cy)),
+        #         (DrawLib.rotate(*DrawLib.sep_seg(self._cy - r / (2 * math.sqrt(3)), self._cx - r / 2, self._cy, self._cx,
+        #                          math.cos(2 * math.pi * self._incrementer / 2 + math.pi) / 2, 1 + 1)[::-1], self._incrementer / 2, self._cx, self._cy))
+        #     ],
+        #     arcade.color.BLACK
+        # )
+        #
+        # arcade.draw_polygon_outline(
+        #     [
+        #         (DrawLib.rotate(*DrawLib.sep_seg(self._cy + r / math.sqrt(3), self._cx, self._cy, self._cx,
+        #                                          math.cos(2 * math.pi * self._incrementer / 2) / 2, 1 + 1)[::-1],
+        #                         self._incrementer / 2, self._cx, self._cy)),
+        #         (DrawLib.rotate(
+        #             *DrawLib.sep_seg(self._cy - r / (2 * math.sqrt(3)), self._cx + r / 2, self._cy, self._cx,
+        #                              math.cos(2 * math.pi * self._incrementer / 2 + math.pi / 2) / 2, 1 + 1)[::-1],
+        #             self._incrementer / 2, self._cx, self._cy)),
+        #         (DrawLib.rotate(
+        #             *DrawLib.sep_seg(self._cy - r / (2 * math.sqrt(3)), self._cx - r / 2, self._cy, self._cx,
+        #                              math.cos(2 * math.pi * self._incrementer / 2 + math.pi) / 2, 1 + 1)[::-1],
+        #             self._incrementer / 2, self._cx, self._cy))
+        #     ],
+        #     arcade.color.RED,
+        #     self._line_w + (0 if self._inter_type == InterType.NONE else 1)
+        # )
+
+        # 4th variant (door):
+        # h = (3 / 4) * self._obj.tile_size
+        # w = (1 / 2) * self._obj.tile_size
+        #
+        # T = 60 * self.DELTA
+        # rem_ = self._incrementer % (2 * T)
+        # print(f'{rem_, T = }')
+        #
+        # if rem_ < T / 2:
+        #     arcade.draw_rectangle_filled(self._cx, self._cy, w, h * (T / 2 - rem_) / (T / 2), arcade.color.BLACK)
+        # elif T / 2 <= rem_ < T:
+        #     arcade.draw_line(self._cx - w * (T - rem_) / T, self._cy, self._cx + w * (T - rem_) / T, self._cy, arcade.color.BLACK, 2)
+        # elif T <= rem_ < 3 * T / 2:
+        #     arcade.draw_line(self._cx - w * (rem_ - T) / T, self._cy, self._cx + w * (rem_ - T) / T, self._cy, arcade.color.BLACK, 2)
+        # else:
+        #     arcade.draw_rectangle_filled(self._cx, self._cy, w, h * (rem_ - 3 * T / 2) / (T / 2), arcade.color.BLACK)
+
+    def arrow_shoot(self, wormhole_goal: 'Wormhole', grid: Grid):
+        # sprite creation:
+        arrow_bullet_sprite = arcade.SpriteSolidColor(grid.tile_size // 4, grid.tile_size // 16, arcade.color.RED)
+        arrow_bullet_sprite.center_x = self.cx
+        arrow_bullet_sprite.center_y = self.cy
+        dx, dy = wormhole_goal.cx - self.cx, wormhole_goal.cy - self.cy
+        # directional angle:
+        angle_rad = math.atan2(dy, dx)
+        # necessary rotation:
+        arrow_bullet_sprite.angle = math.degrees(angle_rad)
+        # delta shift per update cycle step:
+        arrow_bullet_sprite.change_x = math.cos(angle_rad) * 5
+        arrow_bullet_sprite.change_y = math.sin(angle_rad) * 5
+        # adds the arrow_bullet to the Sprite list in the Grid class:
+        grid.arrow_bullets_sprite_list.append(arrow_bullet_sprite)
+
+    def create_dashed_line_block(self, wormhole_goal: 'Wormhole', y: float, x: float, grid: Grid) -> tuple[float, float]:
+        # sprite creation:
+        dashed_line_block_sprite = arcade.SpriteSolidColor(grid.tile_size // 4, grid.tile_size // 16, arcade.color.RED)
+        dashed_line_block_sprite.center_x = x
+        dashed_line_block_sprite.center_y = y
+        dx, dy = wormhole_goal.cx - self.cx, wormhole_goal.cy - self.cy
+        # directional angle:
+        angle_rad = math.atan2(dy, dx)
+        # necessary rotation:
+        dashed_line_block_sprite.angle = math.degrees(angle_rad)
+        # adds the dashed_line_block to the Sprite list in the Grid class:
+        grid.dashed_line_blocks_sprite_list.append(dashed_line_block_sprite)
+        # next dashed_line_blocks coords calculation:
+        distance = math.sqrt((wormhole_goal.cy - y) ** 2 + (wormhole_goal.cx - x) ** 2)
+        shift = 2 * (grid.tile_size // 4)
+        return DrawLib.sep_seg(y, x, wormhole_goal.cy, wormhole_goal.cx, shift, distance - shift)
+
+    def on_motion(self, x, y):
+        # the node the mouse's cursor is in:
+        _node = self._obj.get_node(x, y)
+        node_ = self._obj.get_node(self._cx, self._cy)
+        # the icon is not pressed:
+        if self._inter_type != InterType.PRESSED:
+            if node_ == _node:
+                self._inter_type = InterType.HOVERED
+                # check for a wormhole linked if exists:
+                if _node:
+                    _x, _y = _node.x, _node.y
+                    if (_y, _x) in self._obj.wormholes_links.keys():
+                        y_, x_ = self._obj.wormholes_links[(_y, _x)]
+                        # linked wormhole should be hovered too...
+                        self._obj.wormholes[(y_, x_)].inter_type = InterType.HOVERED
+                        # self._obj.wormholes[(y_, x_)]._incrementer += self.DELTA
+            else:
+                self._inter_type = InterType.NONE
+                # print(f'{self._cy, self._cx = }')
+                if _node:
+                    _x, _y = _node.x, _node.y
+                    if (_y, _x) in self._obj.wormholes_links.keys():
+                        y_, x_ = self._obj.wormholes_links[(_y, _x)]
+                        if self._obj.wormholes[(y_, x_)] is self:
+                            self._inter_type = InterType.HOVERED
+
+    def on_press(self, x, y):
+        # TODO: IS IT NEEDED??????????? Maybe just for a SOUND?!?
+        if arcade.is_point_in_polygon(x, y, self._vertices):
+            if self._inter_type != InterType.PRESSED:
+                self._inter_type = InterType.PRESSED
+            else:
+                # is pressed, it needs to become unpressed:
+                self._inter_type = InterType.NONE
 
     def on_release(self, x, y):
         pass
@@ -4798,5 +5269,15 @@ if __name__ == "__main__":
 # TODO: Now Algorithm class is NOT FuncConnected!!!
 
 # TODO: WORMHOLES should be added;)
+# TODO: GridNode.walk should be relocated to Grid class...
+# TODO: IMPROVE PROTECTION FROM WALLS BUILDING WHILE WORMHOLES ACTIVATING AND VISA VERSA...
+
+# TODO: method append_arrow needs to be checked for Wormhole in the every usage!
+# TODO: line connected wormholes for better visualizing of the path...
+# TODO: wall blocks cannot be created where a wormhole opened...  +++
+# TODO: user should be able to remove wormholes...
+
+# TODO: Catch a strange bug -> can start algo in the gearing phase but cannot do it during the algo phase...
+# TODO: return initial implementation to method update in Drawable interface!!! It means no *args ** kwargs!!! +++
 
 

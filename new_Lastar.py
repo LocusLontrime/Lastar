@@ -1232,7 +1232,9 @@ class Grid(Structure, Drawable, FuncConnected):
         self._dashed_line_blocks_dict = dict()
         self._wormhole_emitter = None
         self._wormhole_receiver = None
-        self._update_steps_counter = None
+        self._wormhole_emitter_ind = None
+        self._wormhole_receiver_ind = None
+        self._update_steps_counter = None  # deprecated
         self._dashed_line_blocks_building = False
         self._dashed_line_block_y = None
         self._dashed_line_block_x = None
@@ -1363,7 +1365,7 @@ class Grid(Structure, Drawable, FuncConnected):
     def get_node(self, mouse_x, mouse_y):
         """gets the node from the current mouse coordinates"""
         y, x = self.get_grid_coords(mouse_x, mouse_y)
-        print(f'GET NODE ->  {y, x = }')
+        # print(f'GET NODE ->  {y, x = }')
         return self.grid[y][x] if y is not None else None
 
     def wormholes_connect(self):
@@ -1395,6 +1397,22 @@ class Grid(Structure, Drawable, FuncConnected):
     @wormhole_receiver.setter
     def wormhole_receiver(self, value):
         self._wormhole_receiver = value
+
+    @property
+    def wormhole_emitter_ind(self):
+        return self._wormhole_emitter_ind
+
+    @property
+    def wormhole_receiver_ind(self):
+        return self._wormhole_receiver_ind
+
+    @wormhole_emitter_ind.setter
+    def wormhole_emitter_ind(self, value):
+        self._wormhole_emitter_ind = value
+
+    @wormhole_receiver_ind.setter
+    def wormhole_receiver_ind(self, value):
+        self._wormhole_receiver_ind = value
 
     @property
     def dashed_line_blocks_dict(self):
@@ -1576,9 +1594,6 @@ class Grid(Structure, Drawable, FuncConnected):
     def initialize(self):
         """initializes all the nodes for _tiles_q par"""
         self._grid = [[GridNode(j, i, 1, NodeType.EMPTY) for i in range(self._hor_tiles_q)] for j in range(self._tiles_q)]
-        for j in range(self._tiles_q):
-            for i in range(self._hor_tiles_q):
-                print(f'[{j, i}] -> {self._grid[j][i]}')
 
     @logged()
     def can_start(self):
@@ -1794,7 +1809,7 @@ class Grid(Structure, Drawable, FuncConnected):
     def build_wall(self, x, y):
         # now building the walls:
         n: GridNode = self.get_node(x, y)
-        print(f'GridNode -> {n = }')
+        # print(f'GridNode -> {n = }')
         if n and n.type == NodeType.EMPTY:
             # there is no wormhole here:
             if (n.y, n.x) not in self.wormholes.keys():
@@ -2491,18 +2506,21 @@ class GridNode(Node):
         self.guiding_arrow_sprite.angle = self.dirs_to_angles.get(delta, 0)
 
     def append_arrow(self, grid: Grid):
-        grid.arrow_sprite_list.append(self.guiding_arrow_sprite)
+        if self.guiding_arrow_sprite not in grid.arrow_sprite_list:
+            grid.arrow_sprite_list.append(self.guiding_arrow_sprite)
 
     # TODO: DANGEROUS TO LOG!!!
     def remove_arrow(self, grid: Grid):  # TODO: WHETHER IS IT NEEDED?..
         """removes the guiding arrow sprite of the node from the arrow_sprite_list"""
-        grid.arrow_sprite_list.remove(self.guiding_arrow_sprite)
+        if self.guiding_arrow_sprite in grid.arrow_sprite_list:
+            grid.arrow_sprite_list.remove(self.guiding_arrow_sprite)
         self.guiding_arrow_sprite = None
 
     # TODO: DANGEROUS TO LOG!!!
     def remove_arrow_from_sprite_list(self, grid: Grid):
         # if self.guiding_arrow_sprite is not None and self.guiding_arrow_sprite in grid.arrow_sprite_list:
-        grid.arrow_sprite_list.remove(self.guiding_arrow_sprite)
+        if self.guiding_arrow_sprite in grid.arrow_sprite_list:
+            grid.arrow_sprite_list.remove(self.guiding_arrow_sprite)
 
     # DUNDERS:
     def __str__(self):
@@ -2729,14 +2747,19 @@ class Algorithm(Connected):
     #  strongly depends on the type of the Structure...
     @logged()
     def path_up(self):
+        print(f'PATH_UP -> ')
         if self._obj.dashed_line_blocks_building:
+            print(f'...dashed_line_blocks_building phase: ')
             res = self._obj.wormhole_emitter.create_dashed_line_block(self._obj.wormhole_receiver, self._obj.dashed_line_block_y, self._obj.dashed_line_block_x)
             if res is not None:
                 self._obj.dashed_line_block_y, self._obj.dashed_line_block_x, dashed_line_block_sprite_ = res
                 self._obj.dashed_line_blocks_dict[self._obj.wormhole_receiver] += [dashed_line_block_sprite_]
             else:
                 self._obj.dashed_line_blocks_building = False
+                # TODO: some logic
+                self._path_index = self._obj.wormhole_receiver_ind
         else:
+            print(f'...regular phase: ')
             if self._path_index == len(self.path) - 2:
                 if Lastar.music_on:
                     print(f'recovered')
@@ -2756,6 +2779,11 @@ class Algorithm(Connected):
                 if (path_node := self._path[self._path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
                     path_node.type = NodeType.PATH_NODE
                     path_node.update_sprite_colour()
+                # line arrows removing:
+                node = self._path[self._path_index + 1]
+                # if self.inter_types[2] == InterType.PRESSED:
+                if node not in [self._obj.start_node, self._obj.end_node]:
+                    node.remove_arrow_from_sprite_list(self._obj)
                 # dashed_line_blocks:
                 if ((self._path[self._path_index + 1].y, self._path[self._path_index + 1].x) in self._obj.wormholes.keys() and
                         (self._path[self._path_index].y, self._path[self._path_index].x) in self._obj.wormholes.keys()):
@@ -2772,6 +2800,8 @@ class Algorithm(Connected):
                     )
                     # working with dashed_line_blocks_dict:
                     self._obj.dashed_line_blocks_dict[self._obj.wormhole_receiver] = []
+                    self._obj.wormhole_emitter_ind = self._path_index
+                    self._obj.wormhole_receiver_ind = self._path_index + 1
                 else:
                     # arrows:
                     p = -self._path[self._path_index + 1].x + self._path[self._path_index].x, \
@@ -2781,14 +2811,9 @@ class Algorithm(Connected):
                         [p1, p2, p3],
                         [arcade.color.WHITE, arcade.color.RED, arcade.color.RED])
                     self._obj.triangle_shape_list.append(triangle_shape)  # NOT A BUG!!!
-                # line arrows removing:
-                node = self._path[self._path_index + 1]
-                # if self.inter_types[2] == InterType.PRESSED:
-                if node not in [self._obj.start_node, self._obj.end_node]:
-                    node.remove_arrow_from_sprite_list(self._obj)
-                # index's step up:
-                self._path_index += 1
-                print(f'{self._path_index = }')
+                    # index's step up:
+                    self._path_index += 1
+                    print(f'---path_index: {self._path_index = }')
 
     @logged()
     def recover_path(self):
@@ -2823,30 +2848,47 @@ class Algorithm(Connected):
 
     @logged()
     def path_down(self):
+        print(f'PATH DOWN -> ')
         if self._obj.dashed_line_blocks_building:
+            print(f'...dashed_line_blocks_building phase: ')
             if self._obj.dashed_line_blocks_dict[self._obj.wormhole_receiver]:
                 dashed_line_block_sprite_: arcade.SpriteSolidColor = self._obj.dashed_line_blocks_dict[self._obj.wormhole_receiver].pop()
                 dashed_line_block_sprite_.remove_from_sprite_lists()
+                distance = math.sqrt((self._obj.wormhole_receiver.cy - self._obj.dashed_line_block_y) ** 2 + (self._obj.wormhole_receiver.cx - self._obj.dashed_line_block_x) ** 2)
+                shift = 2 * (self._obj.tile_size // 4)
+                self._obj.dashed_line_block_y, self._obj.dashed_line_block_x = DrawLib.sep_seg(
+                    self._obj.dashed_line_block_y,
+                    self._obj.dashed_line_block_x,
+                    self._obj.wormhole_receiver.cy,
+                    self._obj.wormhole_receiver.cx,
+                    -shift,
+                    distance + shift)
             else:
                 self._obj.dashed_line_blocks_building = False
                 del self._obj.dashed_line_blocks_dict[self._obj.wormhole_receiver]
+                # TODO: some logic
+                self._path_index = self._obj.wormhole_emitter_ind
         else:
+            print(f'regular phase: ')
             if self._path_index > 0:
-                # dashed_line_blocks:
-                if ((self._path[self._path_index - 1].y, self._path[self._path_index - 1].x) in self._obj.wormholes.keys() and
-                        (self._path[self._path_index].y, self._path[self._path_index].x) in self._obj.wormholes.keys()):
-                    self._obj.dashed_line_blocks_building = True
-                    self._obj.wormhole_receiver = self._obj.wormholes[(self._path[self._path_index].y, self._path[self._path_index].x)]
-                else:
-                    # arrows:
-                    self._obj.triangle_shape_list.remove(self._obj.triangle_shape_list[self._path_index - 1 - len(self._obj.dashed_line_blocks_dict)])  # NOT A BUG!!!
                 if (path_node := self._path[self._path_index]).type not in [NodeType.START_NODE, NodeType.END_NODE]:
                     path_node.type = NodeType.VISITED_NODE
                     path_node.update_sprite_colour()
                 # line arrows restoring:
                 if path_node not in [self._obj.start_node, self._obj.end_node]:
                     path_node.append_arrow(self._obj)
-                self._path_index -= 1
+                # dashed_line_blocks:
+                if ((self._path[self._path_index - 1].y, self._path[self._path_index - 1].x) in self._obj.wormholes.keys() and
+                        (self._path[self._path_index].y, self._path[self._path_index].x) in self._obj.wormholes.keys()):
+                    self._obj.dashed_line_blocks_building = True
+                    self._obj.wormhole_receiver = self._obj.wormholes[(self._path[self._path_index].y, self._path[self._path_index].x)]
+                    self._obj.wormhole_receiver_ind = self._path_index
+                    self._obj.wormhole_emitter_ind = self._path_index - 1
+                else:
+                    # arrows:
+                    self._obj.triangle_shape_list.remove(self._obj.triangle_shape_list[self._path_index - 1 - len(self._obj.dashed_line_blocks_dict)])  # NOT A BUG!!!
+                    self._path_index -= 1
+                    print(f'---path_index: {self._path_index}')
             else:
                 self._path = None
                 self.algo_down()
@@ -2878,7 +2920,7 @@ class Astar(Algorithm):
         super().__init__('Astar')
         # heap:
         self.bin_heap: BinHeap = BinHeap()
-        # logger
+        # logger                                                                                        
         self.log = logging.getLogger('Astar')
         # 1. a_star_settings:
         self._heuristic = 0
@@ -4359,7 +4401,7 @@ class Wormhole(Icon, Drawable, Interactable, Connected):
 
     def __init__(self, cy: int, cx: int, angle_part=1/8, vertices_num=7, line_w=2, clockwise=True, colour=arcade.color.RED):
         super().__init__(cx, cy)  # reversed repr...
-        print(f'WORMHOLE COORDS cy, cx -> {self._cy, self._cx}')
+        # print(f'WORMHOLE COORDS cy, cx -> {self._cy, self._cx}')
         # visual:
         self._clockwise = clockwise
         self._vertices_num = vertices_num
@@ -4505,14 +4547,15 @@ class Wormhole(Icon, Drawable, Interactable, Connected):
         # else:
         #     arcade.draw_rectangle_filled(self._cx, self._cy, w, h * (rem_ - 3 * T / 2) / (T / 2), arcade.color.BLACK)
 
-    def create_dashed_line_block(self, wormhole_goal: 'Wormhole', y: float, x: float) -> tuple[Any, arcade.SpriteSolidColor] | None:
+    def create_dashed_line_block(self, wormhole_goal: 'Wormhole', y: float, x: float) -> tuple[Any, arcade.Sprite] | None:
         distance = math.sqrt((wormhole_goal.cy - y) ** 2 + (wormhole_goal.cx - x) ** 2)
         shift = 2 * (self._obj.tile_size // 4)
         # border case:
         if distance < shift:
             return None
         # sprite creation:
-        dashed_line_block_sprite = arcade.SpriteSolidColor(self._obj.tile_size // 4, self._obj.tile_size // 16, arcade.color.RED)
+        dashed_line_block_sprite = arcade.Sprite("Arrows//red_arrow.png")
+        # dashed_line_block_sprite = arcade.SpriteSolidColor(self._obj.tile_size // 4, self._obj.tile_size // 16, arcade.color.RED)
         dashed_line_block_sprite.center_x = x
         dashed_line_block_sprite.center_y = y
         dx, dy = wormhole_goal.cx - self.cx, wormhole_goal.cy - self.cy
@@ -5263,6 +5306,72 @@ def main():
 if __name__ == "__main__":
     main()
 
+
+# v0.1 base Node class created
+# v0.2 base Astar(arcade.Window) class created
+# v0.3 grid lines drawing added
+# v0.4 grid of nodes (self.grid) for Astar class, consisting of Nodes objects created, some fields added for both classes,
+# drawing of walls (not passable nodes), start and end nodes added
+# v0.5 on_mouse_press() and on_mouse_release methods() overwritten
+# v0.6 on_mouse_motion() method overwritten
+# v0.7 on_mouse_scroll() method overwritten, now it is possible to draw walls while mouse button pressed,
+# switch drawing modes and erase walls, choose start and end node (4 modes are available for now)
+# v0.8 on_key_press() method overwritten, clear() method for Node class implemented for resetting the temporal fields to its defaults,
+# clear() method for Astar class added to clear all the game field (every Node), now by pressing the 'ENTER' key user can clear all the map
+# v0.9 info displaying added (current mode, a_star related information)
+# v1.0 a_star now is called by pressing the 'SPACE' key, the shortest way is shown on the grid
+# v1.1 visited_nodes are now displayed after a_star call, info extended, hash() dunder method added for class Node
+# v1.2 tiebreaker (vector cross product absolute deviation) added
+# v1.3 erase separate drawing mode merged with build mode, now there is one build/erase draw mode for building walls by pressing the left mouse button
+# and erasing them by pressing the right one
+# v1.4 fixed a bug, when some heuristic related temporal pars have not been cleared after a_star had been called
+# v1.5 now it is possible to reset all heuristic related pars for the every node on the grid but leave all the walls
+# and start and end nodes at their positions by pressing the 'BACKSPACE' key, clear method for Astar class divided into two methods:
+# clear_empty_nodes() for partial clearing and clear_grid() for entire clearing
+# v1.6 3 auxiliary heuristics added
+# v1.7 user interface for heuristic  and tiebreaker choosing added
+# v1.8 fixed a bug when start and end nodes have been removed after heuristic had been chosen
+# v1.9 start node choosing and end node choosing drawing modes merged into one start & end nodes choosing drawing mode,
+# start node is chosen by pressing the left mouse button when end node is chosen by pressing the right one
+# v1.10 coordinate pairs tiebreaker added
+# v1.11 fixed bug when cross vector product deviation heuristic causes no impact on a_star
+# v1.12 interface for scale choosing added
+# v1.13 fixed bug when node's filled rectangle has been located not in the center of related grid cell, scaling improved
+# v1.14 erase_all_linked_nodes() method added to erase all coherent wall-regions by pressing the middle mouse button on the any cell of them
+# v1.15 greedy interaction added, greedy_case's of a_star logic implemented, now it is possible to find some non-shortest ways fast
+# v1.16 fixed bug when the time elapsed ms have not been reset after pressing keys such as 'BACKSPACE' and 'ENTER'
+# v1.17 fixed bug when greedy flag has had no impact on a_star, fixed closely related to this clearing bug when if there has been at least one
+# important node (start or end) unselected clearing process has been finished with error
+# --- trying to visualize more visited node by numbers at first and then by colour gradient, bad idea...
+# v1.171 max times visited var is now shown in the info, hotfix: bad location bug resolved, GREEDY FLAG -->> GREEDY_FLAG
+# v1.18 Wave-spreading lee pathfinding algorithm been implemented, further tests needed...
+# v2.0 A-star is now fully interactive (there are two methods: a_star_step_up() -->> RIGHT arrow key and a_star_step_down() -->> LEFT arrow key)
+# for moving forward and back through s_star iterations if the flag is_interactive is on. Switcher related added to the window.
+# v2.1 Info-getting drawing mode added. Now it is possible to get the information about every node during the a_star call by pressing
+# left/right mouse button while in interactive drawing mode
+# v2.2 Fixed problem when the heap invariant has been violated during a_star_step_down() calls. Implementations of sift_up() and sift_down()
+# methods are borrowed from CPython.heapq github
+# v2.3 fixed bug when a rare exception raised during the consecutive calls of a_star_step_down() method
+# Current node to be removed from nodes_visited set have been absent. Nodes_visited now is dict instead of set as it was before
+# v2.4
+#
+# 3.0 Astar became Lastar, many serious changes and fixes...
+#
+#
+#
+# TODO: implement a step-up a_star visualization with some interaction (info window with pars of the current node or the selected one)... (high, hard) +++
+# TODO: add some other tiebreakers (medium, easy) +++
+# TODO: upgrade the visual part (medium, medium) +++
+# TODO: add number representation of times_visited par for the every visited node than can be on off by pressing a key (medium, easy) +++
+# TODO: create an info/help pages (high, hard)
+# TODO: extend the algo base with Lee wave pathfinding algorithm and BFS/DFS (medium, medium) +++
+# TODO: add special flag a_star_interactive_on and switcher on the main window (high, easy) +++
+# TODO:
+# TODO:
+# TODO:
+# TODO:
+
+
 # TODO: LAYERS OF DRAWING ( ??? ) - what is it?..
 # TODO: LOGGING OF MOUSE MOVEMENT, KEYS -> possible performance loss...
 # TODO: BETTER VISUALIZATION FOR FULL ALGO!!! +++
@@ -5308,5 +5417,6 @@ if __name__ == "__main__":
 # TODO: Catch a strange bug -> can start algo in the gearing phase but cannot do it during the algo phase... +++
 # TODO: return initial implementation to method update in Drawable interface!!! It means no *args ** kwargs!!! +++
 # TODO: WALLS cannot be built in the bottom row of the grid, why? FIX! +++
+# TODO: bug while changing the direction inside a wormhole pair... +-- (now bugging only on borders...)
 
 
